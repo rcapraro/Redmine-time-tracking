@@ -13,6 +13,7 @@ import com.ps.redmine.util.toJavaYearMonth
 import com.ps.redmine.util.toKotlin
 import com.ps.redmine.util.today
 import kotlinx.datetime.LocalDate
+import com.ps.redmine.resources.Strings
 import java.time.format.TextStyle
 import java.util.*
 
@@ -30,7 +31,7 @@ fun DatePicker(
         OutlinedTextField(
             value = DateFormatter.formatShort(selectedDate),
             onValueChange = {},
-            label = { Text("Date") },
+            label = { Text(Strings["date_label"]) },
             modifier = Modifier.fillMaxWidth(),
             readOnly = true,
             trailingIcon = {
@@ -60,7 +61,7 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            Text("←")
+                            Text(Strings["nav_previous"])
                         }
                         Text(
                             text = "${
@@ -82,7 +83,7 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            Text("→")
+                            Text(Strings["nav_next"])
                         }
                     }
                 },
@@ -176,11 +177,11 @@ fun DatePicker(
                                 showDialog = false
                             }
                         ) {
-                            Text("Today")
+                            Text(Strings["today"])
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         TextButton(onClick = { showDialog = false }) {
-                            Text("Close")
+                            Text(Strings["close"])
                         }
                     }
                 }

@@ -2,7 +2,10 @@ package com.ps.redmine
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.lazy.LazyColumn
+import java.util.Locale
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -29,6 +32,7 @@ import kotlinx.datetime.toLocalDateTime
 import org.koin.core.context.startKoin
 import org.koin.compose.koinInject
 import java.time.YearMonth
+import com.ps.redmine.resources.Strings
 
 @Composable
 fun App(redmineClient: RedmineClient) {
@@ -51,7 +55,7 @@ fun App(redmineClient: RedmineClient) {
                     yearMonth.monthValue
                 )
             } catch (e: Exception) {
-                errorMessage = "Error loading time entries: ${e.message}"
+                errorMessage = Strings["error_loading_entries"].format(e.message)
             } finally {
                 isLoading = false
             }
@@ -148,7 +152,7 @@ fun App(redmineClient: RedmineClient) {
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "New Entry",
+                        Strings["new_entry"],
                         style = MaterialTheme.typography.caption,
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
                     )
@@ -179,7 +183,7 @@ fun App(redmineClient: RedmineClient) {
                                             selectedTimeEntry = null
                                         }
                                     ) {
-                                        Text("←")
+                                        Text(Strings["nav_previous"])
                                     }
                                     Text(
                                         text = currentMonth.format(),
@@ -191,7 +195,7 @@ fun App(redmineClient: RedmineClient) {
                                             selectedTimeEntry = null
                                         }
                                     ) {
-                                        Text("→")
+                                        Text(Strings["nav_next"])
                                     }
                                 }
                                 Row(
@@ -205,11 +209,11 @@ fun App(redmineClient: RedmineClient) {
                                             selectedTimeEntry = null
                                         }
                                     ) {
-                                        Text("Today (Alt+T)")
+                                        Text(Strings["today_shortcut"])
                                     }
                                 }
                                 Text(
-                                    text = "Alt+← Previous | Alt+→ Next",
+                                    text = Strings["nav_help"],
                                     style = MaterialTheme.typography.caption,
                                     color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                                     modifier = Modifier.padding(vertical = 4.dp)
@@ -222,7 +226,7 @@ fun App(redmineClient: RedmineClient) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Total Hours:",
+                                    text = Strings["total_hours"],
                                     style = MaterialTheme.typography.subtitle1
                                 )
                                 Text(
@@ -278,14 +282,14 @@ fun App(redmineClient: RedmineClient) {
                                     selectedTimeEntry = null
 
                                     val message = if (updatedEntry.id == null)
-                                        "Time entry created successfully"
+                                        Strings["entry_created"]
                                     else
-                                        "Time entry updated successfully"
+                                        Strings["entry_updated"]
                                     scaffoldState.snackbarHostState.showSnackbar(message)
                                 } catch (e: Exception) {
                                     println("[DEBUG_LOG] Error in parent scope: ${e.message}")
                                     scaffoldState.snackbarHostState.showSnackbar(
-                                        "Operation might have succeeded, but there was an error: ${e.message}"
+                                        Strings["operation_error"].format(e.message)
                                     )
                                 }
                             }
@@ -332,7 +336,7 @@ fun TimeEntriesList(
                             color = MaterialTheme.colors.primary
                         )
                         Text(
-                            text = "%.1f h".format(entries.sumOf { it.hours.toDouble() }),
+                            text = Strings["hours_format"].format(entries.sumOf { it.hours.toDouble() }),
                             style = MaterialTheme.typography.subtitle1,
                             color = MaterialTheme.colors.secondary
                         )
@@ -392,7 +396,7 @@ fun TimeEntryItem(
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                     )
                     Text(
-                        text = "%.1f h".format(timeEntry.hours),
+                        text = Strings["hours_format"].format(timeEntry.hours),
                         style = MaterialTheme.typography.body2,
                         color = MaterialTheme.colors.primary
                     )
@@ -643,8 +647,8 @@ fun TimeEntryDetail(
     if (showCancelConfirmation) {
         AlertDialog(
             onDismissRequest = { showCancelConfirmation = false },
-            title = { Text("Discard Changes?") },
-            text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+            title = { Text(Strings["discard_changes_title"]) },
+            text = { Text(Strings["discard_changes_message"]) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -652,12 +656,12 @@ fun TimeEntryDetail(
                         onCancel()
                     }
                 ) {
-                    Text("Discard")
+                    Text(Strings["discard"])
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCancelConfirmation = false }) {
-                    Text("Continue Editing")
+                    Text(Strings["continue_editing"])
                 }
             }
         )
@@ -672,14 +676,14 @@ fun TimeEntryDetail(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (timeEntry == null) "Add Time Entry" else "Edit Time Entry",
+                text = if (timeEntry == null) Strings["add_time_entry"] else Strings["edit_time_entry"],
                 style = MaterialTheme.typography.h6
             )
             TextButton(
                 onClick = { handleCancel() },
                 enabled = !isLoading && !isSaving
             ) {
-                Text("Cancel (Esc)")
+                Text(Strings["cancel_shortcut"])
             }
         }
 
@@ -701,7 +705,7 @@ fun TimeEntryDetail(
                 onClick = { date = today },
                 enabled = !isLoading && !isSaving
             ) {
-                Text("Set to Today")
+                Text(Strings["set_to_today"])
             }
         }
 
@@ -713,7 +717,7 @@ fun TimeEntryDetail(
                 OutlinedTextField(
                     value = selectedProject?.name ?: "",
                     onValueChange = {},
-                    label = { Text("Project") },
+                    label = { Text(Strings["project_label"]) },
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     enabled = !isLoading,
@@ -729,7 +733,7 @@ fun TimeEntryDetail(
                                 onClick = { showProjectDropdown = true },
                                 enabled = projects.isNotEmpty()
                             ) {
-                                Text(if (showProjectDropdown) "▲" else "▼")
+                                Text(if (showProjectDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
                             }
                         }
                     }
@@ -774,7 +778,7 @@ fun TimeEntryDetail(
             }
             if (!isLoading && projects.isEmpty()) {
                 Text(
-                    text = "No projects available",
+                    text = Strings["no_projects"],
                     color = MaterialTheme.colors.error,
                     style = MaterialTheme.typography.caption,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -793,7 +797,7 @@ fun TimeEntryDetail(
                         hours = input.take(5) // Limit to 5 characters (e.g., "12.50")
                     }
                 },
-                label = { Text("Hours") },
+                label = { Text(Strings["hours_label"]) },
                 modifier = Modifier.fillMaxWidth(),
                 isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f),
                 singleLine = true,
@@ -804,21 +808,26 @@ fun TimeEntryDetail(
                             onClick = { hours = "" },
                             enabled = !isLoading
                         ) {
-                            Text("✕")
+                            Text(
+                                text = Strings["clear_button"],
+                                modifier = Modifier.semantics {
+                                    contentDescription = Strings["clear_button_description"]
+                                }
+                            )
                         }
                     }
                 }
             )
             if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
                 Text(
-                    text = "Please enter a valid number",
+                    text = Strings["invalid_number"],
                     color = MaterialTheme.colors.error,
                     style = MaterialTheme.typography.caption,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             } else if (hours.toFloatOrNull()?.let { it <= 0f } == true) {
                 Text(
-                    text = "Hours must be greater than 0",
+                    text = Strings["hours_must_be_positive"],
                     color = MaterialTheme.colors.error,
                     style = MaterialTheme.typography.caption,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -834,8 +843,8 @@ fun TimeEntryDetail(
                 OutlinedTextField(
                     value = selectedIssue?.let { "#${it.id} - ${it.subject}" } ?: "",
                     onValueChange = {},
-                    label = { Text("Issue") },
-                    placeholder = { Text("Select an issue") },
+                    label = { Text(Strings["issue_label"]) },
+                    placeholder = { Text(Strings["select_issue_placeholder"]) },
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     enabled = !isLoading,
@@ -851,7 +860,7 @@ fun TimeEntryDetail(
                                 onClick = { showIssueDropdown = true },
                                 enabled = !isLoading && issues.isNotEmpty()
                             ) {
-                                Text(if (showIssueDropdown) "▲" else "▼")
+                                Text(if (showIssueDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
                             }
                         }
                     }
@@ -893,7 +902,7 @@ fun TimeEntryDetail(
                 }
                 selectedProject == null -> {
                     Text(
-                        text = "Select a project first to see its issues",
+                        text = Strings["select_project_first"],
                         color = MaterialTheme.colors.secondary,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -901,7 +910,7 @@ fun TimeEntryDetail(
                 }
                 issues.isEmpty() && selectedIssue != null -> {
                     Text(
-                        text = "Currently showing issue #${selectedIssue!!.id}",
+                        text = Strings["showing_issue"].format(selectedIssue!!.id),
                         color = MaterialTheme.colors.secondary,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -930,7 +939,7 @@ fun TimeEntryDetail(
                 OutlinedTextField(
                     value = selectedActivity?.name ?: "",
                     onValueChange = {},
-                    label = { Text("Activity") },
+                    label = { Text(Strings["activity_label"]) },
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     enabled = !isLoading,
@@ -946,7 +955,7 @@ fun TimeEntryDetail(
                                 onClick = { showActivityDropdown = true },
                                 enabled = activities.isNotEmpty()
                             ) {
-                                Text(if (showActivityDropdown) "▲" else "▼")
+                                Text(if (showActivityDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
                             }
                         }
                     }
@@ -975,7 +984,7 @@ fun TimeEntryDetail(
             }
             if (!isLoading && activities.isEmpty()) {
                 Text(
-                    text = "No activities available",
+                    text = Strings["no_activities"],
                     color = MaterialTheme.colors.error,
                     style = MaterialTheme.typography.caption,
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -994,7 +1003,7 @@ fun TimeEntryDetail(
                         comments = newValue
                     }
                 },
-                label = { Text("Comments") },
+                label = { Text(Strings["comments_label"]) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 enabled = !isLoading,
@@ -1004,7 +1013,12 @@ fun TimeEntryDetail(
                             onClick = { comments = "" },
                             enabled = !isLoading
                         ) {
-                            Text("✕")
+                            Text(
+                                text = Strings["clear_button"],
+                                modifier = Modifier.semantics {
+                                    contentDescription = Strings["clear_button_description"]
+                                }
+                            )
                         }
                     }
                 } else null
@@ -1014,7 +1028,7 @@ fun TimeEntryDetail(
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = "${comments.length}/255",
+                    text = Strings["char_count"].format(comments.length),
                     style = MaterialTheme.typography.caption,
                     color = if (comments.length > 240) MaterialTheme.colors.error else MaterialTheme.colors.onSurface.copy(
                         alpha = 0.6f
@@ -1055,7 +1069,7 @@ fun TimeEntryDetail(
                     )
                 }
                 println("[DEBUG_LOG] TimeEntry id: ${timeEntry?.id}")
-                Text(if (timeEntry?.id == null) "Add Entry (⌘S)" else "Update Entry (⌘S)")
+                Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
             }
         }
 
@@ -1063,30 +1077,40 @@ fun TimeEntryDetail(
 
         // Keyboard shortcuts help
         Text(
-            text = "Keyboard shortcuts: ⌘S - Save, Esc - Cancel",
+            text = Strings["keyboard_shortcuts"],
             style = MaterialTheme.typography.caption,
             color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
         )
     }
 }
 
-fun main() = application {
-    startKoin {
-        properties(mapOf(
-            "redmine.uri" to (System.getenv("REDMINE_URL") ?: "http://localhost:3000"),
-            "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
-            "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
-        ))
-        modules(appModule)
-    }
+fun main() {
+    // Set default locale to French
+    Locale.setDefault(Locale.FRENCH)
+    println("[DEBUG_LOG] Default locale set to: ${Locale.getDefault()}")
 
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "Redmine Time Tracking",
-        onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) },
-        state = rememberWindowState(width = 1000.dp, height = 900.dp)
-    ) {
-        val redmineClient = koinInject<RedmineClient>()
-        App(redmineClient)
+    // Initialize Strings with French as default
+    println("[DEBUG_LOG] Initializing Strings object")
+    Strings
+
+    application {
+        startKoin {
+            properties(mapOf(
+                "redmine.uri" to (System.getenv("REDMINE_URL") ?: "http://localhost:3000"),
+                "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
+                "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
+            ))
+            modules(appModule)
+        }
+
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = Strings["window_title"],
+            onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) },
+            state = rememberWindowState(width = 1000.dp, height = 900.dp)
+        ) {
+            val redmineClient = koinInject<RedmineClient>()
+            App(redmineClient)
+        }
     }
 }
