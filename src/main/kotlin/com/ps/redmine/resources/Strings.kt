@@ -18,13 +18,8 @@ object Strings {
         lang
     }
 
-    fun setLanguage(language: Language) {
-        println("[DEBUG_LOG] Setting language to: $language")
-        currentLanguage = language
-        println("[DEBUG_LOG] Language updated to: $currentLanguage")
-    }
 
-    val strings = mapOf(
+    private val strings = mapOf(
         Language.FRENCH to mapOf(
             "window_title" to "Suivi du temps Redmine",
             "project_label" to "Projet",
@@ -134,9 +129,6 @@ object Strings {
     )
 
     operator fun get(key: String): String {
-        println("[DEBUG_LOG] Current language: $currentLanguage")
-        println("[DEBUG_LOG] Accessing key: $key")
-
         val result = if (currentLanguage == Language.FRENCH) {
             // For French, try French first, then fall back to English
             strings[Language.FRENCH]?.get(key) ?: strings[Language.ENGLISH]?.get(key) ?: key
@@ -144,8 +136,6 @@ object Strings {
             // For English, try English first, then fall back to French
             strings[Language.ENGLISH]?.get(key) ?: strings[Language.FRENCH]?.get(key) ?: key
         }
-
-        println("[DEBUG_LOG] Result: $result")
         return result
     }
 }

@@ -2,10 +2,7 @@ package com.ps.redmine
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.lazy.LazyColumn
-import java.util.Locale
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -13,6 +10,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -24,15 +23,16 @@ import com.ps.redmine.model.Activity
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import org.koin.core.context.startKoin
 import org.koin.compose.koinInject
+import org.koin.core.context.startKoin
 import java.time.YearMonth
-import com.ps.redmine.resources.Strings
+import java.util.*
 
 @Composable
 fun App(redmineClient: RedmineClient) {
@@ -295,7 +295,7 @@ fun App(redmineClient: RedmineClient) {
                             }
                         },
                         onCancel = { selectedTimeEntry = null },
-                        showMessage = { message -> 
+                        showMessage = { message ->
                             scope.launch {
                                 scaffoldState.snackbarHostState.showSnackbar(message)
                             }
@@ -458,19 +458,19 @@ fun TimeEntryDetail(
             timeEntry?.date ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         ).also { println("[DEBUG_LOG] Initial date: ${it.value}") }
     }
-    var hours by remember(timeEntry) { 
+    var hours by remember(timeEntry) {
         mutableStateOf(timeEntry?.hours?.toString() ?: "").also { println("[DEBUG_LOG] Initial hours: ${it.value}") }
     }
-    var comments by remember(timeEntry) { 
+    var comments by remember(timeEntry) {
         mutableStateOf(timeEntry?.comments ?: "").also { println("[DEBUG_LOG] Initial comments: ${it.value}") }
     }
-    var selectedProject by remember { 
+    var selectedProject by remember {
         mutableStateOf<Project?>(null).also { println("[DEBUG_LOG] Initial project: ${it.value?.name}") }
     }
-    var selectedActivity by remember { 
+    var selectedActivity by remember {
         mutableStateOf<Activity?>(null).also { println("[DEBUG_LOG] Initial activity: ${it.value?.name}") }
     }
-    var selectedIssue by remember { 
+    var selectedIssue by remember {
         mutableStateOf<Issue?>(timeEntry?.issue).also { println("[DEBUG_LOG] Initial issue: ${it.value?.subject}") }
     }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
@@ -561,7 +561,6 @@ fun TimeEntryDetail(
             println("[DEBUG_LOG] Loaded ${projects.size} projects and ${activities.size} activities")
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error loading data: ${e.message}")
-            e.printStackTrace()
         } finally {
             isLoading = false
         }
@@ -583,7 +582,6 @@ fun TimeEntryDetail(
                 issues.forEach { println("[DEBUG_LOG] Issue: #${it.id} - ${it.subject}") }
             } catch (e: Exception) {
                 println("[DEBUG_LOG] Error loading issues: ${e.message}")
-                e.printStackTrace()
                 issues = emptyList()
             } finally {
                 isLoadingIssues = false
@@ -891,15 +889,16 @@ fun TimeEntryDetail(
                 isLoadingIssues -> {
                     val project = selectedProject
                     Text(
-                        text = if (project != null) 
-                            "Loading open issues for project ${project.name}..." 
-                        else 
+                        text = if (project != null)
+                            "Loading open issues for project ${project.name}..."
+                        else
                             "Loading issues...",
                         color = MaterialTheme.colors.secondary,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
+
                 selectedProject == null -> {
                     Text(
                         text = Strings["select_project_first"],
@@ -908,6 +907,7 @@ fun TimeEntryDetail(
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
+
                 issues.isEmpty() && selectedIssue != null -> {
                     Text(
                         text = Strings["showing_issue"].format(selectedIssue!!.id),
@@ -916,6 +916,7 @@ fun TimeEntryDetail(
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
+
                 issues.isEmpty() -> {
                     val project = selectedProject
                     Text(
@@ -1095,11 +1096,13 @@ fun main() {
 
     application {
         startKoin {
-            properties(mapOf(
-                "redmine.uri" to (System.getenv("REDMINE_URL") ?: "http://localhost:3000"),
-                "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
-                "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
-            ))
+            properties(
+                mapOf(
+                    "redmine.uri" to (System.getenv("REDMINE_URL") ?: "https://redmine-restreint.packsolutions.local"),
+                    "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
+                    "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
+                )
+            )
             modules(appModule)
         }
 

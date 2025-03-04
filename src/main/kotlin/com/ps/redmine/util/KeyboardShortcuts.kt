@@ -35,10 +35,12 @@ object KeyShortcutManager {
                 _keyShortcuts.trySend(KeyShortcut.PreviousMonth)
                 return true
             }
+
             (keyEvent.isAltPressed) && keyEvent.key == Key.DirectionRight -> {
                 _keyShortcuts.trySend(KeyShortcut.NextMonth)
                 return true
             }
+
             (keyEvent.isAltPressed) && keyEvent.key == Key.T -> {
                 _keyShortcuts.trySend(KeyShortcut.CurrentMonth)
                 return true

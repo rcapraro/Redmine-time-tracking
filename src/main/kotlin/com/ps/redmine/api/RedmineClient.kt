@@ -1,24 +1,25 @@
 package com.ps.redmine.api
 
+import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Issue
+import com.ps.redmine.model.Project
+import com.ps.redmine.util.toJava
+import com.ps.redmine.util.toKotlin
 import com.taskadapter.redmineapi.RedmineManagerFactory
 import com.taskadapter.redmineapi.bean.TimeEntry
-import com.taskadapter.redmineapi.bean.TimeEntryActivity
-import com.taskadapter.redmineapi.bean.Project as RedmineProject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import org.apache.http.conn.ssl.NoopHostnameVerifier
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy
 import org.apache.http.impl.client.HttpClients
 import org.apache.http.ssl.SSLContextBuilder
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.datetime.*
-import com.ps.redmine.model.Activity
-import com.ps.redmine.model.Issue
-import com.ps.redmine.model.Project
-import com.ps.redmine.model.TimeEntry as AppTimeEntry
-import com.ps.redmine.util.toJava
-import com.ps.redmine.util.toKotlin
 import java.time.ZoneId
 import java.util.*
+import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
 class RedmineClient(
     private val uri: String,
@@ -91,7 +92,7 @@ class RedmineClient(
             issueId = timeEntry.issue.id
         }
 
-        val javaDate = Date.from(timeEntry.date.toJava().atStartOfDay(ZoneId.of("UTC")).toInstant())
+        val javaDate = Date.from(timeEntry.date.toJava().atStartOfDay(ZoneId.systemDefault()).toInstant())
 
         redmineTimeEntry.activityId = timeEntry.activity.id
         redmineTimeEntry.spentOn = javaDate
@@ -107,7 +108,7 @@ class RedmineClient(
 
         try {
             val redmineTimeEntry = redmineManager.timeEntryManager.getTimeEntry(timeEntry.id)
-            val javaDate = Date.from(timeEntry.date.toJava().atStartOfDay(ZoneId.of("UTC")).toInstant())
+            val javaDate = Date.from(timeEntry.date.toJava().atStartOfDay(ZoneId.systemDefault()).toInstant())
 
             redmineTimeEntry.spentOn = javaDate
             redmineTimeEntry.hours = timeEntry.hours
@@ -124,7 +125,6 @@ class RedmineClient(
             timeEntry
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error updating time entry: ${e.message}")
-            e.printStackTrace()
             timeEntry  // Return original entry if update fails
         }
     }
@@ -136,7 +136,6 @@ class RedmineClient(
             println("[DEBUG_LOG] Time entry deleted successfully")
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error deleting time entry: ${e.message}")
-            e.printStackTrace()
             // The entry might still be deleted even if we get an error
             println("[DEBUG_LOG] Note: The entry might have been deleted despite the error")
         }
@@ -145,9 +144,9 @@ class RedmineClient(
     suspend fun getActivities(): List<Activity> = withContext(Dispatchers.IO) {
         cachedActivities?.let { return@withContext it }
 
-        val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity -> 
-            Activity(activity.id, activity.name).also { 
-                activityCache[activity.id] = it 
+        val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity ->
+            Activity(activity.id, activity.name).also {
+                activityCache[activity.id] = it
             }
         }
         cachedActivities = activities
@@ -164,9 +163,9 @@ class RedmineClient(
     suspend fun getProjects(): List<Project> = withContext(Dispatchers.IO) {
         cachedProjects?.values?.toList()?.let { return@withContext it }
 
-        val projects = redmineManager.projectManager.projects.map { project ->  
-            Project(project.id, project.name).also { 
-                projectCache[project.id] = it 
+        val projects = redmineManager.projectManager.projects.map { project ->
+            Project(project.id, project.name).also {
+                projectCache[project.id] = it
             }
         }
         cachedProjects = projectCache.toMap()
@@ -193,33 +192,32 @@ class RedmineClient(
         try {
             val issues = redmineManager.issueManager.getIssues(params)
             println("[DEBUG_LOG] Fetched ${issues.results.size} issues from Redmine")
-            issues.results.orEmpty().map { issue -> 
+            issues.results.orEmpty().map { issue ->
                 println("[DEBUG_LOG] Processing issue #${issue.id}: ${issue.subject} (Project: ${issue.projectId})")
                 Issue(issue.id, issue.subject)
-            }.also { 
+            }.also {
                 println("[DEBUG_LOG] Returning ${it.size} issues")
             }
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error fetching issues: ${e.message}")
-            e.printStackTrace()
             emptyList()
         }
     }
 
     private suspend fun convertToAppTimeEntry(entry: TimeEntry): AppTimeEntry {
         val date = entry.spentOn.toInstant()
-            .atZone(ZoneId.of("UTC"))
+            .atZone(ZoneId.systemDefault())
             .toLocalDate()
             .toKotlin()
 
         // Use cached data
-        val project = projectCache[entry.projectId] 
+        val project = projectCache[entry.projectId]
             ?: Project(entry.projectId, "Unknown Project").also { projectCache[entry.projectId] = it }
 
-        val issue = issueCache[entry.issueId] 
+        val issue = issueCache[entry.issueId]
             ?: Issue(entry.issueId, "Unknown Issue").also { issueCache[entry.issueId] = it }
 
-        val activity = activityCache[entry.activityId] 
+        val activity = activityCache[entry.activityId]
             ?: Activity(entry.activityId, "Unknown Activity").also { activityCache[entry.activityId] = it }
 
         return AppTimeEntry(

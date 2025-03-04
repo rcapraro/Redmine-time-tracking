@@ -1,8 +1,11 @@
 package com.ps.redmine.api
 
+import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Issue
+import com.ps.redmine.model.Project
+import com.ps.redmine.model.TimeEntry
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -14,10 +17,6 @@ import org.koin.dsl.module
 import org.koin.test.KoinTest
 import org.koin.test.inject
 import kotlin.test.assertEquals
-import com.ps.redmine.model.Project
-import com.ps.redmine.model.Activity
-import com.ps.redmine.model.Issue
-import com.ps.redmine.model.TimeEntry
 
 class RedmineClientTest : KoinTest {
     private val testDispatcher = StandardTestDispatcher()
@@ -34,8 +33,8 @@ class RedmineClientTest : KoinTest {
             password = "test"
         ).let { mockk<RedmineClient>(relaxed = true) }
 
-        coEvery { 
-            mockRedmineClient.getTimeEntriesForMonth(2023, 1) 
+        coEvery {
+            mockRedmineClient.getTimeEntriesForMonth(2023, 1)
         } returns emptyList()
 
         startKoin {

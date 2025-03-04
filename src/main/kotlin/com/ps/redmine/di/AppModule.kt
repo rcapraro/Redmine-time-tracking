@@ -4,7 +4,7 @@ import com.ps.redmine.api.RedmineClient
 import org.koin.dsl.module
 
 val appModule = module {
-    single { 
+    single {
         RedmineClient(
             uri = getProperty("redmine.uri"),
             username = getProperty("redmine.username"),
