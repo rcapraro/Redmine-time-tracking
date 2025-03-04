@@ -25,6 +25,12 @@ class RedmineClient(
     private val username: String,
     private val password: String
 ) {
+    // Cache for activities and projects
+    private var cachedActivities: List<Activity>? = null
+    private var cachedProjects: Map<Int, Project>? = null
+    private val projectCache = mutableMapOf<Int, Project>()
+    private val activityCache = mutableMapOf<Int, Activity>()
+    private val issueCache = mutableMapOf<Int, Issue>()
     private val redmineManager = RedmineManagerFactory.createWithUserAuth(
         uri,
         username,
@@ -36,6 +42,9 @@ class RedmineClient(
     )
 
     suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> = withContext(Dispatchers.IO) {
+        println("[DEBUG_LOG] Loading time entries for $year-$month")
+        val startTime = System.currentTimeMillis()
+
         val startDate = LocalDate(year, month, 1)
         val endDate = startDate.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
 
@@ -45,8 +54,36 @@ class RedmineClient(
             "user_id" to "me"
         )
 
+        // Pre-load activities and projects
+        getActivities()
+        getProjects()
+
         val entries = redmineManager.timeEntryManager.getTimeEntries(params)
-        entries.results.orEmpty().map { entry -> convertToAppTimeEntry(entry) }
+
+        // Collect unique issue IDs and project IDs
+        val uniqueIssueIds = entries.results.orEmpty().map { it.issueId }.distinct()
+        val uniqueProjectIds = entries.results.orEmpty().map { it.projectId }.distinct()
+
+        // Batch load issues
+        println("[DEBUG_LOG] Batch loading ${uniqueIssueIds.size} issues")
+        uniqueIssueIds.forEach { issueId ->
+            if (!issueCache.containsKey(issueId)) {
+                try {
+                    val issue = redmineManager.issueManager.getIssueById(issueId)
+                    issueCache[issueId] = Issue(issue.id, issue.subject)
+                } catch (e: Exception) {
+                    println("[DEBUG_LOG] Failed to load issue #$issueId: ${e.message}")
+                    issueCache[issueId] = Issue(issueId, "Unknown Issue")
+                }
+            }
+        }
+
+        val result = entries.results.orEmpty().map { entry -> convertToAppTimeEntry(entry) }
+
+        val endTime = System.currentTimeMillis()
+        println("[DEBUG_LOG] Loaded ${result.size} time entries in ${endTime - startTime}ms")
+
+        result
     }
 
     suspend fun createTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
@@ -106,20 +143,34 @@ class RedmineClient(
     }
 
     suspend fun getActivities(): List<Activity> = withContext(Dispatchers.IO) {
-        val activities = redmineManager.timeEntryManager.timeEntryActivities
-        activities.map { activity -> Activity(activity.id, activity.name) }
+        cachedActivities?.let { return@withContext it }
+
+        val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity -> 
+            Activity(activity.id, activity.name).also { 
+                activityCache[activity.id] = it 
+            }
+        }
+        cachedActivities = activities
+        activities
     }
 
     private suspend fun getActivity(activityId: Int): Activity = withContext(Dispatchers.IO) {
-        val activities = redmineManager.timeEntryManager.timeEntryActivities
-        activities.find { it.id == activityId }?.let { activity ->
-            Activity(activity.id, activity.name)
-        } ?: Activity(activityId, "Unknown Activity")
+        activityCache[activityId]?.let { return@withContext it }
+
+        getActivities() // This will populate the cache
+        activityCache[activityId] ?: Activity(activityId, "Unknown Activity")
     }
 
     suspend fun getProjects(): List<Project> = withContext(Dispatchers.IO) {
-        val projects = redmineManager.projectManager.projects
-        projects.map { project ->  Project(project.id, project.name) }
+        cachedProjects?.values?.toList()?.let { return@withContext it }
+
+        val projects = redmineManager.projectManager.projects.map { project ->  
+            Project(project.id, project.name).also { 
+                projectCache[project.id] = it 
+            }
+        }
+        cachedProjects = projectCache.toMap()
+        projects
     }
 
 
@@ -161,14 +212,21 @@ class RedmineClient(
             .toLocalDate()
             .toKotlin()
 
-        val project = Project(entry.projectId, redmineManager.projectManager.getProjectById(entry.projectId).name)
-        val issue = getIssue(entry.issueId)
+        // Use cached data
+        val project = projectCache[entry.projectId] 
+            ?: Project(entry.projectId, "Unknown Project").also { projectCache[entry.projectId] = it }
+
+        val issue = issueCache[entry.issueId] 
+            ?: Issue(entry.issueId, "Unknown Issue").also { issueCache[entry.issueId] = it }
+
+        val activity = activityCache[entry.activityId] 
+            ?: Activity(entry.activityId, "Unknown Activity").also { activityCache[entry.activityId] = it }
 
         return AppTimeEntry(
             id = entry.id,
             date = date,
             hours = entry.hours,
-            activity = getActivity(entry.activityId),
+            activity = activity,
             project = project,
             issue = issue,
             comments = entry.comment ?: ""
