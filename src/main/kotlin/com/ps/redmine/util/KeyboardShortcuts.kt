@@ -1,4 +1,4 @@
-package com.ps.util
+package com.ps.redmine.util
 
 import androidx.compose.ui.input.key.*
 import kotlinx.coroutines.channels.Channel

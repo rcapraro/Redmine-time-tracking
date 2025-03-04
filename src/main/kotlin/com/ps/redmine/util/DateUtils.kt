@@ -1,4 +1,4 @@
-package com.ps.util
+package com.ps.redmine.util
 
 import kotlinx.datetime.*
 import java.time.LocalDate as JavaLocalDate

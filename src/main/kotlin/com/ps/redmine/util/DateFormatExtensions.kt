@@ -1,4 +1,4 @@
-package com.ps.util
+package com.ps.redmine.util
 
 import java.time.YearMonth
 import java.time.format.TextStyle

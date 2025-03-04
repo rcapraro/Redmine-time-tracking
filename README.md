@@ -25,6 +25,7 @@ The application requires the following environment variables to be set:
 - `REDMINE_URL`: The URL of your Redmine server (e.g., "https://redmine.example.com")
 - `REDMINE_USERNAME`: Your Redmine username
 - `REDMINE_PASSWORD`: Your Redmine password
+- `REDMINE_PROJECT_ID`: (Optional) The default project identifier to use for new time entries (defaults to "pml-pac-4025")
 
 ## Installation
 

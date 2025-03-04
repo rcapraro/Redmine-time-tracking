@@ -31,12 +31,23 @@ dependencies {
     // Date/Time handling
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.0")
 
+    // Koin
+    implementation("io.insert-koin:koin-core:3.4.0")
+    implementation("io.insert-koin:koin-compose:1.0.4")
+
     // Testing
-    testImplementation(kotlin("test"))
+    testImplementation("io.insert-koin:koin-test:3.4.0")
+    testImplementation("io.insert-koin:koin-test-junit5:3.4.0")
+    testImplementation("io.mockk:mockk-jvm:1.13.5")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.9.3")
 }
 
 tasks.test {
     useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }
 
 kotlin {

@@ -1,4 +1,4 @@
-package com.ps.components
+package com.ps.redmine.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,10 +8,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
-import com.ps.util.DateFormatter
-import com.ps.util.toJavaYearMonth
-import com.ps.util.toKotlin
-import com.ps.util.today
+import com.ps.redmine.util.DateFormatter
+import com.ps.redmine.util.toJavaYearMonth
+import com.ps.redmine.util.toKotlin
+import com.ps.redmine.util.today
 import kotlinx.datetime.LocalDate
 import java.time.format.TextStyle
 import java.util.*

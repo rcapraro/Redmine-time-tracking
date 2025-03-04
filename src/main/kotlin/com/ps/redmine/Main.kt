@@ -1,4 +1,4 @@
-package com.ps
+package com.ps.redmine
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -6,22 +6,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.ps.api.RedmineClient
-import com.ps.components.DatePicker
-import com.ps.model.Activity
-import com.ps.model.Project
-import com.ps.model.TimeEntry
-import com.ps.util.*
+import androidx.compose.ui.window.rememberWindowState
+import com.ps.redmine.api.RedmineClient
+import com.ps.redmine.components.DatePicker
+import com.ps.redmine.di.appModule
+import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Issue
+import com.ps.redmine.model.Project
+import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.util.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.koin.core.context.startKoin
+import org.koin.compose.koinInject
 import java.time.YearMonth
 
 @Composable
@@ -48,6 +54,34 @@ fun App(redmineClient: RedmineClient) {
                 errorMessage = "Error loading time entries: ${e.message}"
             } finally {
                 isLoading = false
+            }
+        }
+    }
+
+    fun deleteTimeEntry(timeEntry: TimeEntry) {
+        scope.launch {
+            try {
+                timeEntry.id?.let { id ->
+                    println("[DEBUG_LOG] Attempting to delete time entry #$id")
+                    try {
+                        redmineClient.deleteTimeEntry(id)
+                        println("[DEBUG_LOG] Delete operation completed successfully")
+                        scaffoldState.snackbarHostState.showSnackbar("Time entry deleted successfully")
+                    } catch (e: Exception) {
+                        println("[DEBUG_LOG] Error during delete operation: ${e.message}")
+                        scaffoldState.snackbarHostState.showSnackbar(
+                            "Operation might have succeeded, but there was an error: ${e.message}"
+                        )
+                    } finally {
+                        // Always refresh the list and clear selection
+                        println("[DEBUG_LOG] Refreshing time entries list")
+                        loadTimeEntries(currentMonth)
+                        selectedTimeEntry = null
+                    }
+                }
+            } catch (e: Exception) {
+                println("[DEBUG_LOG] Unexpected error in delete operation: ${e.message}")
+                scaffoldState.snackbarHostState.showSnackbar("An unexpected error occurred: ${e.message}")
             }
         }
     }
@@ -105,6 +139,7 @@ fun App(redmineClient: RedmineClient) {
                                 hours = 0f,
                                 project = Project(0, ""),
                                 activity = Activity(0, ""),
+                                issue = Issue(0, ""),
                                 comments = ""
                             )
                         }
@@ -209,7 +244,9 @@ fun App(redmineClient: RedmineClient) {
                             TimeEntriesList(
                                 timeEntries = timeEntries,
                                 selectedTimeEntry = selectedTimeEntry,
-                                onTimeEntrySelected = { selectedTimeEntry = it }
+                                onTimeEntrySelected = { selectedTimeEntry = it },
+                                onDelete = { entry -> deleteTimeEntry(entry) },
+                                redmineClient = redmineClient
                             )
                         }
                     }
@@ -227,6 +264,7 @@ fun App(redmineClient: RedmineClient) {
                         onSave = { updatedEntry ->
                             scope.launch {
                                 try {
+                                    println("[DEBUG_LOG] Saving entry in parent scope")
                                     val savedEntry = if (updatedEntry.id == null) {
                                         redmineClient.createTimeEntry(updatedEntry)
                                     } else {
@@ -238,16 +276,26 @@ fun App(redmineClient: RedmineClient) {
                                         currentMonth.monthValue
                                     )
                                     selectedTimeEntry = null
-                                    errorMessage = if (updatedEntry.id == null)
+
+                                    val message = if (updatedEntry.id == null)
                                         "Time entry created successfully"
                                     else
                                         "Time entry updated successfully"
+                                    scaffoldState.snackbarHostState.showSnackbar(message)
                                 } catch (e: Exception) {
-                                    errorMessage = "Error saving time entry: ${e.message}"
+                                    println("[DEBUG_LOG] Error in parent scope: ${e.message}")
+                                    scaffoldState.snackbarHostState.showSnackbar(
+                                        "Operation might have succeeded, but there was an error: ${e.message}"
+                                    )
                                 }
                             }
                         },
-                        onCancel = { selectedTimeEntry = null }
+                        onCancel = { selectedTimeEntry = null },
+                        showMessage = { message -> 
+                            scope.launch {
+                                scaffoldState.snackbarHostState.showSnackbar(message)
+                            }
+                        }
                     )
                 }
             }
@@ -259,7 +307,9 @@ fun App(redmineClient: RedmineClient) {
 fun TimeEntriesList(
     timeEntries: List<TimeEntry>,
     selectedTimeEntry: TimeEntry?,
-    onTimeEntrySelected: (TimeEntry) -> Unit
+    onTimeEntrySelected: (TimeEntry) -> Unit,
+    onDelete: (TimeEntry) -> Unit,
+    redmineClient: RedmineClient
 ) {
     val groupedEntries = remember(timeEntries) {
         timeEntries
@@ -292,7 +342,9 @@ fun TimeEntriesList(
                         TimeEntryItem(
                             timeEntry = entry,
                             isSelected = entry == selectedTimeEntry,
-                            onClick = { onTimeEntrySelected(entry) }
+                            onClick = { onTimeEntrySelected(entry) },
+                            onDelete = { onDelete(entry) },
+                            redmineClient = redmineClient
                         )
                     }
                 }
@@ -305,7 +357,9 @@ fun TimeEntriesList(
 fun TimeEntryItem(
     timeEntry: TimeEntry,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    redmineClient: RedmineClient
 ) {
     Surface(
         modifier = Modifier
@@ -345,7 +399,7 @@ fun TimeEntryItem(
                 }
                 Column {
                     Text(
-                        text = timeEntry.project.name,
+                        text = timeEntry.project?.name ?: "No Project",
                         style = MaterialTheme.typography.body1
                     )
                     Row(
@@ -354,6 +408,11 @@ fun TimeEntryItem(
                     ) {
                         Text(
                             text = timeEntry.activity.name,
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.secondary
+                        )
+                        Text(
+                            text = "• #${timeEntry.issue.id} ${timeEntry.issue.subject}",
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colors.secondary
                         )
@@ -368,6 +427,16 @@ fun TimeEntryItem(
                     }
                 }
             }
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete time entry",
+                    tint = MaterialTheme.colors.error
+                )
+            }
         }
     }
 }
@@ -377,46 +446,67 @@ fun TimeEntryDetail(
     timeEntry: TimeEntry?,
     redmineClient: RedmineClient,
     onSave: (TimeEntry) -> Unit,
-    onCancel: () -> Unit = {}
+    onCancel: () -> Unit = {},
+    showMessage: suspend (String) -> Unit
 ) {
     var date by remember(timeEntry) {
         mutableStateOf(
             timeEntry?.date ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        )
+        ).also { println("[DEBUG_LOG] Initial date: ${it.value}") }
     }
-    var hours by remember(timeEntry) { mutableStateOf(timeEntry?.hours?.toString() ?: "") }
-    var comments by remember(timeEntry) { mutableStateOf(timeEntry?.comments ?: "") }
-    var selectedProject by remember { mutableStateOf<Project?>(null) }
-    var selectedActivity by remember { mutableStateOf<Activity?>(null) }
-
+    var hours by remember(timeEntry) { 
+        mutableStateOf(timeEntry?.hours?.toString() ?: "").also { println("[DEBUG_LOG] Initial hours: ${it.value}") }
+    }
+    var comments by remember(timeEntry) { 
+        mutableStateOf(timeEntry?.comments ?: "").also { println("[DEBUG_LOG] Initial comments: ${it.value}") }
+    }
+    var selectedProject by remember { 
+        mutableStateOf<Project?>(null).also { println("[DEBUG_LOG] Initial project: ${it.value?.name}") }
+    }
+    var selectedActivity by remember { 
+        mutableStateOf<Activity?>(null).also { println("[DEBUG_LOG] Initial activity: ${it.value?.name}") }
+    }
+    var selectedIssue by remember { 
+        mutableStateOf<Issue?>(timeEntry?.issue).also { println("[DEBUG_LOG] Initial issue: ${it.value?.subject}") }
+    }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var activities by remember { mutableStateOf<List<Activity>>(emptyList()) }
+    var issues by remember { mutableStateOf<List<Issue>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var isLoadingIssues by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var showProjectDropdown by remember { mutableStateOf(false) }
     var showActivityDropdown by remember { mutableStateOf(false) }
+    var showIssueDropdown by remember { mutableStateOf(false) }
     var showCancelConfirmation by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
-    val isValid = remember(selectedProject, selectedActivity, hours) {
+    val isValid = remember(selectedProject, selectedActivity, hours, selectedIssue) {
         selectedProject != null &&
                 selectedActivity != null &&
                 hours.isNotEmpty() &&
                 hours.toFloatOrNull() != null &&
-                hours.toFloatOrNull() != 0f
+                hours.toFloatOrNull() != 0f &&
+                selectedIssue != null
     }
 
-    val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date) {
-        if (timeEntry == null) {
-            hours.isNotEmpty() || comments.isNotEmpty() || selectedProject != null || selectedActivity != null
+    val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date, selectedIssue) {
+        val changed = if (timeEntry == null) {
+            hours.isNotEmpty() || comments.isNotEmpty() || selectedProject != null || selectedActivity != null || selectedIssue != null
         } else {
             hours != timeEntry.hours.toString() ||
                     comments != timeEntry.comments ||
-                    selectedProject != timeEntry.project ||
+                    selectedProject?.id != timeEntry.project.id ||
                     selectedActivity != timeEntry.activity ||
-                    date != timeEntry.date
+                    date != timeEntry.date ||
+                    selectedIssue?.id != timeEntry.issue.id
         }
+        println("[DEBUG_LOG] Form changes detected: $changed")
+        println("[DEBUG_LOG] Hours: $hours, Comments: $comments")
+        println("[DEBUG_LOG] Project: ${selectedProject?.name}, Activity: ${selectedActivity?.name}")
+        println("[DEBUG_LOG] Issue: ${selectedIssue?.subject}")
+        changed
     }
 
     fun saveEntry() {
@@ -426,16 +516,21 @@ fun TimeEntryDetail(
                 scope.launch {
                     isSaving = true
                     try {
+                        println("[DEBUG_LOG] Saving time entry (id: ${timeEntry?.id})")
                         onSave(
                             TimeEntry(
                                 id = timeEntry?.id,
                                 date = date,
                                 hours = hours.toFloatOrNull() ?: 0f,
                                 project = project,
+                                issue = selectedIssue ?: Issue(0, ""),
                                 activity = activity,
                                 comments = comments
                             )
                         )
+                        println("[DEBUG_LOG] Save operation completed successfully")
+                    } catch (e: Exception) {
+                        println("[DEBUG_LOG] Error in save operation UI handler: ${e.message}")
                     } finally {
                         isSaving = false
                     }
@@ -456,22 +551,80 @@ fun TimeEntryDetail(
     LaunchedEffect(Unit) {
         isLoading = true
         try {
+            println("[DEBUG_LOG] Loading initial data")
             projects = redmineClient.getProjects()
             activities = redmineClient.getActivities()
+            println("[DEBUG_LOG] Loaded ${projects.size} projects and ${activities.size} activities")
         } catch (e: Exception) {
-            println("Error loading projects and activities: ${e.message}")
+            println("[DEBUG_LOG] Error loading data: ${e.message}")
+            e.printStackTrace()
         } finally {
             isLoading = false
         }
     }
 
+    // Load issues when project changes
+    LaunchedEffect(selectedProject) {
+        val project = selectedProject
+        println("[DEBUG_LOG] Project changed: ${project?.name}")
+        println("[DEBUG_LOG] Current state - Hours: $hours, Comments: $comments")
+        println("[DEBUG_LOG] Current state - Activity: ${selectedActivity?.name}")
+
+        if (project != null) {
+            isLoadingIssues = true
+            try {
+                println("[DEBUG_LOG] Loading issues for project: ${project.id} (${project.name})")
+                issues = redmineClient.getIssues(project.id)
+                println("[DEBUG_LOG] Loaded ${issues.size} issues")
+                issues.forEach { println("[DEBUG_LOG] Issue: #${it.id} - ${it.subject}") }
+            } catch (e: Exception) {
+                println("[DEBUG_LOG] Error loading issues: ${e.message}")
+                e.printStackTrace()
+                issues = emptyList()
+            } finally {
+                isLoadingIssues = false
+            }
+        } else {
+            issues = emptyList()
+            selectedIssue = null
+        }
+
+        println("[DEBUG_LOG] After project change - Hours: $hours, Comments: $comments")
+        println("[DEBUG_LOG] After project change - Activity: ${selectedActivity?.name}")
+    }
+
     // Update selections when timeEntry changes or lists are loaded
-    LaunchedEffect(timeEntry, projects, activities) {
-        if (timeEntry != null && projects.isNotEmpty() && activities.isNotEmpty()) {
-            selectedProject = projects.find { it.id == timeEntry.project.id }
-            selectedActivity = activities.find { it.id == timeEntry.activity.id }
+    LaunchedEffect(timeEntry) {
+        println("[DEBUG_LOG] Time entry changed: ${timeEntry?.id}")
+        println("[DEBUG_LOG] Current state before update:")
+        println("[DEBUG_LOG] - Hours: $hours")
+        println("[DEBUG_LOG] - Comments: $comments")
+        println("[DEBUG_LOG] - Project: ${selectedProject?.name}")
+        println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
+        println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
+
+        // Only update on initial load or when editing an entry
+        if (timeEntry != null && (selectedProject == null || timeEntry.id != null)) {
+            println("[DEBUG_LOG] Updating from time entry ${if (timeEntry.id == null) "(new)" else "#${timeEntry.id}"}")
+
+            // Preserve existing values if they exist
+            if (selectedProject == null) {
+                selectedProject = projects.find { it.id == timeEntry.project.id }
+                selectedActivity = activities.find { it.id == timeEntry.activity.id }
+                selectedIssue = timeEntry.issue
+                hours = timeEntry.hours.toString()
+                comments = timeEntry.comments
+            }
+
+            println("[DEBUG_LOG] State after update:")
+            println("[DEBUG_LOG] - Hours: $hours")
+            println("[DEBUG_LOG] - Comments: $comments")
+            println("[DEBUG_LOG] - Project: ${selectedProject?.name}")
+            println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
+            println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
         }
     }
+
 
     // Handle keyboard shortcuts
     LaunchedEffect(Unit) {
@@ -554,6 +707,83 @@ fun TimeEntryDetail(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Project dropdown
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = selectedProject?.name ?: "",
+                    onValueChange = {},
+                    label = { Text("Project") },
+                    modifier = Modifier.fillMaxWidth(),
+                    readOnly = true,
+                    enabled = !isLoading,
+                    isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
+                    trailingIcon = {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            IconButton(
+                                onClick = { showProjectDropdown = true },
+                                enabled = projects.isNotEmpty()
+                            ) {
+                                Text(if (showProjectDropdown) "▲" else "▼")
+                            }
+                        }
+                    }
+                )
+                DropdownMenu(
+                    expanded = showProjectDropdown && !isLoading,
+                    onDismissRequest = { showProjectDropdown = false }
+                ) {
+                    projects.forEach { project ->
+                        DropdownMenuItem(
+                            onClick = {
+                                println("[DEBUG_LOG] Project selection changed:")
+                                println("[DEBUG_LOG] - From: ${selectedProject?.name}")
+                                println("[DEBUG_LOG] - To: ${project.name}")
+                                println("[DEBUG_LOG] Current state before change:")
+                                println("[DEBUG_LOG] - Hours: $hours")
+                                println("[DEBUG_LOG] - Comments: $comments")
+                                println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
+                                println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
+
+                                selectedProject = project
+                                selectedIssue = null  // Reset only issue selection
+                                showProjectDropdown = false
+
+                                println("[DEBUG_LOG] State after project change:")
+                                println("[DEBUG_LOG] - Hours: $hours")
+                                println("[DEBUG_LOG] - Comments: $comments")
+                                println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
+                                println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
+                            }
+                        ) {
+                            Text(
+                                text = project.name,
+                                color = if (project == selectedProject)
+                                    MaterialTheme.colors.primary
+                                else
+                                    MaterialTheme.colors.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+            if (!isLoading && projects.isEmpty()) {
+                Text(
+                    text = "No projects available",
+                    color = MaterialTheme.colors.error,
+                    style = MaterialTheme.typography.caption,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         // Hours
         Column(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
@@ -598,47 +828,48 @@ fun TimeEntryDetail(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Project dropdown
+        // Issue dropdown
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = selectedProject?.name ?: "",
+                    value = selectedIssue?.let { "#${it.id} - ${it.subject}" } ?: "",
                     onValueChange = {},
-                    label = { Text("Project") },
+                    label = { Text("Issue") },
+                    placeholder = { Text("Select an issue") },
                     modifier = Modifier.fillMaxWidth(),
                     readOnly = true,
                     enabled = !isLoading,
-                    isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
+                    isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
                     trailingIcon = {
-                        if (isLoading) {
+                        if (isLoadingIssues) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
                             )
                         } else {
                             IconButton(
-                                onClick = { showProjectDropdown = true },
-                                enabled = projects.isNotEmpty()
+                                onClick = { showIssueDropdown = true },
+                                enabled = !isLoading && issues.isNotEmpty()
                             ) {
-                                Text(if (showProjectDropdown) "▲" else "▼")
+                                Text(if (showIssueDropdown) "▲" else "▼")
                             }
                         }
                     }
                 )
                 DropdownMenu(
-                    expanded = showProjectDropdown && !isLoading,
-                    onDismissRequest = { showProjectDropdown = false }
+                    expanded = showIssueDropdown && !isLoading,
+                    onDismissRequest = { showIssueDropdown = false }
                 ) {
-                    projects.forEach { project ->
+                    issues.forEach { issue ->
                         DropdownMenuItem(
                             onClick = {
-                                selectedProject = project
-                                showProjectDropdown = false
+                                selectedIssue = issue
+                                showIssueDropdown = false
                             }
                         ) {
                             Text(
-                                text = project.name,
-                                color = if (project == selectedProject)
+                                text = "#${issue.id} - ${issue.subject}",
+                                color = if (issue == selectedIssue)
                                     MaterialTheme.colors.primary
                                 else
                                     MaterialTheme.colors.onSurface
@@ -647,13 +878,47 @@ fun TimeEntryDetail(
                     }
                 }
             }
-            if (!isLoading && projects.isEmpty()) {
-                Text(
-                    text = "No projects available",
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
+            when {
+                isLoadingIssues -> {
+                    val project = selectedProject
+                    Text(
+                        text = if (project != null) 
+                            "Loading open issues for project ${project.name}..." 
+                        else 
+                            "Loading issues...",
+                        color = MaterialTheme.colors.secondary,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+                selectedProject == null -> {
+                    Text(
+                        text = "Select a project first to see its issues",
+                        color = MaterialTheme.colors.secondary,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+                issues.isEmpty() && selectedIssue != null -> {
+                    Text(
+                        text = "Currently showing issue #${selectedIssue!!.id}",
+                        color = MaterialTheme.colors.secondary,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+                issues.isEmpty() -> {
+                    val project = selectedProject
+                    Text(
+                        text = if (project != null)
+                            "No open issues found in project ${project.name}"
+                        else
+                            "No issues available",
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
             }
         }
 
@@ -762,21 +1027,18 @@ fun TimeEntryDetail(
 
         Button(
             onClick = {
-                if (!isSaving) {
-                    selectedProject?.let { project ->
-                        selectedActivity?.let { activity ->
-                            onSave(
-                                TimeEntry(
-                                    id = timeEntry?.id,
-                                    date = date,
-                                    hours = hours.toFloatOrNull() ?: 0f,
-                                    project = project,
-                                    activity = activity,
-                                    comments = comments
-                                )
-                            )
-                        }
-                    }
+                if (!isSaving && selectedProject != null && selectedActivity != null && selectedIssue != null) {
+                    onSave(
+                        TimeEntry(
+                            id = timeEntry?.id,
+                            date = date,
+                            hours = hours.toFloatOrNull() ?: 0f,
+                            project = selectedProject!!,
+                            activity = selectedActivity!!,
+                            issue = selectedIssue!!,
+                            comments = comments
+                        )
+                    )
                 }
             },
             modifier = Modifier.align(Alignment.End),
@@ -809,17 +1071,22 @@ fun TimeEntryDetail(
 }
 
 fun main() = application {
-    val redmineClient = RedmineClient(
-        uri = System.getenv("REDMINE_URL") ?: "http://localhost:3000",
-        username = System.getenv("REDMINE_USERNAME") ?: "",
-        password = System.getenv("REDMINE_PASSWORD") ?: ""
-    )
+    startKoin {
+        properties(mapOf(
+            "redmine.uri" to (System.getenv("REDMINE_URL") ?: "http://localhost:3000"),
+            "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
+            "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
+        ))
+        modules(appModule)
+    }
 
     Window(
         onCloseRequest = ::exitApplication,
         title = "Redmine Time Tracking",
-        onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) }
+        onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) },
+        state = rememberWindowState(width = 1000.dp, height = 900.dp)
     ) {
+        val redmineClient = koinInject<RedmineClient>()
         App(redmineClient)
     }
 }
