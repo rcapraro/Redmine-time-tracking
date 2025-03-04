@@ -687,23 +687,23 @@ fun TimeEntryDetail(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Date picker
-        DatePicker(
-            selectedDate = date,
-            onDateSelected = { date = it },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Today shortcut
+        // Date picker and Today button
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            DatePicker(
+                selectedDate = date,
+                onDateSelected = { date = it },
+                modifier = Modifier.width(200.dp)
+            )
+
             TextButton(
                 onClick = { date = today },
                 enabled = !isLoading && !isSaving
             ) {
-                Text(Strings["set_to_today"])
+                Text("Aujourd'hui")
             }
         }
 
@@ -787,17 +787,25 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Hours
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             OutlinedTextField(
                 value = hours,
                 onValueChange = { input ->
                     if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
-                        hours = input.take(5) // Limit to 5 characters (e.g., "12.50")
+                        val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
+                        val floatValue = newValue.toFloatOrNull()
+                        if (floatValue == null || floatValue <= 7.5f) {
+                            hours = newValue
+                        }
                     }
                 },
                 label = { Text(Strings["hours_label"]) },
-                modifier = Modifier.fillMaxWidth(),
-                isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f),
+                modifier = Modifier.width(200.dp),
+                isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
                 singleLine = true,
                 enabled = !isLoading,
                 trailingIcon = {
@@ -816,20 +824,36 @@ fun TimeEntryDetail(
                     }
                 }
             )
-            if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
-                Text(
-                    text = Strings["invalid_number"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            } else if (hours.toFloatOrNull()?.let { it <= 0f } == true) {
-                Text(
-                    text = Strings["hours_must_be_positive"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
+
+            TextButton(
+                onClick = { hours = "7.5" },
+                enabled = !isLoading
+            ) {
+                Text("Journée complète")
+            }
+            Column {
+                if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
+                    Text(
+                        text = Strings["invalid_number"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
+                    Text(
+                        text = Strings["hours_must_be_positive"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
+                    Text(
+                        text = Strings["hours_max_value"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                }
             }
         }
 
@@ -1110,7 +1134,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) },
-            state = rememberWindowState(width = 1000.dp, height = 900.dp)
+            state = rememberWindowState(width = 1050.dp, height = 850.dp)
         ) {
             val redmineClient = koinInject<RedmineClient>()
             App(redmineClient)

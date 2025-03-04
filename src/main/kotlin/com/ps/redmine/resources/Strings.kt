@@ -21,6 +21,7 @@ object Strings {
 
     private val strings = mapOf(
         Language.FRENCH to mapOf(
+            "hours_max_value" to "Les heures ne peuvent pas dépasser 7.5",
             "window_title" to "Suivi du temps Redmine",
             "project_label" to "Projet",
             "hours_label" to "Heures",
@@ -74,6 +75,7 @@ object Strings {
             "issue_selection_format" to "#%d - %s"
         ),
         Language.ENGLISH to mapOf(
+            "hours_max_value" to "Hours cannot exceed 7.5",
             "window_title" to "Redmine Time Tracking",
             "project_label" to "Project",
             "hours_label" to "Hours",
