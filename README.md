@@ -5,6 +5,8 @@ A desktop application for managing time entries in Redmine with a modern user in
 Une application de bureau pour gérer les saisies de temps dans Redmine avec une interface utilisateur moderne construite
 avec Compose for Desktop.
 
+![RedmineTime Application Screenshot | Capture d'écran de l'application RedmineTime](docs/images/redmine-time-screenshot.png)
+
 ## Features | Fonctionnalités
 
 - Monthly time entry overview | Vue d'ensemble mensuelle des temps
@@ -12,29 +14,39 @@ avec Compose for Desktop.
 - Project and activity selection | Sélection de projet et d'activité
 - Easy navigation between months | Navigation facile entre les mois
 - Quick time entry creation and editing | Création et modification rapide des temps
-- SSL support (including self-signed certificates) | Support SSL (y compris les certificats auto-signés)
+- SSL support (including self-signed certificates with automatic trust and hostname verification disabled) | Support SSL (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte désactivée)
 - Native look and feel | Apparence native
 - Keyboard shortcuts for improved productivity | Raccourcis clavier pour une meilleure productivité
 - French language support | Support de la langue française
 
 ## Language Support | Support linguistique
 
-The application is available in the following languages:
-L'application est disponible dans les langues suivantes :
+The application supports multiple languages with an intelligent fallback system:
+L'application prend en charge plusieurs langues avec un système de secours intelligent :
 
-- French (default) | Français (par défaut)
-- English (fallback) | Anglais (secours)
+- French (default language) | Français (langue par défaut)
+  - Primary language for all users | Langue principale pour tous les utilisateurs
+  - Falls back to English if a translation is missing | Utilise l'anglais si une traduction est manquante
+
+- English (fallback language) | Anglais (langue de secours)
+  - Alternative language | Langue alternative
+  - Falls back to French if a translation is missing | Utilise le français si une traduction est manquante
 
 ### Language Configuration | Configuration de la langue
 
-The application uses French by default. To change the language to English, set the following environment variable:
-L'application utilise le français par défaut. Pour changer la langue en anglais, définissez la variable d'environnement
-suivante :
+The application uses French by default. To change the language, set the REDMINE_LANG environment variable:
+L'application utilise le français par défaut. Pour changer la langue, définissez la variable d'environnement REDMINE_LANG :
 
 ```bash
-export REDMINE_LANG=en    # For English | Pour l'anglais
-export REDMINE_LANG=fr    # For French | Pour le français (par défaut)
+# For English | Pour l'anglais
+export REDMINE_LANG=en
+
+# For French (default) | Pour le français (par défaut)
+export REDMINE_LANG=fr    # Or leave unset | Ou laisser non définie
 ```
+
+Note: The application will automatically handle missing translations by falling back to the alternative language.
+Note : L'application gère automatiquement les traductions manquantes en utilisant la langue alternative.
 
 ## Prerequisites | Prérequis
 
@@ -108,8 +120,10 @@ To create native installers | Pour créer les installateurs natifs :
 
 Built with | Construit avec :
 
-- Kotlin 1.8.20
-- Compose for Desktop 1.7.3
+- Kotlin 1.9.21
+- Compose for Desktop 1.5.11
 - Redmine Java API 3.1.3
-- Kotlin Coroutines | Coroutines Kotlin
-- Kotlinx DateTime | DateTime Kotlinx
+- Kotlin Coroutines 1.7.3 | Coroutines Kotlin 1.7.3
+- Kotlinx DateTime 0.5.0 | DateTime Kotlinx 0.5.0
+- Koin 3.5.0 (Dependency Injection)
+- Apache HttpClient 4.5.14
