@@ -22,9 +22,9 @@ import java.util.*
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
 class RedmineClient(
-    private val uri: String,
-    private val username: String,
-    private val password: String
+    uri: String,
+    username: String,
+    password: String
 ) {
     // Cache for activities and projects
     private var cachedActivities: List<Activity>? = null
@@ -63,7 +63,7 @@ class RedmineClient(
 
         // Collect unique issue IDs and project IDs
         val uniqueIssueIds = entries.results.orEmpty().map { it.issueId }.distinct()
-        val uniqueProjectIds = entries.results.orEmpty().map { it.projectId }.distinct()
+        entries.results.orEmpty().map { it.projectId }.distinct()
 
         // Batch load issues
         println("[DEBUG_LOG] Batch loading ${uniqueIssueIds.size} issues")
@@ -173,11 +173,6 @@ class RedmineClient(
     }
 
 
-    private suspend fun getIssue(issueId: Int): Issue = withContext(Dispatchers.IO) {
-        val issue = redmineManager.issueManager.getIssueById(issueId)
-        Issue(issue.id, issue.subject)
-    }
-
     suspend fun getIssues(projectId: Int): List<Issue> = withContext(Dispatchers.IO) {
         println("[DEBUG_LOG] Fetching issues for project $projectId...")
         val params = mapOf(
@@ -204,7 +199,7 @@ class RedmineClient(
         }
     }
 
-    private suspend fun convertToAppTimeEntry(entry: TimeEntry): AppTimeEntry {
+    private fun convertToAppTimeEntry(entry: TimeEntry): AppTimeEntry {
         val date = entry.spentOn.toInstant()
             .atZone(ZoneId.systemDefault())
             .toLocalDate()

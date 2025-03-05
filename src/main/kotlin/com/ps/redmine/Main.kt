@@ -249,8 +249,7 @@ fun App(redmineClient: RedmineClient) {
                                 timeEntries = timeEntries,
                                 selectedTimeEntry = selectedTimeEntry,
                                 onTimeEntrySelected = { selectedTimeEntry = it },
-                                onDelete = { entry -> deleteTimeEntry(entry) },
-                                redmineClient = redmineClient
+                                onDelete = { entry -> deleteTimeEntry(entry) }
                             )
                         }
                     }
@@ -269,7 +268,7 @@ fun App(redmineClient: RedmineClient) {
                             scope.launch {
                                 try {
                                     println("[DEBUG_LOG] Saving entry in parent scope")
-                                    val savedEntry = if (updatedEntry.id == null) {
+                                    if (updatedEntry.id == null) {
                                         redmineClient.createTimeEntry(updatedEntry)
                                     } else {
                                         redmineClient.updateTimeEntry(updatedEntry)
@@ -294,12 +293,7 @@ fun App(redmineClient: RedmineClient) {
                                 }
                             }
                         },
-                        onCancel = { selectedTimeEntry = null },
-                        showMessage = { message ->
-                            scope.launch {
-                                scaffoldState.snackbarHostState.showSnackbar(message)
-                            }
-                        }
+                        onCancel = { selectedTimeEntry = null }
                     )
                 }
             }
@@ -312,8 +306,7 @@ fun TimeEntriesList(
     timeEntries: List<TimeEntry>,
     selectedTimeEntry: TimeEntry?,
     onTimeEntrySelected: (TimeEntry) -> Unit,
-    onDelete: (TimeEntry) -> Unit,
-    redmineClient: RedmineClient
+    onDelete: (TimeEntry) -> Unit
 ) {
     val groupedEntries = remember(timeEntries) {
         timeEntries
@@ -347,8 +340,7 @@ fun TimeEntriesList(
                             timeEntry = entry,
                             isSelected = entry == selectedTimeEntry,
                             onClick = { onTimeEntrySelected(entry) },
-                            onDelete = { onDelete(entry) },
-                            redmineClient = redmineClient
+                            onDelete = { onDelete(entry) }
                         )
                     }
                 }
@@ -362,8 +354,7 @@ fun TimeEntryItem(
     timeEntry: TimeEntry,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onDelete: () -> Unit,
-    redmineClient: RedmineClient
+    onDelete: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -403,7 +394,7 @@ fun TimeEntryItem(
                 }
                 Column {
                     Text(
-                        text = timeEntry.project?.name ?: "No Project",
+                        text = timeEntry.project.name,
                         style = MaterialTheme.typography.body1
                     )
                     Row(
@@ -450,8 +441,7 @@ fun TimeEntryDetail(
     timeEntry: TimeEntry?,
     redmineClient: RedmineClient,
     onSave: (TimeEntry) -> Unit,
-    onCancel: () -> Unit = {},
-    showMessage: suspend (String) -> Unit
+    onCancel: () -> Unit = {}
 ) {
     var date by remember(timeEntry) {
         mutableStateOf(

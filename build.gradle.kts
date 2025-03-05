@@ -1,8 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    kotlin("jvm") version "1.8.20"
-    id("org.jetbrains.compose") version "1.7.3"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.compose)
 }
 
 group = "com.ps"
@@ -21,26 +21,26 @@ dependencies {
     implementation(compose.material)
 
     // Redmine API Client
-    implementation("com.taskadapter:redmine-java-api:3.1.3")
-    implementation("org.apache.httpcomponents:httpclient:4.5.14")
+    implementation(libs.redmine.api)
+    implementation(libs.httpclient)
 
     // Kotlin Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.1")
+    implementation(libs.coroutines.core)
+    implementation(libs.coroutines.swing)
 
     // Date/Time handling
-    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.0")
+    implementation(libs.datetime)
 
     // Koin
-    implementation("io.insert-koin:koin-core:3.4.0")
-    implementation("io.insert-koin:koin-compose:1.0.4")
+    implementation(libs.koin.core)
+    implementation(libs.koin.compose)
 
     // Testing
-    testImplementation("io.insert-koin:koin-test:3.4.0")
-    testImplementation("io.insert-koin:koin-test-junit5:3.4.0")
-    testImplementation("io.mockk:mockk-jvm:1.13.5")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.1")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.9.3")
+    testImplementation(libs.koin.test)
+    testImplementation(libs.koin.test.junit5)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.junit)
 }
 
 tasks.test {
