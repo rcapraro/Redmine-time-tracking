@@ -22,9 +22,9 @@ import java.util.*
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
 class RedmineClient(
-    uri: String,
-    username: String,
-    password: String
+    private var uri: String,
+    private var username: String,
+    private var password: String
 ) {
     // Cache for activities and projects
     private var cachedActivities: List<Activity>? = null
@@ -32,7 +32,9 @@ class RedmineClient(
     private val projectCache = mutableMapOf<Int, Project>()
     private val activityCache = mutableMapOf<Int, Activity>()
     private val issueCache = mutableMapOf<Int, Issue>()
-    private val redmineManager = RedmineManagerFactory.createWithUserAuth(
+    private var redmineManager = createRedmineManager()
+
+    private fun createRedmineManager() = RedmineManagerFactory.createWithUserAuth(
         uri,
         username,
         password,
@@ -41,6 +43,22 @@ class RedmineClient(
             .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
             .build()
     )
+
+    fun updateConfiguration(newUri: String, newUsername: String, newPassword: String) {
+        uri = newUri
+        username = newUsername
+        password = newPassword
+
+        // Clear caches
+        cachedActivities = null
+        cachedProjects = null
+        projectCache.clear()
+        activityCache.clear()
+        issueCache.clear()
+
+        // Reinitialize manager
+        redmineManager = createRedmineManager()
+    }
 
     suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> = withContext(Dispatchers.IO) {
         val startDate = LocalDate(year, month, 1)
@@ -133,13 +151,6 @@ class RedmineClient(
         }
         cachedActivities = activities
         activities
-    }
-
-    private suspend fun getActivity(activityId: Int): Activity = withContext(Dispatchers.IO) {
-        activityCache[activityId]?.let { return@withContext it }
-
-        getActivities() // This will populate the cache
-        activityCache[activityId] ?: Activity(activityId, "Unknown Activity")
     }
 
     suspend fun getProjects(): List<Project> = withContext(Dispatchers.IO) {

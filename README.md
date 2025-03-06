@@ -57,8 +57,34 @@ Note : L'application gère automatiquement les traductions manquantes en utilisa
 
 ## Configuration | Configuration
 
-The application requires the following environment variables to be set:
-L'application nécessite la configuration des variables d'environnement suivantes :
+The application can be configured in two ways | L'application peut être configurée de deux manières :
+
+### GUI Configuration | Configuration graphique
+
+Click the settings icon in the top bar to open the configuration dialog. You can set:
+Cliquez sur l'icône des paramètres dans la barre supérieure pour ouvrir la boîte de dialogue de configuration. Vous
+pouvez définir :
+
+- Redmine URL | URL Redmine
+- Username | Nom d'utilisateur
+- Password | Mot de passe
+
+The configuration is automatically saved and stored securely using Java Preferences API in your system's preferences:
+La configuration est automatiquement sauvegardée et stockée de manière sécurisée via l'API Java Preferences dans les
+préférences de votre système :
+
+- Windows: Registry under `HKEY_CURRENT_USER\Software\JavaSoft\Prefs`
+- macOS: `~/Library/Preferences/com.ps.redmine.plist` (Key: `/com/ps/redmine`)
+- Linux: `~/.java/.userPrefs/com/ps/redmine/prefs.xml`
+
+The configuration values are stored under the node `/com/ps/redmine` in these system-specific locations.
+Les valeurs de configuration sont stockées sous le nœud `/com/ps/redmine` dans ces emplacements spécifiques au système.
+
+### Environment Variables | Variables d'environnement
+
+Alternatively, you can use environment variables (they take precedence over saved configuration):
+Alternativement, vous pouvez utiliser des variables d'environnement (elles ont la priorité sur la configuration
+sauvegardée) :
 
 - `REDMINE_URL`: The URL of your Redmine server | L'URL de votre serveur Redmine (
   default: "https://redmine-restreint.packsolutions.local")
@@ -98,7 +124,11 @@ To create native installers | Pour créer les installateurs natifs :
 
 ## Usage | Utilisation
 
-1. Set the required environment variables | Définir les variables d'environnement requises
+1. Initial Setup | Configuration initiale
+    - Option 1: Click the settings icon in the top bar to configure your Redmine connection | Cliquer sur l'icône des
+      paramètres dans la barre supérieure pour configurer votre connexion Redmine
+    - Option 2: Set the environment variables as described in the Configuration section | Définir les variables
+      d'environnement comme décrit dans la section Configuration
 2. Launch the application | Lancer l'application
 3. Navigate to the desired month using the navigation buttons or keyboard shortcuts | Naviguer vers le mois souhaité en
    utilisant les boutons de navigation ou les raccourcis clavier
@@ -110,6 +140,11 @@ To create native installers | Pour créer les installateurs natifs :
     - Activity | Activité
     - Comments (optional) | Commentaires (optionnel)
 6. Save the time entry | Sauvegarder la saisie de temps
+
+Note: You can update your Redmine connection settings at any time by clicking the settings icon in the top bar. The
+application will restart to apply the new configuration. |
+Note : Vous pouvez mettre à jour vos paramètres de connexion Redmine à tout moment en cliquant sur l'icône des
+paramètres dans la barre supérieure. L'application redémarrera pour appliquer la nouvelle configuration.
 
 ## Keyboard Shortcuts | Raccourcis clavier
 

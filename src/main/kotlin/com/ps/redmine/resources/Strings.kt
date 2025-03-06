@@ -19,6 +19,15 @@ object Strings {
 
     private val strings = mapOf(
         Language.FRENCH to mapOf(
+            "configuration_title" to "Configuration",
+            "configuration_error" to "Veuillez remplir tous les champs",
+            "redmine_uri" to "URL Redmine",
+            "username" to "Nom d'utilisateur",
+            "password" to "Mot de passe",
+            "show_password" to "Afficher",
+            "hide_password" to "Masquer",
+            "save" to "Enregistrer",
+            "settings" to "Paramètres",
             "hours_max_value" to "Les heures ne peuvent pas dépasser 7.5",
             "window_title" to "Suivi du temps Redmine",
             "project_label" to "Projet",
@@ -73,6 +82,15 @@ object Strings {
             "issue_selection_format" to "#%d - %s"
         ),
         Language.ENGLISH to mapOf(
+            "configuration_title" to "Configuration",
+            "configuration_error" to "Please fill all fields",
+            "redmine_uri" to "Redmine URL",
+            "username" to "Username",
+            "password" to "Password",
+            "show_password" to "Show",
+            "hide_password" to "Hide",
+            "save" to "Save",
+            "settings" to "Settings",
             "hours_max_value" to "Hours cannot exceed 7.5",
             "window_title" to "Redmine Time Tracking",
             "project_label" to "Project",

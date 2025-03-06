@@ -56,7 +56,7 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "com.ps.MainKt"
+        mainClass = "com.ps.redmine.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)

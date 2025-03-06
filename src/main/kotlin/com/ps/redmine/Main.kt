@@ -7,6 +7,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,7 +20,9 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.RedmineClient
+import com.ps.redmine.components.ConfigurationDialog
 import com.ps.redmine.components.DatePicker
+import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
 import com.ps.redmine.model.Activity
 import com.ps.redmine.model.Issue
@@ -44,12 +47,12 @@ fun App(redmineClient: RedmineClient) {
     var isLoading by remember { mutableStateOf(false) }
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showConfigDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
-
 
     fun loadTimeEntries(yearMonth: YearMonth) {
         scope.launch {
@@ -146,8 +149,34 @@ fun App(redmineClient: RedmineClient) {
     }
 
     MaterialTheme {
+        if (showConfigDialog) {
+            ConfigurationDialog(
+                redmineClient = redmineClient,
+                onDismiss = { showConfigDialog = false },
+                onConfigSaved = {
+                    scope.launch {
+                        scaffoldState.snackbarHostState.showSnackbar("Configuration saved successfully")
+                        // Reload data with new configuration
+                        loadTimeEntries(currentMonth)
+                    }
+                }
+            )
+        }
         Scaffold(
             scaffoldState = scaffoldState,
+            topBar = {
+                TopAppBar(
+                    title = { Text(Strings["window_title"]) },
+                    actions = {
+                        IconButton(onClick = { showConfigDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = Strings["settings"]
+                            )
+                        }
+                    }
+                )
+            },
             floatingActionButton = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1128,11 +1157,12 @@ fun main() {
 
     application {
         startKoin {
+            val config = ConfigurationManager.loadConfig()
             properties(
                 mapOf(
-                    "redmine.uri" to (System.getenv("REDMINE_URL") ?: "https://redmine-restreint.packsolutions.local"),
-                    "redmine.username" to (System.getenv("REDMINE_USERNAME") ?: ""),
-                    "redmine.password" to (System.getenv("REDMINE_PASSWORD") ?: "")
+                    "redmine.uri" to config.redmineUri,
+                    "redmine.username" to config.username,
+                    "redmine.password" to config.password
                 )
             )
             modules(appModule)
