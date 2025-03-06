@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
+import com.ps.redmine.util.KeyShortcut
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -45,6 +47,7 @@ fun App(redmineClient: RedmineClient) {
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
+
 
     fun loadTimeEntries(yearMonth: YearMonth) {
         scope.launch {
@@ -94,26 +97,42 @@ fun App(redmineClient: RedmineClient) {
         loadTimeEntries(currentMonth)
     }
 
-    LaunchedEffect(Unit) {
-        KeyShortcutManager.keyShortcuts.collect { shortcut ->
+    // Handle keyboard shortcuts
+    DisposableEffect(Unit) {
+        println("[DEBUG_LOG] Setting up App keyboard shortcuts")
+        val callback: (KeyShortcut) -> Unit = { shortcut ->
+            println("[DEBUG_LOG] App received shortcut: $shortcut")
             when (shortcut) {
+                // Navigation shortcuts
                 KeyShortcut.PreviousMonth -> {
+                    println("[DEBUG_LOG] Handling PreviousMonth in App")
                     selectedTimeEntry = null
                     currentMonth = currentMonth.minusMonths(1)
                 }
 
                 KeyShortcut.NextMonth -> {
+                    println("[DEBUG_LOG] Handling NextMonth in App")
                     selectedTimeEntry = null
                     currentMonth = currentMonth.plusMonths(1)
                 }
 
                 KeyShortcut.CurrentMonth -> {
+                    println("[DEBUG_LOG] Handling CurrentMonth in App")
                     selectedTimeEntry = null
                     currentMonth = YearMonth.now()
                 }
-
-                else -> {}
+                // Save/Cancel shortcuts - only handle if TimeEntryDetail is open
+                KeyShortcut.Save,
+                KeyShortcut.Cancel -> {
+                    println("[DEBUG_LOG] Ignoring Save/Cancel in App")
+                } // Let TimeEntryDetail handle these
             }
+        }
+        KeyShortcutManager.setShortcutCallback(callback)
+
+        onDispose {
+            println("[DEBUG_LOG] Cleaning up App keyboard shortcuts")
+            KeyShortcutManager.removeShortcutCallback(callback)
         }
     }
 
@@ -446,22 +465,22 @@ fun TimeEntryDetail(
     var date by remember(timeEntry) {
         mutableStateOf(
             timeEntry?.date ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        ).also { println("[DEBUG_LOG] Initial date: ${it.value}") }
+        )
     }
     var hours by remember(timeEntry) {
-        mutableStateOf(timeEntry?.hours?.toString() ?: "").also { println("[DEBUG_LOG] Initial hours: ${it.value}") }
+        mutableStateOf(timeEntry?.hours?.toString() ?: "")
     }
     var comments by remember(timeEntry) {
-        mutableStateOf(timeEntry?.comments ?: "").also { println("[DEBUG_LOG] Initial comments: ${it.value}") }
+        mutableStateOf(timeEntry?.comments ?: "")
     }
     var selectedProject by remember {
-        mutableStateOf<Project?>(null).also { println("[DEBUG_LOG] Initial project: ${it.value?.name}") }
+        mutableStateOf<Project?>(null)
     }
     var selectedActivity by remember {
-        mutableStateOf<Activity?>(null).also { println("[DEBUG_LOG] Initial activity: ${it.value?.name}") }
+        mutableStateOf<Activity?>(null)
     }
     var selectedIssue by remember {
-        mutableStateOf<Issue?>(timeEntry?.issue).also { println("[DEBUG_LOG] Initial issue: ${it.value?.subject}") }
+        mutableStateOf<Issue?>(timeEntry?.issue)
     }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var activities by remember { mutableStateOf<List<Activity>>(emptyList()) }
@@ -477,16 +496,18 @@ fun TimeEntryDetail(
     val scope = rememberCoroutineScope()
 
     val isValid = remember(selectedProject, selectedActivity, hours, selectedIssue) {
-        selectedProject != null &&
-                selectedActivity != null &&
-                hours.isNotEmpty() &&
-                hours.toFloatOrNull() != null &&
-                hours.toFloatOrNull() != 0f &&
-                selectedIssue != null
+        val hasProject = selectedProject != null
+        val hasActivity = selectedActivity != null
+        val hasHours = hours.isNotEmpty()
+        val validHours = hours.toFloatOrNull() != null
+        val nonZeroHours = hours.toFloatOrNull() != 0f
+        val hasIssue = selectedIssue != null
+
+        hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue
     }
 
     val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date, selectedIssue) {
-        val changed = if (timeEntry == null) {
+        if (timeEntry == null) {
             hours.isNotEmpty() || comments.isNotEmpty() || selectedProject != null || selectedActivity != null || selectedIssue != null
         } else {
             hours != timeEntry.hours.toString() ||
@@ -496,35 +517,30 @@ fun TimeEntryDetail(
                     date != timeEntry.date ||
                     selectedIssue?.id != timeEntry.issue.id
         }
-        println("[DEBUG_LOG] Form changes detected: $changed")
-        println("[DEBUG_LOG] Hours: $hours, Comments: $comments")
-        println("[DEBUG_LOG] Project: ${selectedProject?.name}, Activity: ${selectedActivity?.name}")
-        println("[DEBUG_LOG] Issue: ${selectedIssue?.subject}")
-        changed
     }
 
     fun saveEntry() {
-        if (!isValid || isSaving) return
+        if (!isValid || isSaving) {
+            return
+        }
+
         selectedProject?.let { project ->
             selectedActivity?.let { activity ->
                 scope.launch {
                     isSaving = true
                     try {
-                        println("[DEBUG_LOG] Saving time entry (id: ${timeEntry?.id})")
-                        onSave(
-                            TimeEntry(
-                                id = timeEntry?.id,
-                                date = date,
-                                hours = hours.toFloatOrNull() ?: 0f,
-                                project = project,
-                                issue = selectedIssue ?: Issue(0, ""),
-                                activity = activity,
-                                comments = comments
-                            )
+                        val timeEntryToSave = TimeEntry(
+                            id = timeEntry?.id,
+                            date = date,
+                            hours = hours.toFloatOrNull() ?: 0f,
+                            project = project,
+                            issue = selectedIssue ?: Issue(0, ""),
+                            activity = activity,
+                            comments = comments
                         )
-                        println("[DEBUG_LOG] Save operation completed successfully")
+                        onSave(timeEntryToSave)
                     } catch (e: Exception) {
-                        println("[DEBUG_LOG] Error in save operation UI handler: ${e.message}")
+                        println("[DEBUG_LOG] Error saving time entry: ${e.message}")
                     } finally {
                         isSaving = false
                     }
@@ -545,10 +561,8 @@ fun TimeEntryDetail(
     LaunchedEffect(Unit) {
         isLoading = true
         try {
-            println("[DEBUG_LOG] Loading initial data")
             projects = redmineClient.getProjects()
             activities = redmineClient.getActivities()
-            println("[DEBUG_LOG] Loaded ${projects.size} projects and ${activities.size} activities")
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error loading data: ${e.message}")
         } finally {
@@ -559,17 +573,10 @@ fun TimeEntryDetail(
     // Load issues when project changes
     LaunchedEffect(selectedProject) {
         val project = selectedProject
-        println("[DEBUG_LOG] Project changed: ${project?.name}")
-        println("[DEBUG_LOG] Current state - Hours: $hours, Comments: $comments")
-        println("[DEBUG_LOG] Current state - Activity: ${selectedActivity?.name}")
-
         if (project != null) {
             isLoadingIssues = true
             try {
-                println("[DEBUG_LOG] Loading issues for project: ${project.id} (${project.name})")
                 issues = redmineClient.getIssues(project.id)
-                println("[DEBUG_LOG] Loaded ${issues.size} issues")
-                issues.forEach { println("[DEBUG_LOG] Issue: #${it.id} - ${it.subject}") }
             } catch (e: Exception) {
                 println("[DEBUG_LOG] Error loading issues: ${e.message}")
                 issues = emptyList()
@@ -580,26 +587,11 @@ fun TimeEntryDetail(
             issues = emptyList()
             selectedIssue = null
         }
-
-        println("[DEBUG_LOG] After project change - Hours: $hours, Comments: $comments")
-        println("[DEBUG_LOG] After project change - Activity: ${selectedActivity?.name}")
     }
 
     // Update selections when timeEntry changes or lists are loaded
     LaunchedEffect(timeEntry) {
-        println("[DEBUG_LOG] Time entry changed: ${timeEntry?.id}")
-        println("[DEBUG_LOG] Current state before update:")
-        println("[DEBUG_LOG] - Hours: $hours")
-        println("[DEBUG_LOG] - Comments: $comments")
-        println("[DEBUG_LOG] - Project: ${selectedProject?.name}")
-        println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
-        println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
-
-        // Only update on initial load or when editing an entry
         if (timeEntry != null && (selectedProject == null || timeEntry.id != null)) {
-            println("[DEBUG_LOG] Updating from time entry ${if (timeEntry.id == null) "(new)" else "#${timeEntry.id}"}")
-
-            // Preserve existing values if they exist
             if (selectedProject == null) {
                 selectedProject = projects.find { it.id == timeEntry.project.id }
                 selectedActivity = activities.find { it.id == timeEntry.activity.id }
@@ -607,28 +599,28 @@ fun TimeEntryDetail(
                 hours = timeEntry.hours.toString()
                 comments = timeEntry.comments
             }
-
-            println("[DEBUG_LOG] State after update:")
-            println("[DEBUG_LOG] - Hours: $hours")
-            println("[DEBUG_LOG] - Comments: $comments")
-            println("[DEBUG_LOG] - Project: ${selectedProject?.name}")
-            println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
-            println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
         }
     }
 
 
-    // Handle keyboard shortcuts
-    LaunchedEffect(Unit) {
-        KeyShortcutManager.keyShortcuts.collect { shortcut ->
-            when (shortcut) {
-                KeyShortcut.Save -> if (isValid && !isSaving) saveEntry()
-                KeyShortcut.Cancel -> handleCancel()
-                KeyShortcut.PreviousMonth,
-                KeyShortcut.NextMonth,
-                KeyShortcut.CurrentMonth -> {
-                } // Handled by parent
+    val keyboardHandler = Modifier.onPreviewKeyEvent { event ->
+        println("[DEBUG_LOG] TimeEntryDetail received key event: ${event.key}, type: ${event.type}")
+        when {
+            event.type == KeyEventType.KeyDown && event.key == Key.S && event.isMetaPressed -> {
+                println("[DEBUG_LOG] Handling Command+S in TimeEntryDetail (valid: $isValid, loading: $isLoading, saving: $isSaving)")
+                if (isValid && !isLoading && !isSaving) {
+                    saveEntry()
+                    true
+                } else false
             }
+
+            event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
+                println("[DEBUG_LOG] Handling Escape in TimeEntryDetail")
+                handleCancel()
+                true
+            }
+
+            else -> false
         }
     }
 
@@ -655,8 +647,29 @@ fun TimeEntryDetail(
         )
     }
 
+    val shortcutHandler = Modifier.onPreviewKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+        when {
+            event.key == Key.S && event.isMetaPressed && isValid && !isLoading && !isSaving -> {
+                saveEntry()
+                true
+            }
+
+            event.key == Key.Escape -> {
+                handleCancel()
+                true
+            }
+
+            else -> false
+        }
+    }
+
     Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .then(shortcutHandler)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -733,24 +746,9 @@ fun TimeEntryDetail(
                     projects.forEach { project ->
                         DropdownMenuItem(
                             onClick = {
-                                println("[DEBUG_LOG] Project selection changed:")
-                                println("[DEBUG_LOG] - From: ${selectedProject?.name}")
-                                println("[DEBUG_LOG] - To: ${project.name}")
-                                println("[DEBUG_LOG] Current state before change:")
-                                println("[DEBUG_LOG] - Hours: $hours")
-                                println("[DEBUG_LOG] - Comments: $comments")
-                                println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
-                                println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
-
                                 selectedProject = project
                                 selectedIssue = null  // Reset only issue selection
                                 showProjectDropdown = false
-
-                                println("[DEBUG_LOG] State after project change:")
-                                println("[DEBUG_LOG] - Hours: $hours")
-                                println("[DEBUG_LOG] - Comments: $comments")
-                                println("[DEBUG_LOG] - Activity: ${selectedActivity?.name}")
-                                println("[DEBUG_LOG] - Issue: ${selectedIssue?.subject}")
                             }
                         ) {
                             Text(
@@ -784,7 +782,7 @@ fun TimeEntryDetail(
         ) {
             OutlinedTextField(
                 value = hours,
-                onValueChange = { input ->
+                onValueChange = { input: String ->
                     if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
                         val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
                         val floatValue = newValue.toFloatOrNull()
@@ -793,8 +791,8 @@ fun TimeEntryDetail(
                         }
                     }
                 },
+                modifier = Modifier.width(200.dp).then(shortcutHandler),
                 label = { Text(Strings["hours_label"]) },
-                modifier = Modifier.width(200.dp),
                 isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
                 singleLine = true,
                 enabled = !isLoading,
@@ -1013,13 +1011,13 @@ fun TimeEntryDetail(
         Column(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = comments,
-                onValueChange = { newValue ->
+                onValueChange = { newValue: String ->
                     if (newValue.length <= 255) {
                         comments = newValue
                     }
                 },
+                modifier = Modifier.fillMaxWidth().then(shortcutHandler),
                 label = { Text(Strings["comments_label"]) },
-                modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
                 enabled = !isLoading,
                 trailingIcon = if (comments.isNotEmpty()) {
@@ -1055,21 +1053,7 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = {
-                if (!isSaving && selectedProject != null && selectedActivity != null && selectedIssue != null) {
-                    onSave(
-                        TimeEntry(
-                            id = timeEntry?.id,
-                            date = date,
-                            hours = hours.toFloatOrNull() ?: 0f,
-                            project = selectedProject!!,
-                            activity = selectedActivity!!,
-                            issue = selectedIssue!!,
-                            comments = comments
-                        )
-                    )
-                }
-            },
+            onClick = { saveEntry() },
             modifier = Modifier.align(Alignment.End),
             enabled = isValid && !isLoading && !isSaving
         ) {
@@ -1120,13 +1104,14 @@ fun main() {
             modules(appModule)
         }
 
+        val redmineClient = koinInject<RedmineClient>()
+
         Window(
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
-            onKeyEvent = { KeyShortcutManager.handleKeyEvent(it) },
+            onKeyEvent = KeyShortcutManager::handleKeyEvent,
             state = rememberWindowState(width = 1050.dp, height = 850.dp)
         ) {
-            val redmineClient = koinInject<RedmineClient>()
             App(redmineClient)
         }
     }

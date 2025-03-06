@@ -14,7 +14,8 @@ avec Compose for Desktop.
 - Project and activity selection | Sélection de projet et d'activité
 - Easy navigation between months | Navigation facile entre les mois
 - Quick time entry creation and editing | Création et modification rapide des temps
-- SSL support (including self-signed certificates with automatic trust and hostname verification disabled) | Support SSL (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte désactivée)
+- SSL support (including self-signed certificates with automatic trust and hostname verification disabled) | Support
+  SSL (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte désactivée)
 - Native look and feel | Apparence native
 - Keyboard shortcuts for improved productivity | Raccourcis clavier pour une meilleure productivité
 - French language support | Support de la langue française
@@ -25,17 +26,18 @@ The application supports multiple languages with an intelligent fallback system:
 L'application prend en charge plusieurs langues avec un système de secours intelligent :
 
 - French (default language) | Français (langue par défaut)
-  - Primary language for all users | Langue principale pour tous les utilisateurs
-  - Falls back to English if a translation is missing | Utilise l'anglais si une traduction est manquante
+    - Primary language for all users | Langue principale pour tous les utilisateurs
+    - Falls back to English if a translation is missing | Utilise l'anglais si une traduction est manquante
 
 - English (fallback language) | Anglais (langue de secours)
-  - Alternative language | Langue alternative
-  - Falls back to French if a translation is missing | Utilise le français si une traduction est manquante
+    - Alternative language | Langue alternative
+    - Falls back to French if a translation is missing | Utilise le français si une traduction est manquante
 
 ### Language Configuration | Configuration de la langue
 
 The application uses French by default. To change the language, set the REDMINE_LANG environment variable:
-L'application utilise le français par défaut. Pour changer la langue, définissez la variable d'environnement REDMINE_LANG :
+L'application utilise le français par défaut. Pour changer la langue, définissez la variable d'environnement
+REDMINE_LANG :
 
 ```bash
 # For English | Pour l'anglais
@@ -58,7 +60,8 @@ Note : L'application gère automatiquement les traductions manquantes en utilisa
 The application requires the following environment variables to be set:
 L'application nécessite la configuration des variables d'environnement suivantes :
 
-- `REDMINE_URL`: The URL of your Redmine server | L'URL de votre serveur Redmine (default: "https://redmine-restreint.packsolutions.local")
+- `REDMINE_URL`: The URL of your Redmine server | L'URL de votre serveur Redmine (
+  default: "https://redmine-restreint.packsolutions.local")
 - `REDMINE_USERNAME`: Your Redmine username | Votre nom d'utilisateur Redmine
 - `REDMINE_PASSWORD`: Your Redmine password | Votre mot de passe Redmine
 

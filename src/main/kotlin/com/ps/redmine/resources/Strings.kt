@@ -8,13 +8,11 @@ enum class Language {
 object Strings {
     private var currentLanguage = run {
         val envLang = System.getenv("REDMINE_LANG")?.lowercase()
-        println("[DEBUG_LOG] Environment REDMINE_LANG: $envLang")
-
         val lang = when (envLang) {
             "en" -> Language.ENGLISH
             else -> Language.FRENCH  // Default to French for any other value or if not set
         }
-        println("[DEBUG_LOG] Selected language: $lang")
+        println("[DEBUG_LOG] Using language: $lang (from env: ${envLang ?: "not set"})")
         lang
     }
 

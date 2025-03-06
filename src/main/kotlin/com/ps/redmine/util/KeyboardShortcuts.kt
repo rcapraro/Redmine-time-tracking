@@ -1,51 +1,93 @@
 package com.ps.redmine.util
 
 import androidx.compose.ui.input.key.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+
+interface IKeyEventInfo {
+    val key: Key
+    val type: KeyEventType
+    val isMetaPressed: Boolean
+    val isAltPressed: Boolean
+    val isCtrlPressed: Boolean
+}
+
+class KeyEventWrapper(private val event: KeyEvent) : IKeyEventInfo {
+    override val key: Key = event.key
+    override val type: KeyEventType = event.type
+    override val isMetaPressed: Boolean = event.isMetaPressed
+    override val isAltPressed: Boolean = event.isAltPressed
+    override val isCtrlPressed: Boolean = event.isCtrlPressed
+}
 
 enum class KeyShortcut {
-    Save,
-    Cancel,
     PreviousMonth,
     NextMonth,
-    CurrentMonth
+    CurrentMonth,
+    Save,
+    Cancel
 }
 
 object KeyShortcutManager {
-    private val _keyShortcuts = Channel<KeyShortcut>(Channel.BUFFERED)
-    val keyShortcuts = _keyShortcuts.receiveAsFlow()
+    private val shortcutCallbacks = mutableListOf<(KeyShortcut) -> Unit>()
+    private val _keyShortcuts = MutableSharedFlow<KeyShortcut>(replay = 1, extraBufferCapacity = 10)
+    val keyShortcuts: SharedFlow<KeyShortcut> = _keyShortcuts.asSharedFlow()
 
-    fun handleKeyEvent(keyEvent: KeyEvent): Boolean {
-        if (keyEvent.type != KeyEventType.KeyDown) return false
+    fun setShortcutCallback(callback: (KeyShortcut) -> Unit) {
+        shortcutCallbacks.add(callback)
+    }
 
-        when {
-            // Save
-            (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) && keyEvent.key == Key.S -> {
-                _keyShortcuts.trySend(KeyShortcut.Save)
-                return true
-            }
-            // Cancel
-            keyEvent.key == Key.Escape -> {
-                _keyShortcuts.trySend(KeyShortcut.Cancel)
-                return true
-            }
-            // Month navigation
-            (keyEvent.isAltPressed) && keyEvent.key == Key.DirectionLeft -> {
-                _keyShortcuts.trySend(KeyShortcut.PreviousMonth)
-                return true
-            }
+    fun removeShortcutCallback(callback: (KeyShortcut) -> Unit) {
+        shortcutCallbacks.remove(callback)
+    }
 
-            (keyEvent.isAltPressed) && keyEvent.key == Key.DirectionRight -> {
-                _keyShortcuts.trySend(KeyShortcut.NextMonth)
-                return true
-            }
+    internal fun clearCallbacks() {
+        shortcutCallbacks.clear()
+    }
 
-            (keyEvent.isAltPressed) && keyEvent.key == Key.T -> {
-                _keyShortcuts.trySend(KeyShortcut.CurrentMonth)
-                return true
-            }
+    internal suspend fun emitShortcutForTest(shortcut: KeyShortcut) {
+        _keyShortcuts.emit(shortcut)
+    }
+
+    fun handleKeyEvent(keyEvent: KeyEvent): Boolean = handleKeyEventInfo(KeyEventWrapper(keyEvent))
+
+    internal fun handleKeyEventInfo(keyEvent: IKeyEventInfo): Boolean {
+        if (keyEvent.type != KeyEventType.KeyDown) {
+            return false
         }
-        return false
+
+        val shortcut = when {
+            // Alt + navigation shortcuts
+            keyEvent.isAltPressed && !keyEvent.isMetaPressed && !keyEvent.isCtrlPressed -> when (keyEvent.key) {
+                Key.DirectionLeft -> KeyShortcut.PreviousMonth
+                Key.DirectionRight -> KeyShortcut.NextMonth
+                Key.T -> KeyShortcut.CurrentMonth
+                else -> null
+            }
+
+            // Command/Ctrl + S for Save
+            (keyEvent.key == Key.S && keyEvent.isMetaPressed) ||
+                    (keyEvent.key == Key.S && keyEvent.isCtrlPressed) -> KeyShortcut.Save
+
+            // Escape for Cancel
+            keyEvent.key == Key.Escape -> KeyShortcut.Cancel
+
+            else -> null
+        }
+
+        return if (shortcut != null) {
+            shortcutCallbacks.forEach { callback ->
+                try {
+                    callback(shortcut)
+                } catch (e: Exception) {
+                    println("[DEBUG_LOG] Error in shortcut callback: ${e.message}")
+                }
+            }
+            _keyShortcuts.tryEmit(shortcut)
+            true
+        } else {
+            false
+        }
     }
 }

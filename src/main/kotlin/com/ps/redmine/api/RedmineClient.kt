@@ -43,9 +43,6 @@ class RedmineClient(
     )
 
     suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> = withContext(Dispatchers.IO) {
-        println("[DEBUG_LOG] Loading time entries for $year-$month")
-        val startTime = System.currentTimeMillis()
-
         val startDate = LocalDate(year, month, 1)
         val endDate = startDate.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
 
@@ -66,7 +63,6 @@ class RedmineClient(
         entries.results.orEmpty().map { it.projectId }.distinct()
 
         // Batch load issues
-        println("[DEBUG_LOG] Batch loading ${uniqueIssueIds.size} issues")
         uniqueIssueIds.forEach { issueId ->
             if (!issueCache.containsKey(issueId)) {
                 try {
@@ -79,12 +75,7 @@ class RedmineClient(
             }
         }
 
-        val result = entries.results.orEmpty().map { entry -> convertToAppTimeEntry(entry) }
-
-        val endTime = System.currentTimeMillis()
-        println("[DEBUG_LOG] Loaded ${result.size} time entries in ${endTime - startTime}ms")
-
-        result
+        entries.results.orEmpty().map { entry -> convertToAppTimeEntry(entry) }
     }
 
     suspend fun createTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
@@ -104,7 +95,6 @@ class RedmineClient(
 
     suspend fun updateTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
         require(timeEntry.id != null) { "Time entry ID cannot be null for update operation" }
-        println("[DEBUG_LOG] Updating time entry #${timeEntry.id}")
 
         try {
             val redmineTimeEntry = redmineManager.timeEntryManager.getTimeEntry(timeEntry.id)
@@ -117,11 +107,7 @@ class RedmineClient(
             redmineTimeEntry.issueId = timeEntry.issue.id
             redmineTimeEntry.comment = timeEntry.comments
 
-            println("[DEBUG_LOG] Updating time entry with new values")
             redmineManager.timeEntryManager.update(redmineTimeEntry)
-            println("[DEBUG_LOG] Time entry updated successfully")
-
-            // Return the updated entry directly instead of fetching it again
             timeEntry
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error updating time entry: ${e.message}")
@@ -130,14 +116,10 @@ class RedmineClient(
     }
 
     suspend fun deleteTimeEntry(timeEntryId: Int) = withContext(Dispatchers.IO) {
-        println("[DEBUG_LOG] Deleting time entry #$timeEntryId")
         try {
             redmineManager.timeEntryManager.deleteTimeEntry(timeEntryId)
-            println("[DEBUG_LOG] Time entry deleted successfully")
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error deleting time entry: ${e.message}")
-            // The entry might still be deleted even if we get an error
-            println("[DEBUG_LOG] Note: The entry might have been deleted despite the error")
         }
     }
 
@@ -174,7 +156,6 @@ class RedmineClient(
 
 
     suspend fun getIssues(projectId: Int): List<Issue> = withContext(Dispatchers.IO) {
-        println("[DEBUG_LOG] Fetching issues for project $projectId...")
         val params = mapOf(
             "project_id" to projectId.toString(),
             "status_id" to "open",
@@ -182,16 +163,10 @@ class RedmineClient(
             "sort" to "updated_on:desc"
         )
 
-        println("[DEBUG_LOG] Query parameters: $params")
-
         try {
             val issues = redmineManager.issueManager.getIssues(params)
-            println("[DEBUG_LOG] Fetched ${issues.results.size} issues from Redmine")
             issues.results.orEmpty().map { issue ->
-                println("[DEBUG_LOG] Processing issue #${issue.id}: ${issue.subject} (Project: ${issue.projectId})")
                 Issue(issue.id, issue.subject)
-            }.also {
-                println("[DEBUG_LOG] Returning ${it.size} issues")
             }
         } catch (e: Exception) {
             println("[DEBUG_LOG] Error fetching issues: ${e.message}")
