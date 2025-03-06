@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +42,7 @@ fun App(redmineClient: RedmineClient) {
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
     var timeEntries by remember { mutableStateOf<List<TimeEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var deletingEntryId by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
@@ -67,28 +69,25 @@ fun App(redmineClient: RedmineClient) {
 
     fun deleteTimeEntry(timeEntry: TimeEntry) {
         scope.launch {
-            try {
-                timeEntry.id?.let { id ->
-                    println("[DEBUG_LOG] Attempting to delete time entry #$id")
-                    try {
-                        redmineClient.deleteTimeEntry(id)
-                        println("[DEBUG_LOG] Delete operation completed successfully")
-                        scaffoldState.snackbarHostState.showSnackbar("Time entry deleted successfully")
-                    } catch (e: Exception) {
-                        println("[DEBUG_LOG] Error during delete operation: ${e.message}")
-                        scaffoldState.snackbarHostState.showSnackbar(
-                            "Operation might have succeeded, but there was an error: ${e.message}"
-                        )
-                    } finally {
-                        // Always refresh the list and clear selection
-                        println("[DEBUG_LOG] Refreshing time entries list")
-                        loadTimeEntries(currentMonth)
-                        selectedTimeEntry = null
-                    }
+            timeEntry.id?.let { id ->
+                deletingEntryId = id
+                println("[DEBUG_LOG] Attempting to delete time entry #$id")
+                try {
+                    redmineClient.deleteTimeEntry(id)
+                    println("[DEBUG_LOG] Delete operation completed successfully")
+                    scaffoldState.snackbarHostState.showSnackbar("Time entry deleted successfully")
+                } catch (e: Exception) {
+                    println("[DEBUG_LOG] Error during delete operation: ${e.message}")
+                    scaffoldState.snackbarHostState.showSnackbar(
+                        "Operation might have succeeded, but there was an error: ${e.message}"
+                    )
+                } finally {
+                    // Always refresh the list and clear selection
+                    println("[DEBUG_LOG] Refreshing time entries list")
+                    loadTimeEntries(currentMonth)
+                    selectedTimeEntry = null
+                    deletingEntryId = null
                 }
-            } catch (e: Exception) {
-                println("[DEBUG_LOG] Unexpected error in delete operation: ${e.message}")
-                scaffoldState.snackbarHostState.showSnackbar("An unexpected error occurred: ${e.message}")
             }
         }
     }
@@ -154,26 +153,38 @@ fun App(redmineClient: RedmineClient) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    FloatingActionButton(
-                        onClick = {
-                            selectedTimeEntry = TimeEntry(
-                                id = null,
-                                date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
-                                hours = 0f,
-                                project = Project(0, ""),
-                                activity = Activity(0, ""),
-                                issue = Issue(0, ""),
-                                comments = ""
-                            )
+                    Box {
+                        FloatingActionButton(
+                            onClick = {
+                                if (!isLoading) {
+                                    selectedTimeEntry = TimeEntry(
+                                        id = null,
+                                        date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
+                                        hours = 0f,
+                                        project = Project(0, ""),
+                                        activity = Activity(0, ""),
+                                        issue = Issue(0, ""),
+                                        comments = ""
+                                    )
+                                }
+                            },
+                            modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colors.onSecondary
+                                )
+                            } else {
+                                Icon(Icons.Default.Add, contentDescription = "Add new time entry")
+                            }
                         }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add new time entry")
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         Strings["new_entry"],
                         style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+                        color = MaterialTheme.colors.onSurface.copy(alpha = if (isLoading) 0.4f else 0.7f)
                     )
                 }
             }
@@ -198,9 +209,12 @@ fun App(redmineClient: RedmineClient) {
                                 ) {
                                     IconButton(
                                         onClick = {
-                                            currentMonth = currentMonth.minusMonths(1)
-                                            selectedTimeEntry = null
-                                        }
+                                            if (!isLoading) {
+                                                currentMonth = currentMonth.minusMonths(1)
+                                                selectedTimeEntry = null
+                                            }
+                                        },
+                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
                                     ) {
                                         Text(Strings["nav_previous"])
                                     }
@@ -210,9 +224,12 @@ fun App(redmineClient: RedmineClient) {
                                     )
                                     IconButton(
                                         onClick = {
-                                            currentMonth = currentMonth.plusMonths(1)
-                                            selectedTimeEntry = null
-                                        }
+                                            if (!isLoading) {
+                                                currentMonth = currentMonth.plusMonths(1)
+                                                selectedTimeEntry = null
+                                            }
+                                        },
+                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
                                     ) {
                                         Text(Strings["nav_next"])
                                     }
@@ -224,9 +241,12 @@ fun App(redmineClient: RedmineClient) {
                                 ) {
                                     TextButton(
                                         onClick = {
-                                            currentMonth = YearMonth.now()
-                                            selectedTimeEntry = null
-                                        }
+                                            if (!isLoading) {
+                                                currentMonth = YearMonth.now()
+                                                selectedTimeEntry = null
+                                            }
+                                        },
+                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
                                     ) {
                                         Text(Strings["today_shortcut"])
                                     }
@@ -256,7 +276,7 @@ fun App(redmineClient: RedmineClient) {
                             }
                         }
 
-                        if (isLoading) {
+                        if (isLoading && deletingEntryId == null) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -268,7 +288,8 @@ fun App(redmineClient: RedmineClient) {
                                 timeEntries = timeEntries,
                                 selectedTimeEntry = selectedTimeEntry,
                                 onTimeEntrySelected = { selectedTimeEntry = it },
-                                onDelete = { entry -> deleteTimeEntry(entry) }
+                                onDelete = { entry -> deleteTimeEntry(entry) },
+                                deletingEntryId = deletingEntryId
                             )
                         }
                     }
@@ -325,7 +346,8 @@ fun TimeEntriesList(
     timeEntries: List<TimeEntry>,
     selectedTimeEntry: TimeEntry?,
     onTimeEntrySelected: (TimeEntry) -> Unit,
-    onDelete: (TimeEntry) -> Unit
+    onDelete: (TimeEntry) -> Unit,
+    deletingEntryId: Int? = null
 ) {
     val groupedEntries = remember(timeEntries) {
         timeEntries
@@ -359,7 +381,8 @@ fun TimeEntriesList(
                             timeEntry = entry,
                             isSelected = entry == selectedTimeEntry,
                             onClick = { onTimeEntrySelected(entry) },
-                            onDelete = { onDelete(entry) }
+                            onDelete = { onDelete(entry) },
+                            isLoading = entry.id == deletingEntryId
                         )
                     }
                 }
@@ -373,13 +396,15 @@ fun TimeEntryItem(
     timeEntry: TimeEntry,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isLoading: Boolean = false
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
-            .clickable { onClick() },
+            .clickable(enabled = !isLoading) { onClick() }
+            .alpha(if (isLoading) 0.6f else 1f),
         elevation = if (isSelected) 4.dp else 1.dp,
         color = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.1f) else MaterialTheme.colors.surface,
         shape = MaterialTheme.shapes.small
@@ -442,14 +467,23 @@ fun TimeEntryItem(
                 }
             }
             IconButton(
-                onClick = onDelete,
-                modifier = Modifier.padding(start = 8.dp)
+                onClick = { if (!isLoading) onDelete() },
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .alpha(if (isLoading) 0.6f else 1f)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete time entry",
-                    tint = MaterialTheme.colors.error
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colors.error
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete time entry",
+                        tint = MaterialTheme.colors.error
+                    )
+                }
             }
         }
     }
