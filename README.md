@@ -111,14 +111,15 @@ The application can be packaged as a native installer for different platforms:
 L'application peut être empaquetée comme un installateur natif pour différentes plateformes :
 
 - macOS (DMG)
-- Windows (MSI)
+- Windows (MSI and portable EXE)
 - Linux (DEB)
 
 To create native installers | Pour créer les installateurs natifs :
 
 ```bash
 ./gradlew packageReleaseDmg    # For macOS | Pour macOS
-./gradlew packageReleaseMsi    # For Windows | Pour Windows
+./gradlew packageReleaseMsi    # For Windows MSI installer | Pour Windows installateur MSI
+./gradlew packageReleaseExe    # For Windows portable application | Pour Windows application portable
 ./gradlew packageReleaseDeb    # For Linux | Pour Linux
 ```
 
@@ -165,3 +166,8 @@ Built with | Construit avec :
 - Kotlinx DateTime 0.5.0 | DateTime Kotlinx 0.5.0
 - Koin 3.5.0 (Dependency Injection)
 - Apache HttpClient 4.5.14
+
+## Credits | Crédits
+
+- Application icon created by Fabrice Perez | Icône de l'application créée par Fabrice Perez
+  - LinkedIn: [https://www.linkedin.com/in/perezfabrice/](https://www.linkedin.com/in/perezfabrice/)

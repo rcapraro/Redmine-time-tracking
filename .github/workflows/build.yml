@@ -38,20 +38,26 @@ jobs:
       - name: Create distribution package
         run: ./gradlew createDistributable
 
-      - name: Package application (Windows)
+      - name: Package application (Windows MSI)
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: ./gradlew packageMsi
+        run: ./gradlew packageReleaseMsi
+
+      - name: Package application (Windows EXE)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./gradlew packageReleaseExe
 
       - name: Package application (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
-        run: ./gradlew packageDmg
+        run: ./gradlew packageReleaseDmg
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
           name: installer-${{ matrix.os }}
           path: |
-            build/compose/binaries/main/msi/*.msi
-            build/compose/binaries/main/dmg/*.dmg
+            build/compose/binaries/main-release/msi/*.msi
+            build/compose/binaries/main-release/exe/*.exe
+            build/compose/binaries/main-release/dmg/*.dmg

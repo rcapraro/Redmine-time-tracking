@@ -24,7 +24,7 @@ fun ConfigurationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(Strings["configuration_title"] ?: "Configuration") },
+        title = { Text(Strings["configuration_title"]) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -33,7 +33,7 @@ fun ConfigurationDialog(
                 OutlinedTextField(
                     value = config.redmineUri,
                     onValueChange = { config = config.copy(redmineUri = it) },
-                    label = { Text(Strings["redmine_uri"] ?: "Redmine URI") },
+                    label = { Text(Strings["redmine_uri"]) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -41,7 +41,7 @@ fun ConfigurationDialog(
                 OutlinedTextField(
                     value = config.username,
                     onValueChange = { config = config.copy(username = it) },
-                    label = { Text(Strings["username"] ?: "Username") },
+                    label = { Text(Strings["username"]) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -54,7 +54,7 @@ fun ConfigurationDialog(
                     OutlinedTextField(
                         value = config.password,
                         onValueChange = { config = config.copy(password = it) },
-                        label = { Text(Strings["password"] ?: "Password") },
+                        label = { Text(Strings["password"]) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
@@ -69,7 +69,7 @@ fun ConfigurationDialog(
 
                 if (showError) {
                     Text(
-                        text = Strings["configuration_error"] ?: "Please fill all fields",
+                        text = Strings["configuration_error"],
                         color = MaterialTheme.colors.error,
                         style = MaterialTheme.typography.caption
                     )
@@ -92,12 +92,12 @@ fun ConfigurationDialog(
                     }
                 }
             ) {
-                Text(Strings["save"] ?: "Save")
+                Text(Strings["save"])
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(Strings["cancel"] ?: "Cancel")
+                Text(Strings["cancel"])
             }
         }
     )

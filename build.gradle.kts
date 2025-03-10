@@ -54,14 +54,43 @@ kotlin {
     jvmToolchain(17)
 }
 
+// Ensure Java 17 is used for all tasks
+tasks.withType<JavaCompile>().configureEach {
+    sourceCompatibility = JavaVersion.VERSION_17.toString()
+    targetCompatibility = JavaVersion.VERSION_17.toString()
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
 compose.desktop {
     application {
         mainClass = "com.ps.redmine.MainKt"
 
+        // Disable ProGuard to avoid Java version compatibility issues
+        buildTypes.release.proguard {
+            isEnabled = false
+        }
+
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             packageName = "RedmineTime"
             packageVersion = "1.0.0"
+
+            macOS {
+                iconFile.set(project.file("src/main/resources/app_icon.icns"))
+            }
+
+            windows {
+                iconFile.set(project.file("src/main/resources/app_icon.ico"))
+            }
+
+            linux {
+                iconFile.set(project.file("src/main/resources/app_icon.png"))
+            }
         }
     }
 }

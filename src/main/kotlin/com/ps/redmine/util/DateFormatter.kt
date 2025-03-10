@@ -3,16 +3,18 @@ package com.ps.redmine.util
 import kotlinx.datetime.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 
 object DateFormatter {
-    private val shortFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
-    private val fullFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+    private fun getFormatter(style: FormatStyle): DateTimeFormatter {
+        return DateTimeFormatter.ofLocalizedDate(style).withLocale(Locale.getDefault())
+    }
 
     fun formatShort(date: LocalDate): String {
-        return date.toJava().format(shortFormatter)
+        return date.toJava().format(getFormatter(FormatStyle.SHORT))
     }
 
     fun formatFull(date: LocalDate): String {
-        return date.toJava().format(fullFormatter)
+        return date.toJava().format(getFormatter(FormatStyle.FULL))
     }
 }
