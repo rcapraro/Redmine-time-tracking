@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Definitions for gradients -->
+  <defs>
+    <!-- Main background gradient - subtle blue gradient -->
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3498db" />
+      <stop offset="100%" stop-color="#2980b9" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main background circle with subtle gradient -->
+  <circle cx="256" cy="256" r="240" fill="url(#bg-gradient)" />
+  
+  <!-- Clock face - clean white circle -->
+  <circle cx="256" cy="256" r="200" fill="#ffffff" />
+  
+  <!-- Minimalistic hour marks - just 4 main marks -->
+  <g stroke="#555555" stroke-width="3" stroke-linecap="round">
+    <line x1="256" y1="96" x2="256" y2="116" />
+    <line x1="416" y1="256" x2="396" y2="256" />
+    <line x1="256" y1="416" x2="256" y2="396" />
+    <line x1="96" y1="256" x2="116" y2="256" />
+  </g>
+  
+  <!-- Clock hands with clean design -->
+  <g>
+    <!-- Hour hand -->
+    <line x1="256" y1="256" x2="256" y2="176" stroke="#555555" stroke-width="6" stroke-linecap="round" transform="rotate(45 256 256)" />
+    
+    <!-- Minute hand -->
+    <line x1="256" y1="256" x2="256" y2="136" stroke="#555555" stroke-width="4" stroke-linecap="round" transform="rotate(240 256 256)" />
+  </g>
+  
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="8" fill="#555555" />
+
+  <text x="256" y="176" font-family="Arial, sans-serif" font-size="46" font-weight="bold" text-anchor="middle" fill="#3498db">Saisies</text>
+  <text x="256" y="366" font-family="Arial, sans-serif" font-size="46" font-weight="bold" text-anchor="middle" fill="#3498db">Redmine</text>
+</svg>
