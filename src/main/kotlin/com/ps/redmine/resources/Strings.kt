@@ -79,7 +79,12 @@ object Strings {
             "total_hours_format" to "%.1f",
             "issue_item_format" to "• #%d %s",
             "comment_item_format" to "• %s",
-            "issue_selection_format" to "#%d - %s"
+            "issue_selection_format" to "#%d - %s",
+            "time_entry_deleted" to "Saisie de temps supprimée avec succès",
+            "dismiss" to "Fermer",
+            "configuration_saved" to "Configuration enregistrée avec succès",
+            "add_new_time_entry" to "Ajouter une nouvelle saisie de temps",
+            "delete_time_entry" to "Supprimer la saisie de temps"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -142,7 +147,12 @@ object Strings {
             "total_hours_format" to "%.1f",
             "issue_item_format" to "• #%d %s",
             "comment_item_format" to "• %s",
-            "issue_selection_format" to "#%d - %s"
+            "issue_selection_format" to "#%d - %s",
+            "time_entry_deleted" to "Time entry deleted successfully",
+            "dismiss" to "Dismiss",
+            "configuration_saved" to "Configuration saved successfully",
+            "add_new_time_entry" to "Add new time entry",
+            "delete_time_entry" to "Delete time entry"
         )
     )
 

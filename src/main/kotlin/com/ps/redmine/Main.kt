@@ -78,11 +78,11 @@ fun App(redmineClient: RedmineClient) {
                 try {
                     redmineClient.deleteTimeEntry(id)
                     println("[DEBUG_LOG] Delete operation completed successfully")
-                    scaffoldState.snackbarHostState.showSnackbar("Time entry deleted successfully")
+                    scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
                 } catch (e: Exception) {
                     println("[DEBUG_LOG] Error during delete operation: ${e.message}")
                     scaffoldState.snackbarHostState.showSnackbar(
-                        "Operation might have succeeded, but there was an error: ${e.message}"
+                        Strings["operation_error"].format(e.message)
                     )
                 } finally {
                     // Always refresh the list and clear selection
@@ -142,7 +142,7 @@ fun App(redmineClient: RedmineClient) {
         errorMessage?.let {
             scaffoldState.snackbarHostState.showSnackbar(
                 message = it,
-                actionLabel = "Dismiss"
+                actionLabel = Strings["dismiss"]
             )
             errorMessage = null
         }
@@ -155,7 +155,7 @@ fun App(redmineClient: RedmineClient) {
                 onDismiss = { showConfigDialog = false },
                 onConfigSaved = {
                     scope.launch {
-                        scaffoldState.snackbarHostState.showSnackbar("Configuration saved successfully")
+                        scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
                         // Reload data with new configuration
                         loadTimeEntries(currentMonth)
                     }
@@ -205,7 +205,7 @@ fun App(redmineClient: RedmineClient) {
                                     color = MaterialTheme.colors.onSecondary
                                 )
                             } else {
-                                Icon(Icons.Default.Add, contentDescription = "Add new time entry")
+                                Icon(Icons.Default.Add, contentDescription = Strings["add_new_time_entry"])
                             }
                         }
                     }
@@ -480,13 +480,13 @@ fun TimeEntryItem(
                             color = MaterialTheme.colors.secondary
                         )
                         Text(
-                            text = "• #${timeEntry.issue.id} ${timeEntry.issue.subject}",
+                            text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colors.secondary
                         )
                         if (timeEntry.comments.isNotEmpty()) {
                             Text(
-                                text = "• ${timeEntry.comments}",
+                                text = Strings["comment_item_format"].format(timeEntry.comments),
                                 style = MaterialTheme.typography.caption,
                                 maxLines = 1,
                                 color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
@@ -509,7 +509,7 @@ fun TimeEntryItem(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete time entry",
+                        contentDescription = Strings["delete_time_entry"],
                         tint = MaterialTheme.colors.error
                     )
                 }
@@ -616,6 +616,13 @@ fun TimeEntryDetail(
         if (hasChanges) {
             showCancelConfirmation = true
         } else {
+            // Reset all fields before canceling
+            date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            hours = ""
+            comments = ""
+            selectedProject = null
+            selectedActivity = null
+            selectedIssue = null
             onCancel()
         }
     }
@@ -696,6 +703,13 @@ fun TimeEntryDetail(
                 TextButton(
                     onClick = {
                         showCancelConfirmation = false
+                        // Reset all fields before canceling
+                        date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                        hours = ""
+                        comments = ""
+                        selectedProject = null
+                        selectedActivity = null
+                        selectedIssue = null
                         onCancel()
                     }
                 ) {
@@ -838,73 +852,74 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Hours
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = hours,
-                onValueChange = { input: String ->
-                    if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
-                        val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
-                        val floatValue = newValue.toFloatOrNull()
-                        if (floatValue == null || floatValue <= 7.5f) {
-                            hours = newValue
-                        }
-                    }
-                },
-                modifier = Modifier.width(200.dp).then(shortcutHandler),
-                label = { Text(Strings["hours_label"]) },
-                isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
-                singleLine = true,
-                enabled = !isLoading,
-                trailingIcon = {
-                    if (hours.isNotEmpty()) {
-                        IconButton(
-                            onClick = { hours = "" },
-                            enabled = !isLoading
-                        ) {
-                            Text(
-                                text = Strings["clear_button"],
-                                modifier = Modifier.semantics {
-                                    contentDescription = Strings["clear_button_description"]
-                                }
-                            )
-                        }
-                    }
-                }
-            )
-
-            TextButton(
-                onClick = { hours = "7.5" },
-                enabled = !isLoading
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Journée complète")
-            }
-            Column {
-                if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
-                    Text(
-                        text = Strings["invalid_number"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                    )
-                } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
-                    Text(
-                        text = Strings["hours_must_be_positive"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                    )
-                } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
-                    Text(
-                        text = Strings["hours_max_value"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                    )
+                OutlinedTextField(
+                    value = hours,
+                    onValueChange = { input: String ->
+                        if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
+                            val floatValue = newValue.toFloatOrNull()
+                            if (floatValue == null || floatValue <= 7.5f) {
+                                hours = newValue
+                            }
+                        }
+                    },
+                    modifier = Modifier.width(200.dp).then(shortcutHandler),
+                    label = { Text(Strings["hours_label"]) },
+                    isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
+                    singleLine = true,
+                    enabled = !isLoading,
+                    trailingIcon = {
+                        if (hours.isNotEmpty()) {
+                            IconButton(
+                                onClick = { hours = "" },
+                                enabled = !isLoading
+                            ) {
+                                Text(
+                                    text = Strings["clear_button"],
+                                    modifier = Modifier.semantics {
+                                        contentDescription = Strings["clear_button_description"]
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+
+                TextButton(
+                    onClick = { hours = "7.5" },
+                    enabled = !isLoading
+                ) {
+                    Text("Journée complète")
                 }
+            }
+
+            if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
+                Text(
+                    text = Strings["invalid_number"],
+                    color = MaterialTheme.colors.error,
+                    style = MaterialTheme.typography.caption,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
+                Text(
+                    text = Strings["hours_must_be_positive"],
+                    color = MaterialTheme.colors.error,
+                    style = MaterialTheme.typography.caption,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
+                Text(
+                    text = Strings["hours_max_value"],
+                    color = MaterialTheme.colors.error,
+                    style = MaterialTheme.typography.caption,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
             }
         }
 
@@ -1174,7 +1189,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
-            state = rememberWindowState(width = 1000.dp, height = 900.dp)
+            state = rememberWindowState(width = 1100.dp, height = 900.dp)
         ) {
             App(redmineClient)
         }
