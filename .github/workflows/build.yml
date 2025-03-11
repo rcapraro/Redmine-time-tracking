@@ -35,29 +35,26 @@ jobs:
       - name: Run tests
         run: ./gradlew test
 
-      - name: Create distribution package
-        run: ./gradlew createDistributable
-
       - name: Package application (Windows MSI)
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: ./gradlew packageReleaseMsi
-
-      - name: Package application (Windows EXE)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: ./gradlew packageReleaseExe
 
       - name: Package application (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
         run: ./gradlew packageReleaseDmg
 
-      - name: Upload installers
+      - name: Upload Windows MSI artifact
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: installer-${{ matrix.os }}
-          path: |
-            build/compose/binaries/main-release/msi/*.msi
-            build/compose/binaries/main-release/exe/*.exe
-            build/compose/binaries/main-release/dmg/*.dmg
+          name: redmime-time-windows-installer
+          path: build/compose/binaries/main-release/msi/*.msi
+
+      - name: Upload macOS dmg
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: redmime-time-macos
+          path: build/compose/binaries/main-release/dmg/*.dmg

@@ -1174,7 +1174,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
-            state = rememberWindowState(width = 1050.dp, height = 850.dp)
+            state = rememberWindowState(width = 1000.dp, height = 900.dp)
         ) {
             App(redmineClient)
         }
