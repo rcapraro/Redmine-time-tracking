@@ -128,13 +128,14 @@ To create native installers | Pour créer les installateurs natifs :
 
 ### Continuous Integration | Intégration Continue
 
-The project uses GitHub Actions for continuous integration and automated builds. On each push to the main branch or pull request:
+The project uses GitHub Actions for continuous integration and automated builds. On each push to the main branch or pull
+request:
 
 1. The application is built and tested on Windows and macOS
 2. Native installers are created automatically:
-   - Windows MSI installer
-   - Windows portable application (ZIP)
-   - macOS DMG
+    - Windows MSI installer
+    - Windows portable application (ZIP)
+    - macOS DMG
 
 These artifacts are available for download from the GitHub Actions workflow run.
 
@@ -185,4 +186,4 @@ Built with | Construit avec :
 ## Credits | Crédits
 
 - Application icon created by Fabrice Perez | Icône de l'application créée par Fabrice Perez
-  - LinkedIn: [https://www.linkedin.com/in/perezfabrice/](https://www.linkedin.com/in/perezfabrice/)
+    - LinkedIn: [https://www.linkedin.com/in/perezfabrice/](https://www.linkedin.com/in/perezfabrice/)

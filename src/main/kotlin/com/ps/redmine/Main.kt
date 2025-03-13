@@ -1,12 +1,8 @@
 package com.ps.redmine
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +18,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.RedmineClient
 import com.ps.redmine.components.ConfigurationDialog
 import com.ps.redmine.components.DatePicker
+import com.ps.redmine.components.TimeEntriesList
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
 import com.ps.redmine.model.Activity
@@ -29,9 +26,10 @@ import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
-import io.github.oshai.kotlinlogging.KotlinLogging
+import com.ps.redmine.util.KeyShortcutManager
+import com.ps.redmine.util.format
+import com.ps.redmine.util.today
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -40,8 +38,6 @@ import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.time.YearMonth
 import java.util.*
-
-private val logger = KotlinLogging.logger {}
 
 @Composable
 fun App(redmineClient: RedmineClient) {
@@ -77,19 +73,15 @@ fun App(redmineClient: RedmineClient) {
         scope.launch {
             timeEntry.id?.let { id ->
                 deletingEntryId = id
-                logger.debug { "Attempting to delete time entry #$id" }
                 try {
                     redmineClient.deleteTimeEntry(id)
-                    logger.debug { "Delete operation completed successfully" }
                     scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
                 } catch (e: Exception) {
-                    logger.debug { "Error during delete operation: ${e.message}" }
                     scaffoldState.snackbarHostState.showSnackbar(
                         Strings["operation_error"].format(e.message)
                     )
                 } finally {
                     // Always refresh the list and clear selection
-                    logger.debug { "Refreshing time entries list" }
                     loadTimeEntries(currentMonth)
                     selectedTimeEntry = null
                     deletingEntryId = null
@@ -104,39 +96,32 @@ fun App(redmineClient: RedmineClient) {
 
     // Handle keyboard shortcuts
     DisposableEffect(Unit) {
-        logger.debug { "Setting up App keyboard shortcuts" }
         val callback: (KeyShortcut) -> Unit = { shortcut ->
-            logger.debug { "App received shortcut: $shortcut" }
             when (shortcut) {
                 // Navigation shortcuts
                 KeyShortcut.PreviousMonth -> {
-                    logger.debug { "Handling PreviousMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = currentMonth.minusMonths(1)
                 }
 
                 KeyShortcut.NextMonth -> {
-                    logger.debug { "Handling NextMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = currentMonth.plusMonths(1)
                 }
 
                 KeyShortcut.CurrentMonth -> {
-                    logger.debug { "Handling CurrentMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = YearMonth.now()
                 }
                 // Save/Cancel shortcuts - only handle if TimeEntryDetail is open
                 KeyShortcut.Save,
                 KeyShortcut.Cancel -> {
-                    logger.debug { "Ignoring Save/Cancel in App" }
                 } // Let TimeEntryDetail handle these
             }
         }
         KeyShortcutManager.setShortcutCallback(callback)
 
         onDispose {
-            logger.debug { "Cleaning up App keyboard shortcuts" }
             KeyShortcutManager.removeShortcutCallback(callback)
         }
     }
@@ -180,46 +165,6 @@ fun App(redmineClient: RedmineClient) {
                     }
                 )
             },
-            floatingActionButton = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Box {
-                        FloatingActionButton(
-                            onClick = {
-                                if (!isLoading) {
-                                    selectedTimeEntry = TimeEntry(
-                                        id = null,
-                                        date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date,
-                                        hours = 0f,
-                                        project = Project(0, ""),
-                                        activity = Activity(0, ""),
-                                        issue = Issue(0, ""),
-                                        comments = ""
-                                    )
-                                }
-                            },
-                            modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = MaterialTheme.colors.onSecondary
-                                )
-                            } else {
-                                Icon(Icons.Default.Add, contentDescription = Strings["add_new_time_entry"])
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        Strings["new_entry"],
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = if (isLoading) 0.4f else 0.7f)
-                    )
-                }
-            }
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(16.dp)
@@ -339,7 +284,6 @@ fun App(redmineClient: RedmineClient) {
                         onSave = { updatedEntry ->
                             scope.launch {
                                 try {
-                                    logger.debug { "Saving entry in parent scope" }
                                     if (updatedEntry.id == null) {
                                         redmineClient.createTimeEntry(updatedEntry)
                                     } else {
@@ -358,7 +302,6 @@ fun App(redmineClient: RedmineClient) {
                                         Strings["entry_updated"]
                                     scaffoldState.snackbarHostState.showSnackbar(message)
                                 } catch (e: Exception) {
-                                    logger.debug { "Error in parent scope: ${e.message}" }
                                     scaffoldState.snackbarHostState.showSnackbar(
                                         Strings["operation_error"].format(e.message)
                                     )
@@ -373,153 +316,7 @@ fun App(redmineClient: RedmineClient) {
     }
 }
 
-@Composable
-fun TimeEntriesList(
-    timeEntries: List<TimeEntry>,
-    selectedTimeEntry: TimeEntry?,
-    onTimeEntrySelected: (TimeEntry) -> Unit,
-    onDelete: (TimeEntry) -> Unit,
-    deletingEntryId: Int? = null
-) {
-    val groupedEntries = remember(timeEntries) {
-        timeEntries
-            .sortedByDescending { it.date }
-            .groupBy { it.date }
-    }
-
-    LazyColumn {
-        groupedEntries.forEach { (date, entries) ->
-            item {
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = DateFormatter.formatFull(date),
-                            style = MaterialTheme.typography.subtitle1,
-                            color = MaterialTheme.colors.primary
-                        )
-                        Text(
-                            text = Strings["hours_format"].format(entries.sumOf { it.hours.toDouble() }),
-                            style = MaterialTheme.typography.subtitle1,
-                            color = MaterialTheme.colors.secondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    entries.forEach { entry ->
-                        TimeEntryItem(
-                            timeEntry = entry,
-                            isSelected = entry == selectedTimeEntry,
-                            onClick = { onTimeEntrySelected(entry) },
-                            onDelete = { onDelete(entry) },
-                            isLoading = entry.id == deletingEntryId
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TimeEntryItem(
-    timeEntry: TimeEntry,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-    isLoading: Boolean = false
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(enabled = !isLoading) { onClick() }
-            .alpha(if (isLoading) 0.6f else 1f),
-        elevation = if (isSelected) 4.dp else 1.dp,
-        color = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.1f) else MaterialTheme.colors.surface,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = DateFormatter.formatShort(timeEntry.date),
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = Strings["hours_format"].format(timeEntry.hours),
-                        style = MaterialTheme.typography.body2,
-                        color = MaterialTheme.colors.primary
-                    )
-                }
-                Column {
-                    Text(
-                        text = timeEntry.project.name,
-                        style = MaterialTheme.typography.body1
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = timeEntry.activity.name,
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.secondary
-                        )
-                        Text(
-                            text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.secondary
-                        )
-                        if (timeEntry.comments.isNotEmpty()) {
-                            Text(
-                                text = Strings["comment_item_format"].format(timeEntry.comments),
-                                style = MaterialTheme.typography.caption,
-                                maxLines = 1,
-                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                }
-            }
-            IconButton(
-                onClick = { if (!isLoading) onDelete() },
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .alpha(if (isLoading) 0.6f else 1f)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colors.error
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = Strings["delete_time_entry"],
-                        tint = MaterialTheme.colors.error
-                    )
-                }
-            }
-        }
-    }
-}
+// TimeEntriesList and TimeEntryItem moved to com.ps.redmine.components.TimeEntriesList
 
 @Composable
 fun TimeEntryDetail(
@@ -606,7 +403,7 @@ fun TimeEntryDetail(
                         )
                         onSave(timeEntryToSave)
                     } catch (e: Exception) {
-                        logger.debug { "Error saving time entry: ${e.message}" }
+                        println("Error saving time entry: ${e.message}")
                     } finally {
                         isSaving = false
                     }
@@ -637,7 +434,7 @@ fun TimeEntryDetail(
             projects = redmineClient.getProjects()
             activities = redmineClient.getActivities()
         } catch (e: Exception) {
-            logger.debug { "Error loading data: ${e.message}" }
+            println("Error loading data: ${e.message}")
         } finally {
             isLoading = false
         }
@@ -651,7 +448,7 @@ fun TimeEntryDetail(
             try {
                 issues = redmineClient.getIssues(project.id)
             } catch (e: Exception) {
-                logger.debug { "Error loading issues: ${e.message}" }
+                println("Error loading issues: ${e.message}")
                 issues = emptyList()
             } finally {
                 isLoadingIssues = false
@@ -677,10 +474,8 @@ fun TimeEntryDetail(
 
 
     val keyboardHandler = Modifier.onPreviewKeyEvent { event ->
-        logger.debug { "TimeEntryDetail received key event: ${event.key}, type: ${event.type}" }
         when {
             event.type == KeyEventType.KeyDown && event.key == Key.S && event.isMetaPressed -> {
-                logger.debug { "Handling Command+S in TimeEntryDetail (valid: $isValid, loading: $isLoading, saving: $isSaving)" }
                 if (isValid && !isLoading && !isSaving) {
                     saveEntry()
                     true
@@ -688,7 +483,6 @@ fun TimeEntryDetail(
             }
 
             event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
-                logger.debug { "Handling Escape in TimeEntryDetail" }
                 handleCancel()
                 true
             }
@@ -760,7 +554,7 @@ fun TimeEntryDetail(
                 text = if (timeEntry == null) Strings["add_time_entry"] else Strings["edit_time_entry"],
                 style = MaterialTheme.typography.h6
             )
-            TextButton(
+            Button(
                 onClick = { handleCancel() },
                 enabled = !isLoading && !isSaving
             ) {
@@ -786,7 +580,7 @@ fun TimeEntryDetail(
                 onClick = { date = today },
                 enabled = !isLoading && !isSaving
             ) {
-                Text("Aujourd'hui")
+                Text(Strings["today"])
             }
         }
 
@@ -898,7 +692,7 @@ fun TimeEntryDetail(
                     onClick = { hours = "7.5" },
                     enabled = !isLoading
                 ) {
-                    Text("Journée complète")
+                    Text(Strings["full_day"])
                 }
             }
 
@@ -983,9 +777,9 @@ fun TimeEntryDetail(
                     val project = selectedProject
                     Text(
                         text = if (project != null)
-                            "Loading open issues for project ${project.name}..."
+                            Strings["loading_issues_for_project"].format(project.name)
                         else
-                            "Loading issues...",
+                            Strings["loading_issues"],
                         color = MaterialTheme.colors.secondary,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -1014,9 +808,9 @@ fun TimeEntryDetail(
                     val project = selectedProject
                     Text(
                         text = if (project != null)
-                            "No open issues found in project ${project.name}"
+                            Strings["no_issues_for_project"].format(project.name)
                         else
-                            "No issues available",
+                            Strings["no_issues_available"],
                         color = MaterialTheme.colors.error,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
@@ -1133,44 +927,45 @@ fun TimeEntryDetail(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
-            onClick = { saveEntry() },
-            modifier = Modifier.align(Alignment.End),
-            enabled = isValid && !isLoading && !isSaving
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Keyboard shortcuts help
+            Text(
+                text = Strings["keyboard_shortcuts"],
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+            )
+
+            Button(
+                onClick = { saveEntry() },
+                enabled = isValid && !isLoading && !isSaving
             ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
                 }
-                logger.debug { "TimeEntry id: ${timeEntry?.id}" }
-                Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-
-        // Keyboard shortcuts help
-        Text(
-            text = Strings["keyboard_shortcuts"],
-            style = MaterialTheme.typography.caption,
-            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-        )
     }
 }
 
 fun main() {
     // Set default locale to French
     Locale.setDefault(Locale.FRENCH)
-    logger.debug { "Default locale set to: ${Locale.getDefault()}" }
 
-    // Initialize Strings with French as default
-    logger.debug { "Initializing Strings object" }
     Strings
 
     application {
@@ -1192,7 +987,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
-            state = rememberWindowState(width = 1100.dp, height = 900.dp)
+            state = rememberWindowState(width = 1070.dp, height = 870.dp)
         ) {
             App(redmineClient)
         }

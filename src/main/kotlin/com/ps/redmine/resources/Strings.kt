@@ -1,9 +1,5 @@
 package com.ps.redmine.resources
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-
-private val logger = KotlinLogging.logger {}
-
 enum class Language {
     ENGLISH,
     FRENCH
@@ -16,7 +12,6 @@ object Strings {
             "en" -> Language.ENGLISH
             else -> Language.FRENCH  // Default to French for any other value or if not set
         }
-        logger.debug { "Using language: $lang (from env: ${envLang ?: "not set"})" }
         lang
     }
 
@@ -88,7 +83,12 @@ object Strings {
             "dismiss" to "Fermer",
             "configuration_saved" to "Configuration enregistrée avec succès",
             "add_new_time_entry" to "Ajouter une nouvelle saisie de temps",
-            "delete_time_entry" to "Supprimer la saisie de temps"
+            "delete_time_entry" to "Supprimer la saisie de temps",
+            "full_day" to "Journée complète",
+            "loading_issues_for_project" to "Chargement des tickets ouverts pour le projet %s...",
+            "loading_issues" to "Chargement des tickets...",
+            "no_issues_for_project" to "Aucun ticket ouvert trouvé dans le projet %s",
+            "no_issues_available" to "Aucun ticket disponible"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -156,7 +156,12 @@ object Strings {
             "dismiss" to "Dismiss",
             "configuration_saved" to "Configuration saved successfully",
             "add_new_time_entry" to "Add new time entry",
-            "delete_time_entry" to "Delete time entry"
+            "delete_time_entry" to "Delete time entry",
+            "full_day" to "Full Day",
+            "loading_issues_for_project" to "Loading open issues for project %s...",
+            "loading_issues" to "Loading issues...",
+            "no_issues_for_project" to "No open issues found in project %s",
+            "no_issues_available" to "No issues available"
         )
     )
 

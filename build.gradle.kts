@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -36,11 +37,6 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.koin.compose)
 
-    // Log
-    implementation(libs.slf4j.api)
-    implementation(libs.logback.classic)
-    implementation(libs.kotlin.logging)
-
     // Testing
     testImplementation(libs.koin.test)
     testImplementation(libs.koin.test.junit5)
@@ -64,6 +60,12 @@ kotlin {
 tasks.withType<JavaCompile>().configureEach {
     sourceCompatibility = JavaVersion.VERSION_17.toString()
     targetCompatibility = JavaVersion.VERSION_17.toString()
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 compose.desktop {
