@@ -31,6 +31,7 @@ import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -39,6 +40,8 @@ import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.time.YearMonth
 import java.util.*
+
+private val logger = KotlinLogging.logger {}
 
 @Composable
 fun App(redmineClient: RedmineClient) {
@@ -74,19 +77,19 @@ fun App(redmineClient: RedmineClient) {
         scope.launch {
             timeEntry.id?.let { id ->
                 deletingEntryId = id
-                println("[DEBUG_LOG] Attempting to delete time entry #$id")
+                logger.debug { "Attempting to delete time entry #$id" }
                 try {
                     redmineClient.deleteTimeEntry(id)
-                    println("[DEBUG_LOG] Delete operation completed successfully")
+                    logger.debug { "Delete operation completed successfully" }
                     scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
                 } catch (e: Exception) {
-                    println("[DEBUG_LOG] Error during delete operation: ${e.message}")
+                    logger.debug { "Error during delete operation: ${e.message}" }
                     scaffoldState.snackbarHostState.showSnackbar(
                         Strings["operation_error"].format(e.message)
                     )
                 } finally {
                     // Always refresh the list and clear selection
-                    println("[DEBUG_LOG] Refreshing time entries list")
+                    logger.debug { "Refreshing time entries list" }
                     loadTimeEntries(currentMonth)
                     selectedTimeEntry = null
                     deletingEntryId = null
@@ -101,39 +104,39 @@ fun App(redmineClient: RedmineClient) {
 
     // Handle keyboard shortcuts
     DisposableEffect(Unit) {
-        println("[DEBUG_LOG] Setting up App keyboard shortcuts")
+        logger.debug { "Setting up App keyboard shortcuts" }
         val callback: (KeyShortcut) -> Unit = { shortcut ->
-            println("[DEBUG_LOG] App received shortcut: $shortcut")
+            logger.debug { "App received shortcut: $shortcut" }
             when (shortcut) {
                 // Navigation shortcuts
                 KeyShortcut.PreviousMonth -> {
-                    println("[DEBUG_LOG] Handling PreviousMonth in App")
+                    logger.debug { "Handling PreviousMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = currentMonth.minusMonths(1)
                 }
 
                 KeyShortcut.NextMonth -> {
-                    println("[DEBUG_LOG] Handling NextMonth in App")
+                    logger.debug { "Handling NextMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = currentMonth.plusMonths(1)
                 }
 
                 KeyShortcut.CurrentMonth -> {
-                    println("[DEBUG_LOG] Handling CurrentMonth in App")
+                    logger.debug { "Handling CurrentMonth in App" }
                     selectedTimeEntry = null
                     currentMonth = YearMonth.now()
                 }
                 // Save/Cancel shortcuts - only handle if TimeEntryDetail is open
                 KeyShortcut.Save,
                 KeyShortcut.Cancel -> {
-                    println("[DEBUG_LOG] Ignoring Save/Cancel in App")
+                    logger.debug { "Ignoring Save/Cancel in App" }
                 } // Let TimeEntryDetail handle these
             }
         }
         KeyShortcutManager.setShortcutCallback(callback)
 
         onDispose {
-            println("[DEBUG_LOG] Cleaning up App keyboard shortcuts")
+            logger.debug { "Cleaning up App keyboard shortcuts" }
             KeyShortcutManager.removeShortcutCallback(callback)
         }
     }
@@ -336,7 +339,7 @@ fun App(redmineClient: RedmineClient) {
                         onSave = { updatedEntry ->
                             scope.launch {
                                 try {
-                                    println("[DEBUG_LOG] Saving entry in parent scope")
+                                    logger.debug { "Saving entry in parent scope" }
                                     if (updatedEntry.id == null) {
                                         redmineClient.createTimeEntry(updatedEntry)
                                     } else {
@@ -355,7 +358,7 @@ fun App(redmineClient: RedmineClient) {
                                         Strings["entry_updated"]
                                     scaffoldState.snackbarHostState.showSnackbar(message)
                                 } catch (e: Exception) {
-                                    println("[DEBUG_LOG] Error in parent scope: ${e.message}")
+                                    logger.debug { "Error in parent scope: ${e.message}" }
                                     scaffoldState.snackbarHostState.showSnackbar(
                                         Strings["operation_error"].format(e.message)
                                     )
@@ -603,7 +606,7 @@ fun TimeEntryDetail(
                         )
                         onSave(timeEntryToSave)
                     } catch (e: Exception) {
-                        println("[DEBUG_LOG] Error saving time entry: ${e.message}")
+                        logger.debug { "Error saving time entry: ${e.message}" }
                     } finally {
                         isSaving = false
                     }
@@ -634,7 +637,7 @@ fun TimeEntryDetail(
             projects = redmineClient.getProjects()
             activities = redmineClient.getActivities()
         } catch (e: Exception) {
-            println("[DEBUG_LOG] Error loading data: ${e.message}")
+            logger.debug { "Error loading data: ${e.message}" }
         } finally {
             isLoading = false
         }
@@ -648,7 +651,7 @@ fun TimeEntryDetail(
             try {
                 issues = redmineClient.getIssues(project.id)
             } catch (e: Exception) {
-                println("[DEBUG_LOG] Error loading issues: ${e.message}")
+                logger.debug { "Error loading issues: ${e.message}" }
                 issues = emptyList()
             } finally {
                 isLoadingIssues = false
@@ -674,10 +677,10 @@ fun TimeEntryDetail(
 
 
     val keyboardHandler = Modifier.onPreviewKeyEvent { event ->
-        println("[DEBUG_LOG] TimeEntryDetail received key event: ${event.key}, type: ${event.type}")
+        logger.debug { "TimeEntryDetail received key event: ${event.key}, type: ${event.type}" }
         when {
             event.type == KeyEventType.KeyDown && event.key == Key.S && event.isMetaPressed -> {
-                println("[DEBUG_LOG] Handling Command+S in TimeEntryDetail (valid: $isValid, loading: $isLoading, saving: $isSaving)")
+                logger.debug { "Handling Command+S in TimeEntryDetail (valid: $isValid, loading: $isLoading, saving: $isSaving)" }
                 if (isValid && !isLoading && !isSaving) {
                     saveEntry()
                     true
@@ -685,7 +688,7 @@ fun TimeEntryDetail(
             }
 
             event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
-                println("[DEBUG_LOG] Handling Escape in TimeEntryDetail")
+                logger.debug { "Handling Escape in TimeEntryDetail" }
                 handleCancel()
                 true
             }
@@ -1145,7 +1148,7 @@ fun TimeEntryDetail(
                         strokeWidth = 2.dp
                     )
                 }
-                println("[DEBUG_LOG] TimeEntry id: ${timeEntry?.id}")
+                logger.debug { "TimeEntry id: ${timeEntry?.id}" }
                 Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
             }
         }
@@ -1164,10 +1167,10 @@ fun TimeEntryDetail(
 fun main() {
     // Set default locale to French
     Locale.setDefault(Locale.FRENCH)
-    println("[DEBUG_LOG] Default locale set to: ${Locale.getDefault()}")
+    logger.debug { "Default locale set to: ${Locale.getDefault()}" }
 
     // Initialize Strings with French as default
-    println("[DEBUG_LOG] Initializing Strings object")
+    logger.debug { "Initializing Strings object" }
     Strings
 
     application {

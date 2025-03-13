@@ -1,5 +1,9 @@
 package com.ps.redmine.resources
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
+
 enum class Language {
     ENGLISH,
     FRENCH
@@ -12,7 +16,7 @@ object Strings {
             "en" -> Language.ENGLISH
             else -> Language.FRENCH  // Default to French for any other value or if not set
         }
-        println("[DEBUG_LOG] Using language: $lang (from env: ${envLang ?: "not set"})")
+        logger.debug { "Using language: $lang (from env: ${envLang ?: "not set"})" }
         lang
     }
 

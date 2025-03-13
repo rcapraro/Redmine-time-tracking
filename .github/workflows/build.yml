@@ -40,6 +40,13 @@ jobs:
         shell: pwsh
         run: ./gradlew packageReleaseMsi
 
+      - name: Package application (Windows Portable)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          ./gradlew createReleaseDistributable
+          Compress-Archive -Path build/compose/binaries/main-release/app/* -DestinationPath build/compose/binaries/main-release/RedmineTime-portable.zip
+
       - name: Package application (macOS)
         if: matrix.os == 'macos-latest'
         shell: bash
@@ -51,6 +58,13 @@ jobs:
         with:
           name: redmime-time-windows-installer
           path: build/compose/binaries/main-release/msi/*.msi
+
+      - name: Upload Windows Portable artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: redmime-time-windows-portable
+          path: build/compose/binaries/main-release/RedmineTime-portable.zip
 
       - name: Upload macOS dmg
         if: matrix.os == 'macos-latest'

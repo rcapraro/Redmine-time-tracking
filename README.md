@@ -111,7 +111,7 @@ The application can be packaged as a native installer for different platforms:
 L'application peut être empaquetée comme un installateur natif pour différentes plateformes :
 
 - macOS (DMG)
-- Windows (MSI and portable EXE)
+- Windows (MSI and portable ZIP)
 - Linux (DEB)
 
 To create native installers | Pour créer les installateurs natifs :
@@ -119,9 +119,24 @@ To create native installers | Pour créer les installateurs natifs :
 ```bash
 ./gradlew packageReleaseDmg    # For macOS | Pour macOS
 ./gradlew packageReleaseMsi    # For Windows MSI installer | Pour Windows installateur MSI
-./gradlew packageReleaseExe    # For Windows portable application | Pour Windows application portable
+./gradlew createReleaseDistributable    # For Windows distributable files | Pour Windows fichiers distribuables
+# Then zip the files | Puis compresser les fichiers
+# Windows: Compress-Archive -Path build/compose/binaries/main-release/app/* -DestinationPath RedmineTime-portable.zip
+# Linux/macOS: zip -r RedmineTime-portable.zip build/compose/binaries/main-release/app/*
 ./gradlew packageReleaseDeb    # For Linux | Pour Linux
 ```
+
+### Continuous Integration | Intégration Continue
+
+The project uses GitHub Actions for continuous integration and automated builds. On each push to the main branch or pull request:
+
+1. The application is built and tested on Windows and macOS
+2. Native installers are created automatically:
+   - Windows MSI installer
+   - Windows portable application (ZIP)
+   - macOS DMG
+
+These artifacts are available for download from the GitHub Actions workflow run.
 
 ## Usage | Utilisation
 

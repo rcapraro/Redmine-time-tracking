@@ -7,6 +7,7 @@ import com.ps.redmine.util.toJava
 import com.ps.redmine.util.toKotlin
 import com.taskadapter.redmineapi.RedmineManagerFactory
 import com.taskadapter.redmineapi.bean.TimeEntry
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.DateTimeUnit
@@ -20,6 +21,8 @@ import org.apache.http.ssl.SSLContextBuilder
 import java.time.ZoneId
 import java.util.*
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
+
+private val logger = KotlinLogging.logger {}
 
 class RedmineClient(
     private var uri: String,
@@ -87,7 +90,7 @@ class RedmineClient(
                     val issue = redmineManager.issueManager.getIssueById(issueId)
                     issueCache[issueId] = Issue(issue.id, issue.subject)
                 } catch (e: Exception) {
-                    println("[DEBUG_LOG] Failed to load issue #$issueId: ${e.message}")
+                    logger.debug { "Failed to load issue #$issueId: ${e.message}" }
                     issueCache[issueId] = Issue(issueId, "Unknown Issue")
                 }
             }
@@ -128,7 +131,7 @@ class RedmineClient(
             redmineManager.timeEntryManager.update(redmineTimeEntry)
             timeEntry
         } catch (e: Exception) {
-            println("[DEBUG_LOG] Error updating time entry: ${e.message}")
+            logger.debug { "Error updating time entry: ${e.message}" }
             timeEntry  // Return original entry if update fails
         }
     }
@@ -137,7 +140,7 @@ class RedmineClient(
         try {
             redmineManager.timeEntryManager.deleteTimeEntry(timeEntryId)
         } catch (e: Exception) {
-            println("[DEBUG_LOG] Error deleting time entry: ${e.message}")
+            logger.debug { "Error deleting time entry: ${e.message}" }
         }
     }
 
@@ -180,7 +183,7 @@ class RedmineClient(
                 Issue(issue.id, issue.subject)
             }
         } catch (e: Exception) {
-            println("[DEBUG_LOG] Error fetching issues: ${e.message}")
+            logger.debug { "Error fetching issues: ${e.message}" }
             emptyList()
         }
     }
