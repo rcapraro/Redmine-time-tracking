@@ -94,7 +94,8 @@ object Strings {
             "no_search_results" to "Aucun résultat trouvé",
             "missing_hours" to "Il manque %.1f heures pour atteindre 7.5 heures",
             "excess_hours" to "Vous avez %.1f heures de plus que 7.5 heures",
-            "perfect_hours" to "Journée complète (7.5 heures) ✓"
+            "perfect_hours" to "Journée complète (7.5 heures) ✓",
+            "dark_theme" to "Thème sombre"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -173,7 +174,8 @@ object Strings {
             "no_search_results" to "No search results",
             "missing_hours" to "Missing %.1f hours to reach 7.5 hours",
             "excess_hours" to "You have %.1f hours more than 7.5 hours",
-            "perfect_hours" to "Full day (7.5 hours) ✓"
+            "perfect_hours" to "Full day (7.5 hours) ✓",
+            "dark_theme" to "Dark Theme"
         )
     )
 

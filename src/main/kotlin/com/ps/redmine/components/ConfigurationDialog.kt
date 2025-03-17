@@ -67,6 +67,22 @@ fun ConfigurationDialog(
                     }
                 }
 
+                // Theme switch
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings["dark_theme"],
+                        style = MaterialTheme.typography.body1
+                    )
+                    Switch(
+                        checked = config.isDarkTheme,
+                        onCheckedChange = { config = config.copy(isDarkTheme = it) }
+                    )
+                }
+
                 if (showError) {
                     Text(
                         text = Strings["configuration_error"],

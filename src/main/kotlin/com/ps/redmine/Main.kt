@@ -171,13 +171,33 @@ fun App(redmineClient: RedmineClient) {
         )
     )
 
-    val customColors = lightColors(
+    // Load configuration to get theme preference
+    val config = remember { ConfigurationManager.loadConfig() }
+    var isDarkTheme by remember { mutableStateOf(config.isDarkTheme) }
+
+    // Define light and dark color schemes
+    val lightColorScheme = lightColors(
         secondary = Color(0xFF00897B) // Darker teal color for better visibility
     )
 
+    val darkColorScheme = darkColors(
+        primary = Color(0xFF90CAF9), // Light blue
+        primaryVariant = Color(0xFF64B5F6), // Lighter blue
+        secondary = Color(0xFF80CBC4), // Light teal
+        background = Color(0xFF121212), // Dark background
+        surface = Color(0xFF1E1E1E), // Dark surface
+        onPrimary = Color(0xFF000000), // Black text on primary
+        onSecondary = Color(0xFF000000), // Black text on secondary
+        onBackground = Color(0xFFFFFFFF), // White text on background
+        onSurface = Color(0xFFFFFFFF) // White text on surface
+    )
+
+    // Use the appropriate color scheme based on the theme preference
+    val colorScheme = if (isDarkTheme) darkColorScheme else lightColorScheme
+
     MaterialTheme(
         typography = customTypography,
-        colors = customColors
+        colors = colorScheme
     ) {
         if (showConfigDialog) {
             ConfigurationDialog(
@@ -186,6 +206,8 @@ fun App(redmineClient: RedmineClient) {
                 onConfigSaved = {
                     scope.launch {
                         scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
+                        // Reload configuration to get updated theme preference
+                        isDarkTheme = ConfigurationManager.loadConfig().isDarkTheme
                         // Reload data with new configuration
                         loadTimeEntries(currentMonth)
                     }
