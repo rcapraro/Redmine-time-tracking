@@ -5,7 +5,10 @@ A desktop application for managing time entries in Redmine with a modern user in
 Une application de bureau pour gérer les saisies de temps dans Redmine avec une interface utilisateur moderne construite
 avec Compose for Desktop.
 
-![RedmineTime Application Screenshot | Capture d'écran de l'application RedmineTime](docs/images/redmine-time-screenshot.png)
+![RedmineTime Application Screenshot (Light Theme) | Capture d'écran de l'application RedmineTime (Thème clair)](docs/images/redmine-time-screenshot.png)
+
+*The screenshot above shows the application in light theme. The application also supports a dark theme that can be enabled in the settings.*
+*La capture d'écran ci-dessus montre l'application en thème clair. L'application prend également en charge un thème sombre qui peut être activé dans les paramètres.*
 
 ## Features | Fonctionnalités
 
@@ -17,6 +20,7 @@ avec Compose for Desktop.
 - SSL support (including self-signed certificates with automatic trust and hostname verification disabled) | Support
   SSL (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte désactivée)
 - Native look and feel | Apparence native
+- Light and dark theme support | Support des thèmes clair et sombre
 - Keyboard shortcuts for improved productivity | Raccourcis clavier pour une meilleure productivité
 - French language support | Support de la langue française
 
@@ -68,6 +72,7 @@ pouvez définir :
 - Redmine URL | URL Redmine
 - Username | Nom d'utilisateur
 - Password | Mot de passe
+- Dark Theme | Thème sombre
 
 The configuration is automatically saved and stored securely using Java Preferences API in your system's preferences:
 La configuration est automatiquement sauvegardée et stockée de manière sécurisée via l'API Java Preferences dans les
@@ -90,6 +95,7 @@ sauvegardée) :
   default: "https://redmine-restreint.packsolutions.local")
 - `REDMINE_USERNAME`: Your Redmine username | Votre nom d'utilisateur Redmine
 - `REDMINE_PASSWORD`: Your Redmine password | Votre mot de passe Redmine
+- `REDMINE_DARK_THEME`: Set to "true" to enable dark theme | Définir à "true" pour activer le thème sombre (default: "false")
 
 ## Installation | Installation
 
