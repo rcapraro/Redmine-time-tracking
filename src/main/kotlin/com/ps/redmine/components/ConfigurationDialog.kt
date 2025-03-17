@@ -27,14 +27,14 @@ fun ConfigurationDialog(
         title = { Text(Strings["configuration_title"]) },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
                     value = config.redmineUri,
                     onValueChange = { config = config.copy(redmineUri = it) },
                     label = { Text(Strings["redmine_uri"]) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     singleLine = true
                 )
 
@@ -42,12 +42,12 @@ fun ConfigurationDialog(
                     value = config.username,
                     onValueChange = { config = config.copy(username = it) },
                     label = { Text(Strings["username"]) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     singleLine = true
                 )
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -55,7 +55,7 @@ fun ConfigurationDialog(
                         value = config.password,
                         onValueChange = { config = config.copy(password = it) },
                         label = { Text(Strings["password"]) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
                         singleLine = true,
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
                     )

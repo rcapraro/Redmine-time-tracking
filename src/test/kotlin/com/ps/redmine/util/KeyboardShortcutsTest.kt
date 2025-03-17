@@ -41,7 +41,6 @@ class KeyboardShortcutsTest {
         assertEquals(KeyShortcut.Save, shortcutReceived, "Save shortcut should be triggered")
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `test command S emits save shortcut`() = runTest {
         withContext(Dispatchers.Default.limitedParallelism(1)) {
@@ -74,7 +73,6 @@ class KeyboardShortcutsTest {
         assertEquals(KeyShortcut.Save, shortcutReceived, "Save shortcut should be triggered")
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `test multiple collectors receive same shortcut`() = runTest {
         withContext(Dispatchers.Default.limitedParallelism(1)) {
@@ -99,7 +97,6 @@ class KeyboardShortcutsTest {
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `test shortcut emission with multiple collectors`() = runTest {
         val shortcuts = listOf(

@@ -42,7 +42,7 @@ object Strings {
             "continue_editing" to "Continuer l'édition",
             "discard_changes_title" to "Abandonner les modifications ?",
             "discard_changes_message" to "Vous avez des modifications non sauvegardées. Êtes-vous sûr de vouloir les abandonner ?",
-            "keyboard_shortcuts" to "Raccourcis clavier : ⌘S - Sauvegarder, Esc - Annuler",
+            "keyboard_shortcuts" to "Raccourcis clavier :\n⌘S - Sauvegarder, Esc - Annuler",
             "today" to "Aujourd'hui",
             "today_shortcut" to "Aujourd'hui (Alt+T)",
             "set_to_today" to "Définir à aujourd'hui",
@@ -73,7 +73,7 @@ object Strings {
             "no_projects" to "Aucun projet disponible",
             "no_activities" to "Aucune activité disponible",
             "showing_issue" to "Affichage actuel du ticket #%d",
-            "hours_format" to "%.1f h",
+            "hours_format" to "%.1f heures",
             "char_count" to "%d/255",
             "total_hours_format" to "%.1f",
             "issue_item_format" to "• #%d %s",
@@ -88,7 +88,13 @@ object Strings {
             "loading_issues_for_project" to "Chargement des tickets ouverts pour le projet %s...",
             "loading_issues" to "Chargement des tickets...",
             "no_issues_for_project" to "Aucun ticket ouvert trouvé dans le projet %s",
-            "no_issues_available" to "Aucun ticket disponible"
+            "no_issues_available" to "Aucun ticket disponible",
+            "search" to "Rechercher",
+            "no_items" to "Aucun élément disponible",
+            "no_search_results" to "Aucun résultat trouvé",
+            "missing_hours" to "Il manque %.1f heures pour atteindre 7.5 heures",
+            "excess_hours" to "Vous avez %.1f heures de plus que 7.5 heures",
+            "perfect_hours" to "Journée complète (7.5 heures) ✓"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -146,7 +152,7 @@ object Strings {
             "no_projects" to "No projects available",
             "no_activities" to "No activities available",
             "showing_issue" to "Currently showing issue #%d",
-            "hours_format" to "%.1f h",
+            "hours_format" to "%.1f hours",
             "char_count" to "%d/255",
             "total_hours_format" to "%.1f",
             "issue_item_format" to "• #%d %s",
@@ -161,7 +167,13 @@ object Strings {
             "loading_issues_for_project" to "Loading open issues for project %s...",
             "loading_issues" to "Loading issues...",
             "no_issues_for_project" to "No open issues found in project %s",
-            "no_issues_available" to "No issues available"
+            "no_issues_available" to "No issues available",
+            "search" to "Search",
+            "no_items" to "No items available",
+            "no_search_results" to "No search results",
+            "missing_hours" to "Missing %.1f hours to reach 7.5 hours",
+            "excess_hours" to "You have %.1f hours more than 7.5 hours",
+            "perfect_hours" to "Full day (7.5 hours) ✓"
         )
     )
 

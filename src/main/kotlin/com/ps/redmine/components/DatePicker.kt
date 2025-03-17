@@ -14,6 +14,7 @@ import com.ps.redmine.util.toJavaYearMonth
 import com.ps.redmine.util.toKotlin
 import com.ps.redmine.util.today
 import kotlinx.datetime.LocalDate
+import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.*
 
@@ -27,12 +28,12 @@ fun DatePicker(
     var currentYearMonth by remember { mutableStateOf(selectedDate.toJavaYearMonth()) }
     val currentToday by remember { mutableStateOf(today) }
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.heightIn(min = 56.dp)) {
         OutlinedTextField(
             value = DateFormatter.formatShort(selectedDate),
             onValueChange = {},
             label = { Text(Strings["date_label"]) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             readOnly = true,
             trailingIcon = {
                 IconButton(onClick = { showDialog = true }) {
@@ -46,7 +47,7 @@ fun DatePicker(
                 onDismissRequest = { showDialog = false },
                 title = {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -88,13 +89,13 @@ fun DatePicker(
                     }
                 },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.heightIn(min = 200.dp, max = 200.dp)) {
                         // Days of week header
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).heightIn(min = 24.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            for (dayOfWeek in java.time.DayOfWeek.values()) {
+                            for (dayOfWeek in DayOfWeek.entries) {
                                 Text(
                                     text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
                                     style = MaterialTheme.typography.caption,
@@ -112,13 +113,13 @@ fun DatePicker(
 
                         for (week in 0 until weeks) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 30.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 for (dayOfWeek in 1..7) {
                                     val day = week * 7 + dayOfWeek - firstDayOfWeek + 1
                                     Box(
-                                        modifier = Modifier.size(36.dp).padding(2.dp)
+                                        modifier = Modifier.size(30.dp).padding(2.dp)
                                     ) {
                                         if (day in 1..daysInMonth) {
                                             val javaDate = currentYearMonth.atDay(day)
@@ -165,7 +166,8 @@ fun DatePicker(
                 },
                 buttons = {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                            .heightIn(min = 30.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {

@@ -8,16 +8,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.RedmineClient
 import com.ps.redmine.components.ConfigurationDialog
 import com.ps.redmine.components.DatePicker
+import com.ps.redmine.components.SearchableDropdown
 import com.ps.redmine.components.TimeEntriesList
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
@@ -78,7 +83,8 @@ fun App(redmineClient: RedmineClient) {
                     scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
                 } catch (e: Exception) {
                     scaffoldState.snackbarHostState.showSnackbar(
-                        Strings["operation_error"].format(e.message)
+                        message = Strings["operation_error"].format(e.message),
+                        duration = SnackbarDuration.Long
                     )
                 } finally {
                     // Always refresh the list and clear selection
@@ -130,13 +136,49 @@ fun App(redmineClient: RedmineClient) {
         errorMessage?.let {
             scaffoldState.snackbarHostState.showSnackbar(
                 message = it,
-                actionLabel = Strings["dismiss"]
+                actionLabel = Strings["dismiss"],
+                duration = SnackbarDuration.Long
             )
             errorMessage = null
         }
     }
 
-    MaterialTheme {
+    // Custom typography with harmonized font sizes
+    val customTypography = Typography(
+        h6 = TextStyle(
+            fontWeight = FontWeight.Medium,
+            fontSize = 18.sp // Reduced from default 20sp
+        ),
+        subtitle1 = TextStyle(
+            fontWeight = FontWeight.Normal,
+            fontSize = 16.sp // Harmonized
+        ),
+        subtitle2 = TextStyle(
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp // Harmonized
+        ),
+        body1 = TextStyle(
+            fontWeight = FontWeight.Normal,
+            fontSize = 14.sp // Harmonized
+        ),
+        body2 = TextStyle(
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp // Harmonized
+        ),
+        caption = TextStyle(
+            fontWeight = FontWeight.Normal,
+            fontSize = 12.sp // Harmonized
+        )
+    )
+
+    val customColors = lightColors(
+        secondary = Color(0xFF00897B) // Darker teal color for better visibility
+    )
+
+    MaterialTheme(
+        typography = customTypography,
+        colors = customColors
+    ) {
         if (showConfigDialog) {
             ConfigurationDialog(
                 redmineClient = redmineClient,
@@ -167,11 +209,11 @@ fun App(redmineClient: RedmineClient) {
             },
         ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(16.dp)
+                modifier = Modifier.fillMaxSize().padding(8.dp)
             ) {
                 // Left panel - Time entries list
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight()
+                    modifier = Modifier.weight(1.5f).fillMaxHeight()
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Month navigation and total hours
@@ -272,11 +314,11 @@ fun App(redmineClient: RedmineClient) {
                     }
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 // Right panel - Time entry details
                 Box(
-                    modifier = Modifier.weight(1f).fillMaxHeight()
+                    modifier = Modifier.weight(1.3f).fillMaxHeight()
                 ) {
                     TimeEntryDetail(
                         timeEntry = selectedTimeEntry,
@@ -303,7 +345,8 @@ fun App(redmineClient: RedmineClient) {
                                     scaffoldState.snackbarHostState.showSnackbar(message)
                                 } catch (e: Exception) {
                                     scaffoldState.snackbarHostState.showSnackbar(
-                                        Strings["operation_error"].format(e.message)
+                                        message = Strings["operation_error"].format(e.message),
+                                        duration = SnackbarDuration.Long
                                     )
                                 }
                             }
@@ -343,7 +386,7 @@ fun TimeEntryDetail(
         mutableStateOf<Activity?>(null)
     }
     var selectedIssue by remember {
-        mutableStateOf<Issue?>(timeEntry?.issue)
+        mutableStateOf(timeEntry?.issue)
     }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var activities by remember { mutableStateOf<List<Activity>>(emptyList()) }
@@ -351,9 +394,6 @@ fun TimeEntryDetail(
     var isLoading by remember { mutableStateOf(false) }
     var isLoadingIssues by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
-    var showProjectDropdown by remember { mutableStateOf(false) }
-    var showActivityDropdown by remember { mutableStateOf(false) }
-    var showIssueDropdown by remember { mutableStateOf(false) }
     var showCancelConfirmation by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -494,8 +534,8 @@ fun TimeEntryDetail(
     if (showCancelConfirmation) {
         AlertDialog(
             onDismissRequest = { showCancelConfirmation = false },
-            title = { Text(Strings["discard_changes_title"]) },
-            text = { Text(Strings["discard_changes_message"]) },
+            title = { Text(Strings["discard_changes_title"], modifier = Modifier.heightIn(min = 24.dp)) },
+            text = { Text(Strings["discard_changes_message"], modifier = Modifier.heightIn(min = 24.dp)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -573,7 +613,7 @@ fun TimeEntryDetail(
             DatePicker(
                 selectedDate = date,
                 onDateSelected = { date = it },
-                modifier = Modifier.width(200.dp)
+                modifier = Modifier.width(200.dp).heightIn(min = 56.dp)
             )
 
             TextButton(
@@ -587,55 +627,21 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Project dropdown
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = selectedProject?.name ?: "",
-                    onValueChange = {},
-                    label = { Text(Strings["project_label"]) },
-                    modifier = Modifier.fillMaxWidth(),
-                    readOnly = true,
-                    enabled = !isLoading,
-                    isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
-                    trailingIcon = {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            IconButton(
-                                onClick = { showProjectDropdown = true },
-                                enabled = projects.isNotEmpty()
-                            ) {
-                                Text(if (showProjectDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
-                            }
-                        }
-                    }
-                )
-                DropdownMenu(
-                    expanded = showProjectDropdown && !isLoading,
-                    onDismissRequest = { showProjectDropdown = false }
-                ) {
-                    projects.forEach { project ->
-                        DropdownMenuItem(
-                            onClick = {
-                                selectedProject = project
-                                selectedIssue = null  // Reset only issue selection
-                                showProjectDropdown = false
-                            }
-                        ) {
-                            Text(
-                                text = project.name,
-                                color = if (project == selectedProject)
-                                    MaterialTheme.colors.primary
-                                else
-                                    MaterialTheme.colors.onSurface
-                            )
-                        }
-                    }
-                }
-            }
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            SearchableDropdown(
+                items = projects,
+                selectedItem = selectedProject,
+                onItemSelected = { project: Project ->
+                    selectedProject = project
+                    selectedIssue = null  // Reset only issue selection
+                },
+                itemText = { project: Project -> project.name },
+                label = { Text(Strings["project_label"]) },
+                isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
+                enabled = !isLoading,
+                isLoading = isLoading,
+                noItemsText = Strings["no_projects"]
+            )
             if (!isLoading && projects.isEmpty()) {
                 Text(
                     text = Strings["no_projects"],
@@ -649,7 +655,7 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Hours
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -723,55 +729,21 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Issue dropdown
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = selectedIssue?.let { "#${it.id} - ${it.subject}" } ?: "",
-                    onValueChange = {},
-                    label = { Text(Strings["issue_label"]) },
-                    placeholder = { Text(Strings["select_issue_placeholder"]) },
-                    modifier = Modifier.fillMaxWidth(),
-                    readOnly = true,
-                    enabled = !isLoading,
-                    isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
-                    trailingIcon = {
-                        if (isLoadingIssues) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            IconButton(
-                                onClick = { showIssueDropdown = true },
-                                enabled = !isLoading && issues.isNotEmpty()
-                            ) {
-                                Text(if (showIssueDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
-                            }
-                        }
-                    }
-                )
-                DropdownMenu(
-                    expanded = showIssueDropdown && !isLoading,
-                    onDismissRequest = { showIssueDropdown = false }
-                ) {
-                    issues.forEach { issue ->
-                        DropdownMenuItem(
-                            onClick = {
-                                selectedIssue = issue
-                                showIssueDropdown = false
-                            }
-                        ) {
-                            Text(
-                                text = "#${issue.id} - ${issue.subject}",
-                                color = if (issue == selectedIssue)
-                                    MaterialTheme.colors.primary
-                                else
-                                    MaterialTheme.colors.onSurface
-                            )
-                        }
-                    }
-                }
-            }
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            SearchableDropdown(
+                items = issues,
+                selectedItem = selectedIssue,
+                onItemSelected = { issue: Issue ->
+                    selectedIssue = issue
+                },
+                itemText = { issue: Issue -> "#${issue.id} - ${issue.subject}" },
+                label = { Text(Strings["issue_label"]) },
+                placeholder = { Text(Strings["select_issue_placeholder"]) },
+                isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
+                enabled = !isLoading,
+                isLoading = isLoadingIssues,
+                noItemsText = Strings["no_issues_available"]
+            )
             when {
                 isLoadingIssues -> {
                     val project = selectedProject
@@ -822,54 +794,20 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Activity dropdown
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = selectedActivity?.name ?: "",
-                    onValueChange = {},
-                    label = { Text(Strings["activity_label"]) },
-                    modifier = Modifier.fillMaxWidth(),
-                    readOnly = true,
-                    enabled = !isLoading,
-                    isError = !isLoading && activities.isNotEmpty() && selectedActivity == null,
-                    trailingIcon = {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            IconButton(
-                                onClick = { showActivityDropdown = true },
-                                enabled = activities.isNotEmpty()
-                            ) {
-                                Text(if (showActivityDropdown) Strings["dropdown_up"] else Strings["dropdown_down"])
-                            }
-                        }
-                    }
-                )
-                DropdownMenu(
-                    expanded = showActivityDropdown && !isLoading,
-                    onDismissRequest = { showActivityDropdown = false }
-                ) {
-                    activities.forEach { activity ->
-                        DropdownMenuItem(
-                            onClick = {
-                                selectedActivity = activity
-                                showActivityDropdown = false
-                            }
-                        ) {
-                            Text(
-                                text = activity.name,
-                                color = if (activity == selectedActivity)
-                                    MaterialTheme.colors.primary
-                                else
-                                    MaterialTheme.colors.onSurface
-                            )
-                        }
-                    }
-                }
-            }
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            SearchableDropdown(
+                items = activities,
+                selectedItem = selectedActivity,
+                onItemSelected = { activity: Activity ->
+                    selectedActivity = activity
+                },
+                itemText = { activity: Activity -> activity.name },
+                label = { Text(Strings["activity_label"]) },
+                isError = !isLoading && activities.isNotEmpty() && selectedActivity == null,
+                enabled = !isLoading,
+                isLoading = isLoading,
+                noItemsText = Strings["no_activities"]
+            )
             if (!isLoading && activities.isEmpty()) {
                 Text(
                     text = Strings["no_activities"],
@@ -883,7 +821,7 @@ fun TimeEntryDetail(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Comments
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)) {
             OutlinedTextField(
                 value = comments,
                 onValueChange = { newValue: String ->
@@ -891,7 +829,7 @@ fun TimeEntryDetail(
                         comments = newValue
                     }
                 },
-                modifier = Modifier.fillMaxWidth().then(shortcutHandler),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).then(shortcutHandler),
                 label = { Text(Strings["comments_label"]) },
                 minLines = 3,
                 enabled = !isLoading,
@@ -987,7 +925,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
-            state = rememberWindowState(width = 1070.dp, height = 870.dp)
+            state = rememberWindowState(width = 1100.dp, height = 900.dp)
         ) {
             App(redmineClient)
         }

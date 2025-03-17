@@ -1,8 +1,11 @@
 package com.ps.redmine.components
 
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -15,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
+import kotlinx.datetime.LocalDate
 
 @Composable
 fun TimeEntriesList(
@@ -24,40 +28,161 @@ fun TimeEntriesList(
     onDelete: (TimeEntry) -> Unit,
     deletingEntryId: Int? = null
 ) {
-    val groupedEntries = remember(timeEntries) {
-        timeEntries
-            .sortedByDescending { it.date }
-            .groupBy { it.date }
+    // Group entries by date and sort dates in descending order
+    val entriesByDate = remember(timeEntries) {
+        timeEntries.groupBy { it.date }
+            .toSortedMap(compareByDescending { it })
     }
 
-    LazyColumn {
-        groupedEntries.forEach { (date, entries) ->
-            item {
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+    // Calculate total hours per day and check if < 7.5
+    val dailyTotals = remember(entriesByDate) {
+        entriesByDate.mapValues { (_, entries) ->
+            entries.sumOf { it.hours.toDouble() }.toFloat()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 600.dp)  // Add explicit height constraint
+    ) {
+        val listState = rememberLazyListState()
+
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+        ) {
+            entriesByDate.forEach { (date, entries) ->
+                // Display date header with total hours
+                item {
+                    DateHeader(
+                        date = date,
+                        totalHours = dailyTotals[date] ?: 0f
+                    )
+                }
+
+                // Display entries for this date
+                items(entries.size) { index ->
+                    val entry = entries[index]
+                    TimeEntryItem(
+                        timeEntry = entry,
+                        isSelected = entry == selectedTimeEntry,
+                        onClick = { onTimeEntrySelected(entry) },
+                        onDelete = { onDelete(entry) },
+                        isLoading = entry.id == deletingEntryId
+                    )
+                }
+            }
+        }
+
+        // Add a visible scrollbar
+        VerticalScrollbar(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight(),
+            adapter = rememberScrollbarAdapter(listState)
+        )
+    }
+}
+
+@Composable
+fun DateHeader(
+    date: LocalDate,
+    totalHours: Float
+) {
+    val missingHours = if (totalHours < 7.5f) 7.5f - totalHours else 0f
+    val excessHours = if (totalHours > 7.5f) totalHours - 7.5f else 0f
+    val isPerfectHours = totalHours == 7.5f
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colors.surface,
+        elevation = 2.dp,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            // Date and total hours
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = DateFormatter.formatShort(date),
+                    style = MaterialTheme.typography.h6,
+                    color = MaterialTheme.colors.primary
+                )
+
+                Surface(
+                    color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = Strings["hours_format"].format(totalHours),
+                        style = MaterialTheme.typography.subtitle1,
+                        color = MaterialTheme.colors.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Display appropriate message based on hours
+            when {
+                isPerfectHours -> {
+                    // Display checkbox for perfect hours (7.5)
+                    Surface(
+                        color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = DateFormatter.formatFull(date),
-                            style = MaterialTheme.typography.subtitle1,
-                            color = MaterialTheme.colors.primary
-                        )
-                        Text(
-                            text = Strings["hours_format"].format(entries.sumOf { it.hours.toDouble() }),
-                            style = MaterialTheme.typography.subtitle1,
-                            color = MaterialTheme.colors.secondary
+                            text = Strings["perfect_hours"],
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    entries.forEach { entry ->
-                        TimeEntryItem(
-                            timeEntry = entry,
-                            isSelected = entry == selectedTimeEntry,
-                            onClick = { onTimeEntrySelected(entry) },
-                            onDelete = { onDelete(entry) },
-                            isLoading = entry.id == deletingEntryId
+                }
+
+                missingHours > 0 -> {
+                    // Display warning for missing hours
+                    Surface(
+                        color = MaterialTheme.colors.error.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "⚠️ " + Strings["missing_hours"].format(missingHours),
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.error,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                excessHours > 0 -> {
+                    // Display warning for excess hours
+                    Surface(
+                        color = MaterialTheme.colors.error.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = "⚠️ " + Strings["excess_hours"].format(excessHours),
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.error,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -77,7 +202,7 @@ fun TimeEntryItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .clickable(enabled = !isLoading) { onClick() }
             .alpha(if (isLoading) 0.6f else 1f),
         elevation = if (isSelected) 4.dp else 1.dp,
@@ -91,56 +216,85 @@ fun TimeEntryItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Bullet point to indicate this entry is under a day
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.h6,
+                color = MaterialTheme.colors.primary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
+                // First row: Hours, Project
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = DateFormatter.formatShort(timeEntry.date),
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
-                    Text(
-                        text = Strings["hours_format"].format(timeEntry.hours),
-                        style = MaterialTheme.typography.body2,
-                        color = MaterialTheme.colors.primary
-                    )
-                }
-                Column {
+                    // Hours with more prominence
+                    Surface(
+                        color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = Strings["hours_format"].format(timeEntry.hours),
+                            style = MaterialTheme.typography.subtitle2,
+                            color = MaterialTheme.colors.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    // Project name
                     Text(
                         text = timeEntry.project.name,
-                        style = MaterialTheme.typography.body1
+                        style = MaterialTheme.typography.body1,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Second row: Activity, Issue, Comments
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Activity with more prominence
+                    Surface(
+                        color = MaterialTheme.colors.secondary.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Text(
                             text = timeEntry.activity.name,
                             style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.secondary
+                            color = MaterialTheme.colors.secondary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
+                    }
+
+                    // Issue
+                    Text(
+                        text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.secondary
+                    )
+
+                    // Comments (if any)
+                    if (timeEntry.comments.isNotEmpty()) {
                         Text(
-                            text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
+                            text = Strings["comment_item_format"].format(timeEntry.comments),
                             style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.secondary
+                            maxLines = 1,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                         )
-                        if (timeEntry.comments.isNotEmpty()) {
-                            Text(
-                                text = Strings["comment_item_format"].format(timeEntry.comments),
-                                style = MaterialTheme.typography.caption,
-                                maxLines = 1,
-                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
                     }
                 }
             }
+
+            // Delete button
             IconButton(
                 onClick = { if (!isLoading) onDelete() },
                 modifier = Modifier

@@ -13,7 +13,7 @@ interface IKeyEventInfo {
     val isCtrlPressed: Boolean
 }
 
-class KeyEventWrapper(private val event: KeyEvent) : IKeyEventInfo {
+class KeyEventWrapper(event: KeyEvent) : IKeyEventInfo {
     override val key: Key = event.key
     override val type: KeyEventType = event.type
     override val isMetaPressed: Boolean = event.isMetaPressed
