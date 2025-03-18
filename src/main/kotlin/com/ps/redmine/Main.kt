@@ -281,10 +281,13 @@ fun App(redmineClient: RedmineClient) {
                                         },
                                         modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
                                     ) {
-                                        Text(Strings["nav_previous"])
+                                        // Use key parameter to force recomposition when language changes
+                                        key(currentLanguage) {
+                                            Text(Strings["nav_previous"])
+                                        }
                                     }
                                     Text(
-                                        text = currentMonth.format(),
+                                        text = currentMonth.format(currentLocale),
                                         style = MaterialTheme.typography.h6
                                     )
                                     IconButton(
@@ -296,7 +299,10 @@ fun App(redmineClient: RedmineClient) {
                                         },
                                         modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
                                     ) {
-                                        Text(Strings["nav_next"])
+                                        // Use key parameter to force recomposition when language changes
+                                        key(currentLanguage) {
+                                            Text(Strings["nav_next"])
+                                        }
                                     }
                                 }
                                 Row(
@@ -319,12 +325,15 @@ fun App(redmineClient: RedmineClient) {
                                         }
                                     }
                                 }
-                                Text(
-                                    text = Strings["nav_help"],
-                                    style = MaterialTheme.typography.caption,
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
+                                // Use key parameter to force recomposition when language changes
+                                key(currentLanguage) {
+                                    Text(
+                                        text = Strings["nav_help"],
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
                             }
 
                             Row(
@@ -359,7 +368,8 @@ fun App(redmineClient: RedmineClient) {
                                     selectedTimeEntry = selectedTimeEntry,
                                     onTimeEntrySelected = { selectedTimeEntry = it },
                                     onDelete = { entry -> deleteTimeEntry(entry) },
-                                    deletingEntryId = deletingEntryId
+                                    deletingEntryId = deletingEntryId,
+                                    locale = currentLocale
                                 )
                             }
                         }

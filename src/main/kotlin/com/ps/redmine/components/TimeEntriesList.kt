@@ -19,6 +19,7 @@ import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
 import kotlinx.datetime.LocalDate
+import java.util.*
 
 @Composable
 fun TimeEntriesList(
@@ -26,7 +27,8 @@ fun TimeEntriesList(
     selectedTimeEntry: TimeEntry?,
     onTimeEntrySelected: (TimeEntry) -> Unit,
     onDelete: (TimeEntry) -> Unit,
-    deletingEntryId: Int? = null
+    deletingEntryId: Int? = null,
+    locale: Locale = Locale.getDefault()
 ) {
     // Group entries by date and sort dates in descending order
     val entriesByDate = remember(timeEntries) {
@@ -61,7 +63,8 @@ fun TimeEntriesList(
                 item {
                     DateHeader(
                         date = date,
-                        totalHours = dailyTotals[date] ?: 0f
+                        totalHours = dailyTotals[date] ?: 0f,
+                        locale = locale
                     )
                 }
 
@@ -92,7 +95,8 @@ fun TimeEntriesList(
 @Composable
 fun DateHeader(
     date: LocalDate,
-    totalHours: Float
+    totalHours: Float,
+    locale: Locale = Locale.getDefault()
 ) {
     val missingHours = if (totalHours < 7.5f) 7.5f - totalHours else 0f
     val excessHours = if (totalHours > 7.5f) totalHours - 7.5f else 0f
@@ -114,7 +118,7 @@ fun DateHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = DateFormatter.formatShort(date),
+                    text = DateFormatter.formatShort(date, locale),
                     style = MaterialTheme.typography.h6,
                     color = MaterialTheme.colors.primary
                 )

@@ -28,7 +28,7 @@ fun DatePicker(
 
     Column(modifier = modifier.heightIn(min = 56.dp)) {
         OutlinedTextField(
-            value = DateFormatter.formatShort(selectedDate),
+            value = DateFormatter.formatShort(selectedDate, locale),
             onValueChange = {},
             label = { Text(Strings["date_label"]) },
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
@@ -93,7 +93,9 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            Text(Strings["nav_previous"])
+                            // Use remember with locale as key to force recomposition when locale changes
+                            val navPreviousText = remember(locale) { Strings["nav_previous"] }
+                            Text(navPreviousText)
                         }
                         Text(
                             text = "${
@@ -115,7 +117,9 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            Text(Strings["nav_next"])
+                            // Use remember with locale as key to force recomposition when locale changes
+                            val navNextText = remember(locale) { Strings["nav_next"] }
+                            Text(navNextText)
                         }
                     }
                 },
