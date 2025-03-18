@@ -7,8 +7,10 @@ avec Compose for Desktop.
 
 ![RedmineTime Application Screenshot (Light Theme) | Capture d'écran de l'application RedmineTime (Thème clair)](docs/images/redmine-time-screenshot.png)
 
-*The screenshot above shows the application in light theme. The application also supports a dark theme that can be enabled in the settings.*
-*La capture d'écran ci-dessus montre l'application en thème clair. L'application prend également en charge un thème sombre qui peut être activé dans les paramètres.*
+*The screenshot above shows the application in light theme. The application also supports a dark theme that can be
+enabled in the settings.*
+*La capture d'écran ci-dessus montre l'application en thème clair. L'application prend également en charge un thème
+sombre qui peut être activé dans les paramètres.*
 
 ## Features | Fonctionnalités
 
@@ -39,17 +41,18 @@ L'application prend en charge plusieurs langues avec un système de secours inte
 
 ### Language Configuration | Configuration de la langue
 
-The application uses French by default. To change the language, set the REDMINE_LANG environment variable:
-L'application utilise le français par défaut. Pour changer la langue, définissez la variable d'environnement
-REDMINE_LANG :
+The application uses French by default. You can change the language in the configuration panel:
+L'application utilise le français par défaut. Vous pouvez changer la langue dans le panneau de configuration :
 
-```bash
-# For English | Pour l'anglais
-export REDMINE_LANG=en
+1. Click the settings icon in the top bar | Cliquez sur l'icône des paramètres dans la barre supérieure
+2. Select your preferred language (French or English) from the dropdown | Sélectionnez votre langue préférée (français
+   ou anglais) dans le menu déroulant
+3. Click Save | Cliquez sur Enregistrer
 
-# For French (default) | Pour le français (par défaut)
-export REDMINE_LANG=fr    # Or leave unset | Ou laisser non définie
-```
+The application will reload with the selected language, and all dates will be formatted according to the selected
+language.
+L'application se rechargera avec la langue sélectionnée, et toutes les dates seront formatées selon la langue
+sélectionnée.
 
 Note: The application will automatically handle missing translations by falling back to the alternative language.
 Note : L'application gère automatiquement les traductions manquantes en utilisant la langue alternative.
@@ -95,7 +98,11 @@ sauvegardée) :
   default: "https://redmine-restreint.packsolutions.local")
 - `REDMINE_USERNAME`: Your Redmine username | Votre nom d'utilisateur Redmine
 - `REDMINE_PASSWORD`: Your Redmine password | Votre mot de passe Redmine
-- `REDMINE_DARK_THEME`: Set to "true" to enable dark theme | Définir à "true" pour activer le thème sombre (default: "false")
+- `REDMINE_DARK_THEME`: Set to "true" to enable dark theme | Définir à "true" pour activer le thème sombre (default: "
+  false")
+
+Note: Language settings can only be changed through the configuration panel.
+Note : Les paramètres de langue ne peuvent être modifiés que via le panneau de configuration.
 
 ## Installation | Installation
 

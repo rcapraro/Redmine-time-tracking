@@ -55,6 +55,24 @@ fun App(redmineClient: RedmineClient) {
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
 
+    // Add a state variable to track the current language
+    var currentLanguage by remember { mutableStateOf(ConfigurationManager.loadConfig().language) }
+
+    // Create a state variable for the current locale based on the language
+    val currentLocale = remember(currentLanguage) {
+        when (currentLanguage.lowercase()) {
+            "en" -> Locale.ENGLISH
+            else -> Locale.FRENCH
+        }
+    }
+
+    // Update Strings object when language changes
+    LaunchedEffect(currentLanguage) {
+        Strings.updateLanguage(currentLanguage)
+        // Update locale
+        Locale.setDefault(currentLocale)
+    }
+
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
 
@@ -206,8 +224,11 @@ fun App(redmineClient: RedmineClient) {
                 onConfigSaved = {
                     scope.launch {
                         scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
-                        // Reload configuration to get updated theme preference
-                        isDarkTheme = ConfigurationManager.loadConfig().isDarkTheme
+                        // Reload configuration to get updated preferences
+                        val newConfig = ConfigurationManager.loadConfig()
+                        isDarkTheme = newConfig.isDarkTheme
+                        // Update the language state to trigger recomposition
+                        currentLanguage = newConfig.language
                         // Reload data with new configuration
                         loadTimeEntries(currentMonth)
                     }
@@ -217,17 +238,20 @@ fun App(redmineClient: RedmineClient) {
         Scaffold(
             scaffoldState = scaffoldState,
             topBar = {
-                TopAppBar(
-                    title = { Text(Strings["window_title"]) },
-                    actions = {
-                        IconButton(onClick = { showConfigDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = Strings["settings"]
-                            )
+                // Use key parameter to force recomposition when language changes
+                key(currentLanguage) {
+                    TopAppBar(
+                        title = { Text(Strings["window_title"]) },
+                        actions = {
+                            IconButton(onClick = { showConfigDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = Strings["settings"]
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
             },
         ) {
             Row(
@@ -280,16 +304,19 @@ fun App(redmineClient: RedmineClient) {
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    TextButton(
-                                        onClick = {
-                                            if (!isLoading) {
-                                                currentMonth = YearMonth.now()
-                                                selectedTimeEntry = null
-                                            }
-                                        },
-                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
-                                    ) {
-                                        Text(Strings["today_shortcut"])
+                                    // Use key parameter to force recomposition when language changes
+                                    key(currentLanguage) {
+                                        TextButton(
+                                            onClick = {
+                                                if (!isLoading) {
+                                                    currentMonth = YearMonth.now()
+                                                    selectedTimeEntry = null
+                                                }
+                                            },
+                                            modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
+                                        ) {
+                                            Text(Strings["today_shortcut"])
+                                        }
                                     }
                                 }
                                 Text(
@@ -310,7 +337,7 @@ fun App(redmineClient: RedmineClient) {
                                     style = MaterialTheme.typography.subtitle1
                                 )
                                 Text(
-                                    text = "%.1f".format(totalHours),
+                                    text = Strings["total_hours_format"].format(totalHours),
                                     style = MaterialTheme.typography.h6,
                                     color = MaterialTheme.colors.primary
                                 )
@@ -325,13 +352,16 @@ fun App(redmineClient: RedmineClient) {
                                 CircularProgressIndicator()
                             }
                         } else {
-                            TimeEntriesList(
-                                timeEntries = timeEntries,
-                                selectedTimeEntry = selectedTimeEntry,
-                                onTimeEntrySelected = { selectedTimeEntry = it },
-                                onDelete = { entry -> deleteTimeEntry(entry) },
-                                deletingEntryId = deletingEntryId
-                            )
+                            // Use key parameter to force recomposition when language changes
+                            key(currentLanguage) {
+                                TimeEntriesList(
+                                    timeEntries = timeEntries,
+                                    selectedTimeEntry = selectedTimeEntry,
+                                    onTimeEntrySelected = { selectedTimeEntry = it },
+                                    onDelete = { entry -> deleteTimeEntry(entry) },
+                                    deletingEntryId = deletingEntryId
+                                )
+                            }
                         }
                     }
                 }
@@ -342,39 +372,43 @@ fun App(redmineClient: RedmineClient) {
                 Box(
                     modifier = Modifier.weight(1.3f).fillMaxHeight()
                 ) {
-                    TimeEntryDetail(
-                        timeEntry = selectedTimeEntry,
-                        redmineClient = redmineClient,
-                        onSave = { updatedEntry ->
-                            scope.launch {
-                                try {
-                                    if (updatedEntry.id == null) {
-                                        redmineClient.createTimeEntry(updatedEntry)
-                                    } else {
-                                        redmineClient.updateTimeEntry(updatedEntry)
-                                    }
-                                    // Refresh the list
-                                    timeEntries = redmineClient.getTimeEntriesForMonth(
-                                        currentMonth.year,
-                                        currentMonth.monthValue
-                                    )
-                                    selectedTimeEntry = null
+                    // Use key parameter to force recomposition when language changes
+                    key(currentLanguage) {
+                        TimeEntryDetail(
+                            timeEntry = selectedTimeEntry,
+                            redmineClient = redmineClient,
+                            onSave = { updatedEntry ->
+                                scope.launch {
+                                    try {
+                                        if (updatedEntry.id == null) {
+                                            redmineClient.createTimeEntry(updatedEntry)
+                                        } else {
+                                            redmineClient.updateTimeEntry(updatedEntry)
+                                        }
+                                        // Refresh the list
+                                        timeEntries = redmineClient.getTimeEntriesForMonth(
+                                            currentMonth.year,
+                                            currentMonth.monthValue
+                                        )
+                                        selectedTimeEntry = null
 
-                                    val message = if (updatedEntry.id == null)
-                                        Strings["entry_created"]
-                                    else
-                                        Strings["entry_updated"]
-                                    scaffoldState.snackbarHostState.showSnackbar(message)
-                                } catch (e: Exception) {
-                                    scaffoldState.snackbarHostState.showSnackbar(
-                                        message = Strings["operation_error"].format(e.message),
-                                        duration = SnackbarDuration.Long
-                                    )
+                                        val message = if (updatedEntry.id == null)
+                                            Strings["entry_created"]
+                                        else
+                                            Strings["entry_updated"]
+                                        scaffoldState.snackbarHostState.showSnackbar(message)
+                                    } catch (e: Exception) {
+                                        scaffoldState.snackbarHostState.showSnackbar(
+                                            message = Strings["operation_error"].format(e.message),
+                                            duration = SnackbarDuration.Long
+                                        )
+                                    }
                                 }
-                            }
-                        },
-                        onCancel = { selectedTimeEntry = null }
-                    )
+                            },
+                            onCancel = { selectedTimeEntry = null },
+                            locale = currentLocale
+                        )
+                    }
                 }
             }
         }
@@ -388,7 +422,8 @@ fun TimeEntryDetail(
     timeEntry: TimeEntry?,
     redmineClient: RedmineClient,
     onSave: (TimeEntry) -> Unit,
-    onCancel: () -> Unit = {}
+    onCancel: () -> Unit = {},
+    locale: Locale = Locale.getDefault()
 ) {
     var date by remember(timeEntry) {
         mutableStateOf(
@@ -635,7 +670,8 @@ fun TimeEntryDetail(
             DatePicker(
                 selectedDate = date,
                 onDateSelected = { date = it },
-                modifier = Modifier.width(200.dp).heightIn(min = 56.dp)
+                modifier = Modifier.width(200.dp).heightIn(min = 56.dp),
+                locale = locale
             )
 
             TextButton(
@@ -923,14 +959,21 @@ fun TimeEntryDetail(
 }
 
 fun main() {
-    // Set default locale to French
-    Locale.setDefault(Locale.FRENCH)
+    // Load configuration
+    val config = ConfigurationManager.loadConfig()
 
-    Strings
+    // Set default locale based on language configuration
+    val locale = when (config.language.lowercase()) {
+        "en" -> Locale.ENGLISH
+        else -> Locale.FRENCH
+    }
+    Locale.setDefault(locale)
+
+    // Update Strings with the configured language
+    Strings.updateLanguage(config.language)
 
     application {
         startKoin {
-            val config = ConfigurationManager.loadConfig()
             properties(
                 mapOf(
                     "redmine.uri" to config.redmineUri,

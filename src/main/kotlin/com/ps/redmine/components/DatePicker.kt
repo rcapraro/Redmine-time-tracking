@@ -22,7 +22,8 @@ import java.util.*
 fun DatePicker(
     selectedDate: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    locale: Locale = Locale.getDefault()
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var currentYearMonth by remember { mutableStateOf(selectedDate.toJavaYearMonth()) }
@@ -68,7 +69,7 @@ fun DatePicker(
                             text = "${
                                 currentYearMonth.month.getDisplayName(
                                     TextStyle.FULL,
-                                    Locale.getDefault()
+                                    locale
                                 )
                             } ${currentYearMonth.year}",
                             style = MaterialTheme.typography.h6
@@ -97,7 +98,7 @@ fun DatePicker(
                         ) {
                             for (dayOfWeek in DayOfWeek.entries) {
                                 Text(
-                                    text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                                    text = dayOfWeek.getDisplayName(TextStyle.SHORT, locale),
                                     style = MaterialTheme.typography.caption,
                                     color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                                     modifier = Modifier.padding(4.dp)

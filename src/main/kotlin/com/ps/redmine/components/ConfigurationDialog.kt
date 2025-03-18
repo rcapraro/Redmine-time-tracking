@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.api.RedmineClient
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
+import java.util.*
 
 @Composable
 fun ConfigurationDialog(
@@ -83,6 +84,50 @@ fun ConfigurationDialog(
                     )
                 }
 
+                // Language selection
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings["language"],
+                        style = MaterialTheme.typography.body1
+                    )
+
+                    var expanded by remember { mutableStateOf(false) }
+                    val languages = listOf("fr", "en")
+                    val languageLabels = mapOf(
+                        "fr" to Strings["language_fr"],
+                        "en" to Strings["language_en"]
+                    )
+
+                    Box {
+                        TextButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(languageLabels[config.language] ?: config.language)
+                        }
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            languages.forEach { language ->
+                                DropdownMenuItem(
+                                    onClick = {
+                                        config = config.copy(language = language)
+                                        expanded = false
+                                    }
+                                ) {
+                                    Text(languageLabels[language] ?: language)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (showError) {
                     Text(
                         text = Strings["configuration_error"],
@@ -96,10 +141,29 @@ fun ConfigurationDialog(
             Button(
                 onClick = {
                     if (config.redmineUri.isNotBlank() && config.username.isNotBlank() && config.password.isNotBlank()) {
+                        // Check if language has changed
+                        val oldConfig = ConfigurationManager.loadConfig()
+                        val languageChanged = oldConfig.language != config.language
+
                         // Save to persistent storage
                         ConfigurationManager.saveConfig(config)
+
                         // Update RedmineClient
                         redmineClient.updateConfiguration(config.redmineUri, config.username, config.password)
+
+                        // Update language if changed
+                        if (languageChanged) {
+                            // Update Strings with the new language
+                            Strings.updateLanguage(config.language)
+
+                            // Update locale
+                            val locale = when (config.language.lowercase()) {
+                                "en" -> Locale.ENGLISH
+                                else -> Locale.FRENCH
+                            }
+                            Locale.setDefault(locale)
+                        }
+
                         // Notify parent to reload data
                         onConfigSaved()
                         onDismiss()

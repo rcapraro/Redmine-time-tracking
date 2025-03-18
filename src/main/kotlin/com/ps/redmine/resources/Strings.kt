@@ -6,13 +6,13 @@ enum class Language {
 }
 
 object Strings {
-    private var currentLanguage = run {
-        val envLang = System.getenv("REDMINE_LANG")?.lowercase()
-        val lang = when (envLang) {
+    private var currentLanguage = Language.FRENCH // Default initialization
+
+    fun updateLanguage(language: String) {
+        currentLanguage = when (language.lowercase()) {
             "en" -> Language.ENGLISH
             else -> Language.FRENCH  // Default to French for any other value or if not set
         }
-        lang
     }
 
 
@@ -27,6 +27,9 @@ object Strings {
             "hide_password" to "Masquer",
             "save" to "Enregistrer",
             "settings" to "Paramètres",
+            "language" to "Langue",
+            "language_fr" to "Français",
+            "language_en" to "Anglais",
             "hours_max_value" to "Les heures ne peuvent pas dépasser 7.5",
             "window_title" to "Suivi du temps Redmine",
             "project_label" to "Projet",
@@ -107,6 +110,9 @@ object Strings {
             "hide_password" to "Hide",
             "save" to "Save",
             "settings" to "Settings",
+            "language" to "Language",
+            "language_fr" to "French",
+            "language_en" to "English",
             "hours_max_value" to "Hours cannot exceed 7.5",
             "window_title" to "Redmine Time Tracking",
             "project_label" to "Project",
@@ -122,7 +128,7 @@ object Strings {
             "continue_editing" to "Continue Editing",
             "discard_changes_title" to "Discard Changes?",
             "discard_changes_message" to "You have unsaved changes. Are you sure you want to discard them?",
-            "keyboard_shortcuts" to "Keyboard shortcuts: ⌘S - Save, Esc - Cancel",
+            "keyboard_shortcuts" to "Keyboard shortcuts:\n⌘S - Save, Esc - Cancel",
             "today" to "Today",
             "today_shortcut" to "Today (Alt+T)",
             "set_to_today" to "Set to Today",
