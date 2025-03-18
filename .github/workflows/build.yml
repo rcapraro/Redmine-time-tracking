@@ -13,7 +13,7 @@ on:
 jobs:
   build:
     # Run this job even if the commit message contains [skip ci] when it's a tag push
-    if: "startsWith(github.ref, 'refs/tags/') || !contains(github.event.head_commit.message, '[skip ci]')"
+    if: "startsWith(github.ref, 'refs/tags/') || github.event.head_commit == null || !contains(github.event.head_commit.message, '[skip ci]')"
     strategy:
       matrix:
         os: [ windows-latest, macos-latest ]
