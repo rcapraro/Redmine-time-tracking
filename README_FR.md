@@ -134,6 +134,22 @@ principale ou pull request :
 
 Ces artefacts sont disponibles au téléchargement depuis l'exécution du workflow GitHub Actions.
 
+### Versions
+
+Lorsqu'une nouvelle version est prête pour la publication :
+
+1. Créez et poussez un tag avec le numéro de version préfixé par 'v' (par exemple, `v1.0.0`, `v2.1.3`)
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+2. GitHub Actions va automatiquement :
+   - Construire l'application pour toutes les plateformes supportées
+   - Créer une nouvelle version GitHub avec le nom du tag
+   - Joindre tous les installateurs construits à la version
+
+Les installateurs publiés seront disponibles sur la page des versions GitHub.
+
 ## Utilisation
 
 1. Configuration initiale

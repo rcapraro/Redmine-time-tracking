@@ -3,11 +3,17 @@ name: Build and Test
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**/*.md'
   pull_request:
     branches: [ main ]
 
 jobs:
   build:
+    # Run this job even if the commit message contains [skip ci] when it's a tag push
+    if: "startsWith(github.ref, 'refs/tags/') || !contains(github.event.head_commit.message, '[skip ci]')"
     strategy:
       matrix:
         os: [ windows-latest, macos-latest ]
@@ -56,19 +62,57 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: redmime-time-windows-installer
+          name: redmine-time-windows-installer
           path: build/compose/binaries/main-release/msi/*.msi
 
       - name: Upload Windows Portable artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: redmime-time-windows-portable
+          name: redmine-time-windows-portable
           path: build/compose/binaries/main-release/RedmineTime-portable.zip
 
       - name: Upload macOS dmg
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: redmime-time-macos
+          name: redmine-time-macos
           path: build/compose/binaries/main-release/dmg/*.dmg
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: redmine-time-windows-installer
+          path: artifacts/windows-installer
+
+      - name: Download Windows Portable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: redmine-time-windows-portable
+          path: artifacts/windows-portable
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: redmine-time-macos
+          path: artifacts/macos
+
+      - name: List downloaded artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: RedmineTime ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/windows-installer/*.msi
+            artifacts/windows-portable/*.zip
+            artifacts/macos/*.dmg

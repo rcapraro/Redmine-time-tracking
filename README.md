@@ -131,6 +131,22 @@ request:
 
 These artifacts are available for download from the GitHub Actions workflow run.
 
+### Releases
+
+When a new version is ready for release:
+
+1. Create and push a tag with the version number prefixed with 'v' (e.g., `v1.0.0`, `v2.1.3`)
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+2. GitHub Actions will automatically:
+   - Build the application for all supported platforms
+   - Create a new GitHub release with the tag name
+   - Attach all built installers to the release
+
+The released installers will be available on the GitHub Releases page.
+
 ## Usage
 
 1. Initial Setup
