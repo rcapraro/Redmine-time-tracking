@@ -730,7 +730,7 @@ fun TimeEntryDetail(
                             }
                         }
                     },
-                    modifier = Modifier.width(200.dp).then(shortcutHandler),
+                    modifier = Modifier.width(200.dp).heightIn(min = 56.dp).then(shortcutHandler),
                     label = { Text(Strings["hours_label"]) },
                     isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
                     singleLine = true,

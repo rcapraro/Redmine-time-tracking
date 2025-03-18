@@ -9,10 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.DateFormatter
-import com.ps.redmine.util.toJavaYearMonth
-import com.ps.redmine.util.toKotlin
-import com.ps.redmine.util.today
+import com.ps.redmine.util.*
 import kotlinx.datetime.LocalDate
 import java.time.DayOfWeek
 import java.time.format.TextStyle
@@ -42,6 +39,39 @@ fun DatePicker(
                 }
             }
         )
+
+        // Add buttons for previous/next business day
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "-1/+1 " + Strings["day_label"],
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            // Previous day button
+            OutlinedButton(
+                onClick = { onDateSelected(selectedDate.previousBusinessDay()) },
+                modifier = Modifier.height(28.dp).width(40.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text("←", style = MaterialTheme.typography.caption)
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Next day button
+            OutlinedButton(
+                onClick = { onDateSelected(selectedDate.nextBusinessDay()) },
+                modifier = Modifier.height(28.dp).width(40.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text("→", style = MaterialTheme.typography.caption)
+            }
+        }
 
         if (showDialog) {
             AlertDialog(
