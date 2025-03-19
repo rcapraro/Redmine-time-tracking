@@ -144,9 +144,9 @@ Lorsqu'une nouvelle version est prête pour la publication :
    git push origin v1.0.0
    ```
 2. GitHub Actions va automatiquement :
-   - Construire l'application pour toutes les plateformes supportées
-   - Créer une nouvelle version GitHub avec le nom du tag
-   - Joindre tous les installateurs construits à la version
+    - Construire l'application pour toutes les plateformes supportées
+    - Créer une nouvelle version GitHub avec le nom du tag
+    - Joindre tous les installateurs construits à la version
 
 Les installateurs publiés seront disponibles sur la page des versions GitHub.
 

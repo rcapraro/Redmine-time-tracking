@@ -20,10 +20,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.RedmineClient
-import com.ps.redmine.components.ConfigurationDialog
-import com.ps.redmine.components.DatePicker
-import com.ps.redmine.components.SearchableDropdown
-import com.ps.redmine.components.TimeEntriesList
+import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
 import com.ps.redmine.model.Activity
@@ -44,6 +41,54 @@ import org.koin.core.context.startKoin
 import java.time.YearMonth
 import java.util.*
 
+/**
+ * Checks if an exception is a connection error.
+ *
+ * @param e The exception to check
+ * @return true if the exception is a connection error, false otherwise
+ */
+fun isConnectionError(e: Exception): Boolean {
+    return e is java.net.ConnectException ||
+            e is java.net.SocketTimeoutException ||
+            e is java.net.UnknownHostException ||
+            e.cause is java.net.ConnectException ||
+            e.cause is java.net.SocketTimeoutException ||
+            e.cause is java.net.UnknownHostException
+}
+
+/**
+ * Handles an exception by showing an error dialog with appropriate message.
+ *
+ * @param e The exception to handle
+ * @param errorDialogMessage Reference to the error dialog message state
+ * @param errorDialogDetails Reference to the error dialog details state
+ * @param showErrorDialog Reference to the show error dialog state
+ */
+fun handleException(
+    e: Exception,
+    errorDialogMessage: (String) -> Unit,
+    errorDialogDetails: (String) -> Unit,
+    showErrorDialog: (Boolean) -> Unit
+) {
+    // Check if it's a connection error
+    val isConnectionError = isConnectionError(e)
+
+    // Set appropriate error message
+    errorDialogMessage(
+        if (isConnectionError) {
+            Strings["error_api_unreachable"]
+        } else {
+            Strings["error_dialog_message"]
+        }
+    )
+
+    // Store technical details
+    errorDialogDetails("${e.javaClass.simpleName}: ${e.message}\n${e.stackTraceToString()}")
+
+    // Show error dialog
+    showErrorDialog(true)
+}
+
 @Composable
 fun App(redmineClient: RedmineClient) {
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
@@ -52,6 +97,12 @@ fun App(redmineClient: RedmineClient) {
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showConfigDialog by remember { mutableStateOf(false) }
+
+    // Error dialog state
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorDialogMessage by remember { mutableStateOf("") }
+    var errorDialogDetails by remember { mutableStateOf<String?>(null) }
+
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
 
@@ -85,7 +136,13 @@ fun App(redmineClient: RedmineClient) {
                     yearMonth.monthValue
                 )
             } catch (e: Exception) {
-                errorMessage = Strings["error_loading_entries"].format(e.message)
+                // Handle the exception
+                handleException(
+                    e,
+                    { errorDialogMessage = it },
+                    { errorDialogDetails = it },
+                    { showErrorDialog = it }
+                )
             } finally {
                 isLoading = false
             }
@@ -100,9 +157,12 @@ fun App(redmineClient: RedmineClient) {
                     redmineClient.deleteTimeEntry(id)
                     scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
                 } catch (e: Exception) {
-                    scaffoldState.snackbarHostState.showSnackbar(
-                        message = Strings["operation_error"].format(e.message),
-                        duration = SnackbarDuration.Long
+                    // Handle the exception
+                    handleException(
+                        e,
+                        { errorDialogMessage = it },
+                        { errorDialogDetails = it },
+                        { showErrorDialog = it }
                     )
                 } finally {
                     // Always refresh the list and clear selection
@@ -222,6 +282,8 @@ fun App(redmineClient: RedmineClient) {
                 redmineClient = redmineClient,
                 onDismiss = { showConfigDialog = false },
                 onConfigSaved = {
+                    // Set isLoading to true immediately to show the loading overlay
+                    isLoading = true
                     scope.launch {
                         scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
                         // Reload configuration to get updated preferences
@@ -408,9 +470,12 @@ fun App(redmineClient: RedmineClient) {
                                             Strings["entry_updated"]
                                         scaffoldState.snackbarHostState.showSnackbar(message)
                                     } catch (e: Exception) {
-                                        scaffoldState.snackbarHostState.showSnackbar(
-                                            message = Strings["operation_error"].format(e.message),
-                                            duration = SnackbarDuration.Long
+                                        // Handle the exception
+                                        handleException(
+                                            e,
+                                            { errorDialogMessage = it },
+                                            { errorDialogDetails = it },
+                                            { showErrorDialog = it }
                                         )
                                     }
                                 }
@@ -421,6 +486,43 @@ fun App(redmineClient: RedmineClient) {
                     }
                 }
             }
+
+            // Show loading overlay when reloading after configuration changes
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize().semantics { contentDescription = "Loading Indicator" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colors.background.copy(alpha = 0.7f)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(60.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = Strings["loading"],
+                                style = MaterialTheme.typography.subtitle1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Show error dialog when needed
+        if (showErrorDialog) {
+            ErrorDialog(
+                errorMessage = errorDialogMessage,
+                technicalDetails = errorDialogDetails,
+                onDismiss = { showErrorDialog = false }
+            )
         }
     }
 }

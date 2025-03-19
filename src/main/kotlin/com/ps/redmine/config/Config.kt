@@ -21,7 +21,7 @@ object ConfigurationManager {
     fun loadConfig(): Config = Config(
         redmineUri = preferences.get(
             KEY_REDMINE_URI,
-            System.getenv("REDMINE_URL") ?: "https://redmine-restreint.packsolutions.local"
+            System.getenv("REDMINE_URL") ?: "https://redmine.local/"
         ),
         username = preferences.get(KEY_USERNAME, System.getenv("REDMINE_USERNAME") ?: ""),
         password = preferences.get(KEY_PASSWORD, System.getenv("REDMINE_PASSWORD") ?: ""),

@@ -141,9 +141,9 @@ When a new version is ready for release:
    git push origin v1.0.0
    ```
 2. GitHub Actions will automatically:
-   - Build the application for all supported platforms
-   - Create a new GitHub release with the tag name
-   - Attach all built installers to the release
+    - Build the application for all supported platforms
+    - Create a new GitHub release with the tag name
+    - Attach all built installers to the release
 
 The released installers will be available on the GitHub Releases page.
 
