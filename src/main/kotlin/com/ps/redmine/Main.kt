@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -97,6 +98,7 @@ fun App(redmineClient: RedmineClient) {
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showConfigDialog by remember { mutableStateOf(false) }
+    var configVersion by remember { mutableStateOf(0) }
 
     // Error dialog state
     var showErrorDialog by remember { mutableStateOf(false) }
@@ -143,6 +145,8 @@ fun App(redmineClient: RedmineClient) {
                     { errorDialogDetails = it },
                     { showErrorDialog = it }
                 )
+                // Clear the time entries list when an error occurs
+                timeEntries = emptyList()
             } finally {
                 isLoading = false
             }
@@ -281,9 +285,11 @@ fun App(redmineClient: RedmineClient) {
             ConfigurationDialog(
                 redmineClient = redmineClient,
                 onDismiss = { showConfigDialog = false },
-                onConfigSaved = {
-                    // Set isLoading to true immediately to show the loading overlay
-                    isLoading = true
+                onConfigSaved = { redmineConfigChanged ->
+                    // Set isLoading to true immediately to show the loading overlay if Redmine config changed
+                    if (redmineConfigChanged) {
+                        isLoading = true
+                    }
                     scope.launch {
                         scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
                         // Reload configuration to get updated preferences
@@ -291,8 +297,14 @@ fun App(redmineClient: RedmineClient) {
                         isDarkTheme = newConfig.isDarkTheme
                         // Update the language state to trigger recomposition
                         currentLanguage = newConfig.language
-                        // Reload data with new configuration
-                        loadTimeEntries(currentMonth)
+
+                        // Only reload data and increment configVersion if Redmine configuration changed
+                        if (redmineConfigChanged) {
+                            // Increment configVersion to trigger reloading of dropdowns
+                            configVersion++
+                            // Reload data with new configuration
+                            loadTimeEntries(currentMonth)
+                        }
                     }
                 }
             )
@@ -481,7 +493,8 @@ fun App(redmineClient: RedmineClient) {
                                 }
                             },
                             onCancel = { selectedTimeEntry = null },
-                            locale = currentLocale
+                            locale = currentLocale,
+                            configVersion = configVersion
                         )
                     }
                 }
@@ -535,7 +548,8 @@ fun TimeEntryDetail(
     redmineClient: RedmineClient,
     onSave: (TimeEntry) -> Unit,
     onCancel: () -> Unit = {},
-    locale: Locale = Locale.getDefault()
+    locale: Locale = Locale.getDefault(),
+    configVersion: Int = 0
 ) {
     var date by remember(timeEntry) {
         mutableStateOf(
@@ -637,7 +651,8 @@ fun TimeEntryDetail(
     }
 
     // Load projects and activities
-    LaunchedEffect(Unit) {
+    // Use redmineClient and configVersion as dependencies to reload when configuration changes
+    LaunchedEffect(redmineClient, configVersion) {
         isLoading = true
         try {
             projects = redmineClient.getProjects()
@@ -1102,7 +1117,8 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
-            state = rememberWindowState(width = 1100.dp, height = 900.dp)
+            state = rememberWindowState(width = 1100.dp, height = 900.dp),
+            icon = painterResource("/app_icon.ico")
         ) {
             App(redmineClient)
         }

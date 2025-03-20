@@ -17,7 +17,7 @@ import java.util.*
 fun ConfigurationDialog(
     redmineClient: RedmineClient,
     onDismiss: () -> Unit,
-    onConfigSaved: () -> Unit
+    onConfigSaved: (redmineConfigChanged: Boolean) -> Unit
 ) {
     var config by remember { mutableStateOf(ConfigurationManager.loadConfig()) }
     var showError by remember { mutableStateOf(false) }
@@ -141,15 +141,20 @@ fun ConfigurationDialog(
             Button(
                 onClick = {
                     if (config.redmineUri.isNotBlank() && config.username.isNotBlank() && config.password.isNotBlank()) {
-                        // Check if language has changed
+                        // Check what has changed
                         val oldConfig = ConfigurationManager.loadConfig()
                         val languageChanged = oldConfig.language != config.language
+                        val redmineConfigChanged = oldConfig.redmineUri != config.redmineUri ||
+                                oldConfig.username != config.username ||
+                                oldConfig.password != config.password
 
                         // Save to persistent storage
                         ConfigurationManager.saveConfig(config)
 
-                        // Update RedmineClient
-                        redmineClient.updateConfiguration(config.redmineUri, config.username, config.password)
+                        // Update RedmineClient if Redmine configuration changed
+                        if (redmineConfigChanged) {
+                            redmineClient.updateConfiguration(config.redmineUri, config.username, config.password)
+                        }
 
                         // Update language if changed
                         if (languageChanged) {
@@ -164,8 +169,8 @@ fun ConfigurationDialog(
                             Locale.setDefault(locale)
                         }
 
-                        // Notify parent to reload data
-                        onConfigSaved()
+                        // Notify parent to reload data only if Redmine configuration changed
+                        onConfigSaved(redmineConfigChanged)
                         onDismiss()
                     } else {
                         showError = true

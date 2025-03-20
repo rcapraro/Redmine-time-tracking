@@ -143,25 +143,35 @@ class RedmineClient(
     suspend fun getActivities(): List<Activity> = withContext(Dispatchers.IO) {
         cachedActivities?.let { return@withContext it }
 
-        val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity ->
-            Activity(activity.id, activity.name).also {
-                activityCache[activity.id] = it
+        try {
+            val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity ->
+                Activity(activity.id, activity.name).also {
+                    activityCache[activity.id] = it
+                }
             }
+            cachedActivities = activities
+            activities
+        } catch (e: Exception) {
+            println("Error fetching activities: ${e.message}")
+            emptyList()
         }
-        cachedActivities = activities
-        activities
     }
 
     suspend fun getProjects(): List<Project> = withContext(Dispatchers.IO) {
         cachedProjects?.values?.toList()?.let { return@withContext it }
 
-        val projects = redmineManager.projectManager.projects.map { project ->
-            Project(project.id, project.name).also {
-                projectCache[project.id] = it
+        try {
+            val projects = redmineManager.projectManager.projects.map { project ->
+                Project(project.id, project.name).also {
+                    projectCache[project.id] = it
+                }
             }
+            cachedProjects = projectCache.toMap()
+            projects
+        } catch (e: Exception) {
+            println("Error fetching projects: ${e.message}")
+            emptyList()
         }
-        cachedProjects = projectCache.toMap()
-        projects
     }
 
 
