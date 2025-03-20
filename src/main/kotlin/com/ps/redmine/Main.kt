@@ -52,9 +52,11 @@ fun isConnectionError(e: Exception): Boolean {
     return e is java.net.ConnectException ||
             e is java.net.SocketTimeoutException ||
             e is java.net.UnknownHostException ||
+            e is com.taskadapter.redmineapi.RedmineException ||
             e.cause is java.net.ConnectException ||
             e.cause is java.net.SocketTimeoutException ||
-            e.cause is java.net.UnknownHostException
+            e.cause is java.net.UnknownHostException ||
+            e.cause is com.taskadapter.redmineapi.RedmineException
 }
 
 /**
