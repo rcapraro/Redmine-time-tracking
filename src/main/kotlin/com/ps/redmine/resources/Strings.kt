@@ -107,7 +107,8 @@ object Strings {
             "dark_theme" to "Thème sombre",
             "previous_day" to "Jour précédent",
             "next_day" to "Jour suivant",
-            "day_label" to "Jour"
+            "day_label" to "Jour",
+            "version" to "Version"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -199,7 +200,8 @@ object Strings {
             "dark_theme" to "Dark Theme",
             "previous_day" to "Previous Day",
             "next_day" to "Next Day",
-            "day_label" to "Day"
+            "day_label" to "Day",
+            "version" to "Version"
         )
     )
 
