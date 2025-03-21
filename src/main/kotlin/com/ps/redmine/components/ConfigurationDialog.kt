@@ -13,6 +13,19 @@ import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
 import java.util.*
 
+// Helper function to get the application version
+private fun getAppVersion(): String {
+    return try {
+        // Try to load the Version class dynamically
+        val versionClass = Class.forName("com.ps.redmine.Version")
+        val versionField = versionClass.getDeclaredField("VERSION")
+        versionField.get(null) as String
+    } catch (e: Exception) {
+        // If the Version class is not available, return a default version
+        "dev"
+    }
+}
+
 @Composable
 fun ConfigurationDialog(
     redmineClient: RedmineClient,
@@ -133,6 +146,20 @@ fun ConfigurationDialog(
                         text = Strings["configuration_error"],
                         color = MaterialTheme.colors.error,
                         style = MaterialTheme.typography.caption
+                    )
+                }
+
+                // Display version at the bottom
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${Strings["version"]}: ${getAppVersion()}",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                     )
                 }
             }

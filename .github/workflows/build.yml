@@ -33,6 +33,21 @@ jobs:
           cache-read-only: false
           cache-overwrite-existing: true
 
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: extract_version
+        run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/v})" >> $GITHUB_ENV
+
+      - name: Update gradle.properties with tag version (Windows)
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: pwsh
+        run: (Get-Content gradle.properties) -replace 'appVersion=.*', "appVersion=$env:VERSION" | Set-Content gradle.properties
+
+      - name: Update gradle.properties with tag version (macOS/Linux)
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os != 'Windows'
+        shell: bash
+        run: sed -i '' "s/appVersion=.*/appVersion=$VERSION/" gradle.properties
+
       - name: Build with Gradle
         run: ./gradlew build
 

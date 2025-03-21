@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.ps"
-version = "1.0-SNAPSHOT"
+version = project.findProperty("appVersion")?.toString() ?: "1.0.0"
 
 repositories {
     mavenCentral()
@@ -68,6 +68,32 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
+// Task to generate Version.kt file with the current version
+tasks.register("generateVersionFile") {
+    val versionFile = file("src/main/kotlin/com/ps/redmine/Version.kt")
+    val appVersion = project.findProperty("appVersion")?.toString() ?: "1.0.0"
+
+    inputs.property("appVersion", appVersion)
+    outputs.file(versionFile)
+
+    doLast {
+        versionFile.parentFile.mkdirs()
+        versionFile.writeText(
+            """
+            package com.ps.redmine
+
+            object Version {
+                const val VERSION = "$appVersion"
+            }
+        """.trimIndent()
+        )
+    }
+}
+
+tasks.named("compileKotlin") {
+    dependsOn("generateVersionFile")
+}
+
 compose.desktop {
     application {
         mainClass = "com.ps.redmine.MainKt"
@@ -80,18 +106,26 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             packageName = "RedmineTime"
-            packageVersion = "1.0.0"
+            val appVersionStr = project.findProperty("appVersion")?.toString() ?: "1.0.0"
+            packageVersion = appVersionStr
 
             macOS {
                 iconFile.set(project.file("src/main/resources/app_icon.icns"))
+                packageVersion = appVersionStr
+                dmgPackageVersion = appVersionStr
             }
 
             windows {
                 iconFile.set(project.file("src/main/resources/app_icon.ico"))
+                packageVersion = appVersionStr
+                msiPackageVersion = appVersionStr
+                exePackageVersion = appVersionStr
             }
 
             linux {
                 iconFile.set(project.file("src/main/resources/app_icon.png"))
+                packageVersion = appVersionStr
+                debPackageVersion = appVersionStr
             }
         }
     }

@@ -27,7 +27,7 @@ class RedmineClient(
     private var password: String
 ) {
     // Cache for activities and projects
-    private var cachedActivities: List<Activity>? = null
+    private var cachedActivities: Map<Int, Activity>? = null
     private var cachedProjects: Map<Int, Project>? = null
     private val projectCache = mutableMapOf<Int, Project>()
     private val activityCache = mutableMapOf<Int, Activity>()
@@ -141,7 +141,7 @@ class RedmineClient(
     }
 
     suspend fun getActivities(): List<Activity> = withContext(Dispatchers.IO) {
-        cachedActivities?.let { return@withContext it }
+        cachedActivities?.values?.toList()?.let { return@withContext it }
 
         try {
             val activities = redmineManager.timeEntryManager.timeEntryActivities.map { activity ->
@@ -149,7 +149,7 @@ class RedmineClient(
                     activityCache[activity.id] = it
                 }
             }
-            cachedActivities = activities
+            cachedActivities = activityCache.toMap()
             activities
         } catch (e: Exception) {
             println("Error fetching activities: ${e.message}")
