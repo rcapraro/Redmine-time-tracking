@@ -25,7 +25,7 @@ class RedmineClient(
     private var uri: String,
     private var username: String,
     private var password: String
-) {
+) : AutoCloseable {
     // Cache for activities and projects
     private var cachedActivities: Map<Int, Activity>? = null
     private var cachedProjects: Map<Int, Project>? = null
@@ -34,14 +34,19 @@ class RedmineClient(
     private val issueCache = mutableMapOf<Int, Issue>()
     private var redmineManager = createRedmineManager()
 
+    // Store the HttpClient as a property so it can be closed when configuration changes
+    private var httpClient = createHttpClient()
+
+    private fun createHttpClient() = HttpClients.custom()
+        .setSSLContext(SSLContextBuilder().loadTrustMaterial(null, TrustSelfSignedStrategy()).build())
+        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+        .build()
+
     private fun createRedmineManager() = RedmineManagerFactory.createWithUserAuth(
         uri,
         username,
         password,
-        HttpClients.custom()
-            .setSSLContext(SSLContextBuilder().loadTrustMaterial(null, TrustSelfSignedStrategy()).build())
-            .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-            .build()
+        httpClient ?: createHttpClient().also { httpClient = it }
     )
 
     fun updateConfiguration(newUri: String, newUsername: String, newPassword: String) {
@@ -56,7 +61,18 @@ class RedmineClient(
         activityCache.clear()
         issueCache.clear()
 
-        // Reinitialize manager
+        try {
+            // Close the old HttpClient to release resources and clear any cached connections
+            httpClient.close()
+        } catch (e: Exception) {
+            // Ignore exceptions when closing the client
+            println("Error closing HttpClient: ${e.message}")
+        }
+
+        // Create a new HttpClient
+        httpClient = createHttpClient()
+
+        // Reinitialize manager with the new HttpClient
         redmineManager = createRedmineManager()
     }
 
@@ -219,5 +235,17 @@ class RedmineClient(
             issue = issue,
             comments = entry.comment ?: ""
         )
+    }
+
+    /**
+     * Closes the HttpClient to release resources.
+     * This method is called when the application is shut down.
+     */
+    override fun close() {
+        try {
+            httpClient.close()
+        } catch (e: Exception) {
+            println("Error closing HttpClient: ${e.message}")
+        }
     }
 }

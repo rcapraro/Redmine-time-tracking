@@ -96,7 +96,8 @@ fun handleException(
 fun App(redmineClient: RedmineClient) {
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
     var timeEntries by remember { mutableStateOf<List<TimeEntry>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) } // For data loading
+    var isGlobalLoading by remember { mutableStateOf(false) } // For global loading (config changes)
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showConfigDialog by remember { mutableStateOf(false) }
@@ -151,6 +152,10 @@ fun App(redmineClient: RedmineClient) {
                 timeEntries = emptyList()
             } finally {
                 isLoading = false
+                // If this was triggered by a config change, also update isGlobalLoading
+                if (isGlobalLoading) {
+                    isGlobalLoading = false
+                }
             }
         }
     }
@@ -287,10 +292,10 @@ fun App(redmineClient: RedmineClient) {
             ConfigurationDialog(
                 redmineClient = redmineClient,
                 onDismiss = { showConfigDialog = false },
-                onConfigSaved = { redmineConfigChanged ->
-                    // Set isLoading to true immediately to show the loading overlay if Redmine config changed
-                    if (redmineConfigChanged) {
-                        isLoading = true
+                onConfigSaved = { redmineConfigChanged, languageChanged, themeChanged ->
+                    // Set isGlobalLoading to true immediately to show the loading overlay for any change
+                    if (redmineConfigChanged || languageChanged || themeChanged) {
+                        isGlobalLoading = true
                     }
                     scope.launch {
                         scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
@@ -306,6 +311,11 @@ fun App(redmineClient: RedmineClient) {
                             configVersion++
                             // Reload data with new configuration
                             loadTimeEntries(currentMonth)
+                        } else {
+                            // For language or theme changes, we don't need to reload data
+                            // Just set isGlobalLoading back to false after a short delay to allow UI to update
+                            kotlinx.coroutines.delay(300)
+                            isGlobalLoading = false
                         }
                     }
                 }
@@ -350,12 +360,12 @@ fun App(redmineClient: RedmineClient) {
                                 ) {
                                     IconButton(
                                         onClick = {
-                                            if (!isLoading) {
+                                            if (!isLoading && !isGlobalLoading) {
                                                 currentMonth = currentMonth.minusMonths(1)
                                                 selectedTimeEntry = null
                                             }
                                         },
-                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
+                                        modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
                                         // Use key parameter to force recomposition when language changes
                                         key(currentLanguage) {
@@ -368,12 +378,12 @@ fun App(redmineClient: RedmineClient) {
                                     )
                                     IconButton(
                                         onClick = {
-                                            if (!isLoading) {
+                                            if (!isLoading && !isGlobalLoading) {
                                                 currentMonth = currentMonth.plusMonths(1)
                                                 selectedTimeEntry = null
                                             }
                                         },
-                                        modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
+                                        modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
                                         // Use key parameter to force recomposition when language changes
                                         key(currentLanguage) {
@@ -390,12 +400,12 @@ fun App(redmineClient: RedmineClient) {
                                     key(currentLanguage) {
                                         TextButton(
                                             onClick = {
-                                                if (!isLoading) {
+                                                if (!isLoading && !isGlobalLoading) {
                                                     currentMonth = YearMonth.now()
                                                     selectedTimeEntry = null
                                                 }
                                             },
-                                            modifier = Modifier.alpha(if (isLoading) 0.6f else 1f)
+                                            modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                         ) {
                                             Text(Strings["today_shortcut"])
                                         }
@@ -429,7 +439,8 @@ fun App(redmineClient: RedmineClient) {
                             }
                         }
 
-                        if (isLoading && deletingEntryId == null) {
+                        if (isLoading && !isGlobalLoading && deletingEntryId == null) {
+                            // Only show the time entries list loading indicator when not showing the global loading indicator
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -496,16 +507,17 @@ fun App(redmineClient: RedmineClient) {
                             },
                             onCancel = { selectedTimeEntry = null },
                             locale = currentLocale,
-                            configVersion = configVersion
+                            configVersion = configVersion,
+                            isGlobalLoading = isGlobalLoading
                         )
                     }
                 }
             }
 
             // Show loading overlay when reloading after configuration changes
-            if (isLoading) {
+            if (isGlobalLoading) {
                 Box(
-                    modifier = Modifier.fillMaxSize().semantics { contentDescription = "Loading Indicator" },
+                    modifier = Modifier.fillMaxSize().semantics { contentDescription = "Global Loading Indicator" },
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
@@ -551,7 +563,8 @@ fun TimeEntryDetail(
     onSave: (TimeEntry) -> Unit,
     onCancel: () -> Unit = {},
     locale: Locale = Locale.getDefault(),
-    configVersion: Int = 0
+    configVersion: Int = 0,
+    isGlobalLoading: Boolean = false
 ) {
     var date by remember(timeEntry) {
         mutableStateOf(
@@ -583,15 +596,17 @@ fun TimeEntryDetail(
 
     val scope = rememberCoroutineScope()
 
-    val isValid = remember(selectedProject, selectedActivity, hours, selectedIssue) {
+    // Check if the form is valid and not in a loading state
+    val isValid = remember(selectedProject, selectedActivity, hours, selectedIssue, isLoading, isGlobalLoading) {
         val hasProject = selectedProject != null
         val hasActivity = selectedActivity != null
         val hasHours = hours.isNotEmpty()
         val validHours = hours.toFloatOrNull() != null
         val nonZeroHours = hours.toFloatOrNull() != 0f
         val hasIssue = selectedIssue != null
+        val notLoading = !isLoading && !isGlobalLoading
 
-        hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue
+        hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue && notLoading
     }
 
     val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date, selectedIssue) {
@@ -608,7 +623,7 @@ fun TimeEntryDetail(
     }
 
     fun saveEntry() {
-        if (!isValid || isSaving) {
+        if (!isValid || isSaving || isGlobalLoading) {
             return
         }
 
@@ -702,15 +717,17 @@ fun TimeEntryDetail(
     val keyboardHandler = Modifier.onPreviewKeyEvent { event ->
         when {
             event.type == KeyEventType.KeyDown && event.key == Key.S && event.isMetaPressed -> {
-                if (isValid && !isLoading && !isSaving) {
+                if (isValid && !isLoading && !isSaving && !isGlobalLoading) {
                     saveEntry()
                     true
                 } else false
             }
 
             event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
-                handleCancel()
-                true
+                if (!isGlobalLoading) {
+                    handleCancel()
+                    true
+                } else false
             }
 
             else -> false
@@ -751,14 +768,16 @@ fun TimeEntryDetail(
         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
 
         when {
-            event.key == Key.S && event.isMetaPressed && isValid && !isLoading && !isSaving -> {
+            event.key == Key.S && event.isMetaPressed && isValid && !isLoading && !isSaving && !isGlobalLoading -> {
                 saveEntry()
                 true
             }
 
             event.key == Key.Escape -> {
-                handleCancel()
-                true
+                if (!isGlobalLoading) {
+                    handleCancel()
+                    true
+                } else false
             }
 
             else -> false
@@ -782,7 +801,7 @@ fun TimeEntryDetail(
             )
             Button(
                 onClick = { handleCancel() },
-                enabled = !isLoading && !isSaving
+                enabled = !isLoading && !isSaving && !isGlobalLoading
             ) {
                 Text(Strings["cancel_shortcut"])
             }
@@ -805,7 +824,7 @@ fun TimeEntryDetail(
 
             TextButton(
                 onClick = { date = today },
-                enabled = !isLoading && !isSaving
+                enabled = !isLoading && !isSaving && !isGlobalLoading
             ) {
                 Text(Strings["today"])
             }
@@ -825,7 +844,7 @@ fun TimeEntryDetail(
                 itemText = { project: Project -> project.name },
                 label = { Text(Strings["project_label"]) },
                 isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
-                enabled = !isLoading,
+                enabled = !isLoading && !isGlobalLoading,
                 isLoading = isLoading,
                 noItemsText = Strings["no_projects"]
             )
@@ -863,12 +882,12 @@ fun TimeEntryDetail(
                     label = { Text(Strings["hours_label"]) },
                     isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
                     singleLine = true,
-                    enabled = !isLoading,
+                    enabled = !isLoading && !isGlobalLoading,
                     trailingIcon = {
                         if (hours.isNotEmpty()) {
                             IconButton(
                                 onClick = { hours = "" },
-                                enabled = !isLoading
+                                enabled = !isLoading && !isGlobalLoading
                             ) {
                                 Text(
                                     text = Strings["clear_button"],
@@ -883,7 +902,7 @@ fun TimeEntryDetail(
 
                 TextButton(
                     onClick = { hours = "7.5" },
-                    enabled = !isLoading
+                    enabled = !isLoading && !isGlobalLoading
                 ) {
                     Text(Strings["full_day"])
                 }
@@ -927,7 +946,7 @@ fun TimeEntryDetail(
                 label = { Text(Strings["issue_label"]) },
                 placeholder = { Text(Strings["select_issue_placeholder"]) },
                 isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
-                enabled = !isLoading,
+                enabled = !isLoading && !isGlobalLoading,
                 isLoading = isLoadingIssues,
                 noItemsText = Strings["no_issues_available"]
             )
@@ -991,7 +1010,7 @@ fun TimeEntryDetail(
                 itemText = { activity: Activity -> activity.name },
                 label = { Text(Strings["activity_label"]) },
                 isError = !isLoading && activities.isNotEmpty() && selectedActivity == null,
-                enabled = !isLoading,
+                enabled = !isLoading && !isGlobalLoading,
                 isLoading = isLoading,
                 noItemsText = Strings["no_activities"]
             )
@@ -1019,12 +1038,12 @@ fun TimeEntryDetail(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).then(shortcutHandler),
                 label = { Text(Strings["comments_label"]) },
                 minLines = 3,
-                enabled = !isLoading,
+                enabled = !isLoading && !isGlobalLoading,
                 trailingIcon = if (comments.isNotEmpty()) {
                     {
                         IconButton(
                             onClick = { comments = "" },
-                            enabled = !isLoading
+                            enabled = !isLoading && !isGlobalLoading
                         ) {
                             Text(
                                 text = Strings["clear_button"],
@@ -1066,7 +1085,7 @@ fun TimeEntryDetail(
 
             Button(
                 onClick = { saveEntry() },
-                enabled = isValid && !isLoading && !isSaving
+                enabled = isValid && !isLoading && !isSaving && !isGlobalLoading
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

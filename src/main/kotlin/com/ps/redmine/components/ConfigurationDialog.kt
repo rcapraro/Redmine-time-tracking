@@ -30,7 +30,7 @@ private fun getAppVersion(): String {
 fun ConfigurationDialog(
     redmineClient: RedmineClient,
     onDismiss: () -> Unit,
-    onConfigSaved: (redmineConfigChanged: Boolean) -> Unit
+    onConfigSaved: (redmineConfigChanged: Boolean, languageChanged: Boolean, themeChanged: Boolean) -> Unit
 ) {
     var config by remember { mutableStateOf(ConfigurationManager.loadConfig()) }
     var showError by remember { mutableStateOf(false) }
@@ -171,6 +171,7 @@ fun ConfigurationDialog(
                         // Check what has changed
                         val oldConfig = ConfigurationManager.loadConfig()
                         val languageChanged = oldConfig.language != config.language
+                        val themeChanged = oldConfig.isDarkTheme != config.isDarkTheme
                         val redmineConfigChanged = oldConfig.redmineUri != config.redmineUri ||
                                 oldConfig.username != config.username ||
                                 oldConfig.password != config.password
@@ -196,8 +197,8 @@ fun ConfigurationDialog(
                             Locale.setDefault(locale)
                         }
 
-                        // Notify parent to reload data only if Redmine configuration changed
-                        onConfigSaved(redmineConfigChanged)
+                        // Notify parent about all changes
+                        onConfigSaved(redmineConfigChanged, languageChanged, themeChanged)
                         onDismiss()
                     } else {
                         showError = true

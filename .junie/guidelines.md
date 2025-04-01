@@ -2,11 +2,13 @@
 
 ## Project Overview
 
-RedmineTime is a desktop application designed to simplify time entry management in Redmine. Built with modern UI technologies, it provides a user-friendly interface for tracking and managing time spent on various projects and tasks.
+RedmineTime is a desktop application designed to simplify time entry management in Redmine. Built with modern UI
+technologies, it provides a user-friendly interface for tracking and managing time spent on various projects and tasks.
 
 ### Purpose
 
-The primary purpose of RedmineTime is to offer a more intuitive and efficient alternative to Redmine's native time entry interface. It allows users to:
+The primary purpose of RedmineTime is to offer a more intuitive and efficient alternative to Redmine's native time entry
+interface. It allows users to:
 
 - Quickly view and manage their time entries on a monthly basis
 - Add and edit time entries with minimal friction
@@ -17,6 +19,7 @@ The primary purpose of RedmineTime is to offer a more intuitive and efficient al
 ### Target Users
 
 RedmineTime is designed for:
+
 - Developers, project managers, and other professionals who use Redmine for time tracking
 - Teams that need an efficient way to log time against Redmine projects and issues
 - Organizations that use Redmine as their project management tool
@@ -105,12 +108,12 @@ The application can be packaged as native installers for different platforms:
 The project uses GitHub Actions for continuous integration:
 
 1. On each push to the main branch or pull request:
-   - The application is built and tested on Windows and macOS
-   - Native installers are created automatically
+    - The application is built and tested on Windows and macOS
+    - Native installers are created automatically
 
 2. When a new version is ready for release:
-   - Create and push a tag with the version number prefixed with 'v' (e.g., `v1.0.0`)
-   - GitHub Actions will automatically build installers and create a release
+    - Create and push a tag with the version number prefixed with 'v' (e.g., `v1.0.0`)
+    - GitHub Actions will automatically build installers and create a release
 
 ## Configuration
 
@@ -119,6 +122,7 @@ The application can be configured in two ways:
 ### GUI Configuration
 
 Access the configuration dialog by clicking the settings icon in the top bar. You can set:
+
 - Redmine URL
 - Username
 - Password
@@ -128,6 +132,7 @@ Access the configuration dialog by clicking the settings icon in the top bar. Yo
 ### Environment Variables
 
 Alternatively, use environment variables (they take precedence over saved configuration):
+
 - `REDMINE_URL`: The URL of your Redmine server
 - `REDMINE_USERNAME`: Your Redmine username
 - `REDMINE_PASSWORD`: Your Redmine password
@@ -176,4 +181,4 @@ This project is proprietary software. All rights reserved.
 ## Credits
 
 - Application icon created by Fabrice Perez
-  - LinkedIn: [https://www.linkedin.com/in/perezfabrice/](https://www.linkedin.com/in/perezfabrice/)
+    - LinkedIn: [https://www.linkedin.com/in/perezfabrice/](https://www.linkedin.com/in/perezfabrice/)
