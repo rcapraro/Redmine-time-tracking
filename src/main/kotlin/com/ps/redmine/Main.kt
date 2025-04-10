@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.ps.redmine.api.RedmineClient
+import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
@@ -52,11 +52,11 @@ fun isConnectionError(e: Exception): Boolean {
     return e is java.net.ConnectException ||
             e is java.net.SocketTimeoutException ||
             e is java.net.UnknownHostException ||
-            e is com.taskadapter.redmineapi.RedmineException ||
+            e is java.io.IOException ||
             e.cause is java.net.ConnectException ||
             e.cause is java.net.SocketTimeoutException ||
             e.cause is java.net.UnknownHostException ||
-            e.cause is com.taskadapter.redmineapi.RedmineException
+            e.cause is java.io.IOException
 }
 
 /**
@@ -73,27 +73,58 @@ fun handleException(
     errorDialogDetails: (String) -> Unit,
     showErrorDialog: (Boolean) -> Unit
 ) {
+    e.printStackTrace()
+
     // Check if it's a connection error
     val isConnectionError = isConnectionError(e)
 
-    // Set appropriate error message
-    errorDialogMessage(
-        if (isConnectionError) {
-            Strings["error_api_unreachable"]
-        } else {
-            Strings["error_dialog_message"]
+    // Check if it's a Redmine API error with status 422 (Unprocessable Entity)
+    val isValidationError = e is com.ps.redmine.api.KtorRedmineClient.RedmineApiException &&
+            e.statusCode == 422
+
+    // For RedmineApiException, get additional details
+    if (e is com.ps.redmine.api.KtorRedmineClient.RedmineApiException) {
+        // Try to parse the error response for more details
+        if (e.statusCode == 422) {
+            val errorBody = e.responseBody
+
+            // Check for specific error patterns
+            val containsActivityError = errorBody.contains("Activité")
+            val containsProjectError = errorBody.contains("Projet")
+            val containsIssueError = errorBody.contains("Demande")
         }
-    )
+    }
+
+    // Set appropriate error message
+    val userMessage = when {
+        isConnectionError -> Strings["error_api_unreachable"]
+        isValidationError -> {
+            // For validation errors, provide a more specific message
+            val errorMsg = e.message ?: ""
+            if (errorMsg.contains("Activité") || errorMsg.contains("Projet") || errorMsg.contains("Demande")) {
+                // This is the specific error we're trying to fix
+                "Please ensure all required fields (Activity, Project, and Issue) are correctly selected."
+            } else {
+                // Other validation errors
+                "The time entry could not be saved due to validation errors: ${e.message}"
+            }
+        }
+
+        else -> Strings["error_dialog_message"]
+    }
+
+    errorDialogMessage(userMessage)
 
     // Store technical details
-    errorDialogDetails("${e.javaClass.simpleName}: ${e.message}\n${e.stackTraceToString()}")
+    val technicalDetails = "${e.javaClass.simpleName}: ${e.message}\n${e.stackTraceToString()}"
+    errorDialogDetails(technicalDetails)
 
     // Show error dialog
     showErrorDialog(true)
 }
 
 @Composable
-fun App(redmineClient: RedmineClient) {
+fun App(redmineClient: RedmineClientInterface) {
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
     var timeEntries by remember { mutableStateOf<List<TimeEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) } // For data loading
@@ -559,7 +590,7 @@ fun App(redmineClient: RedmineClient) {
 @Composable
 fun TimeEntryDetail(
     timeEntry: TimeEntry?,
-    redmineClient: RedmineClient,
+    redmineClient: RedmineClientInterface,
     onSave: (TimeEntry) -> Unit,
     onCancel: () -> Unit = {},
     locale: Locale = Locale.getDefault(),
@@ -614,7 +645,7 @@ fun TimeEntryDetail(
             hours.isNotEmpty() || comments.isNotEmpty() || selectedProject != null || selectedActivity != null || selectedIssue != null
         } else {
             hours != timeEntry.hours.toString() ||
-                    comments != timeEntry.comments ||
+                    comments != (timeEntry.comments ?: "") ||
                     selectedProject?.id != timeEntry.project.id ||
                     selectedActivity != timeEntry.activity ||
                     date != timeEntry.date ||
@@ -629,23 +660,26 @@ fun TimeEntryDetail(
 
         selectedProject?.let { project ->
             selectedActivity?.let { activity ->
-                scope.launch {
-                    isSaving = true
-                    try {
-                        val timeEntryToSave = TimeEntry(
-                            id = timeEntry?.id,
-                            date = date,
-                            hours = hours.toFloatOrNull() ?: 0f,
-                            project = project,
-                            issue = selectedIssue ?: Issue(0, ""),
-                            activity = activity,
-                            comments = comments
-                        )
-                        onSave(timeEntryToSave)
-                    } catch (e: Exception) {
-                        println("Error saving time entry: ${e.message}")
-                    } finally {
-                        isSaving = false
+                selectedIssue?.let { issue ->
+                    scope.launch {
+                        isSaving = true
+                        try {
+                            val parsedHours = hours.toFloatOrNull() ?: 0f
+                            val timeEntryToSave = TimeEntry(
+                                id = timeEntry?.id,
+                                date = date,
+                                hours = parsedHours,
+                                project = project,
+                                issue = issue,
+                                activity = activity,
+                                comments = comments
+                            )
+                            onSave(timeEntryToSave)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            isSaving = false
+                        }
                     }
                 }
             }
@@ -667,13 +701,14 @@ fun TimeEntryDetail(
         }
     }
 
-    // Load projects and activities
+    // Load projects
     // Use redmineClient and configVersion as dependencies to reload when configuration changes
     LaunchedEffect(redmineClient, configVersion) {
         isLoading = true
         try {
-            projects = redmineClient.getProjects()
-            activities = redmineClient.getActivities()
+            // Get projects in a single call
+            projects = redmineClient.getProjectsWithActivities()
+            // Activities will be loaded when a project is selected
         } catch (e: Exception) {
             println("Error loading data: ${e.message}")
         } finally {
@@ -681,22 +716,29 @@ fun TimeEntryDetail(
         }
     }
 
-    // Load issues when project changes
+    // Load activities and issues when project changes
     LaunchedEffect(selectedProject) {
         val project = selectedProject
         if (project != null) {
             isLoadingIssues = true
             try {
+                // Load activities for the selected project
+                activities = redmineClient.getActivitiesForProject(project.id)
+
+                // Load issues for the selected project
                 issues = redmineClient.getIssues(project.id)
             } catch (e: Exception) {
-                println("Error loading issues: ${e.message}")
+                println("Error loading issues or activities: ${e.message}")
                 issues = emptyList()
+                activities = emptyList()
             } finally {
                 isLoadingIssues = false
             }
         } else {
             issues = emptyList()
+            activities = emptyList()
             selectedIssue = null
+            selectedActivity = null
         }
     }
 
@@ -708,7 +750,7 @@ fun TimeEntryDetail(
                 selectedActivity = activities.find { it.id == timeEntry.activity.id }
                 selectedIssue = timeEntry.issue
                 hours = timeEntry.hours.toString()
-                comments = timeEntry.comments
+                comments = timeEntry.comments ?: ""
             }
         }
     }
@@ -1125,17 +1167,20 @@ fun main() {
             properties(
                 mapOf(
                     "redmine.uri" to config.redmineUri,
-                    "redmine.username" to config.username,
-                    "redmine.password" to config.password
+                    "redmine.apiKey" to config.apiKey
                 )
             )
             modules(appModule)
         }
 
-        val redmineClient = koinInject<RedmineClient>()
+        val redmineClient = koinInject<RedmineClientInterface>()
 
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                // Close the RedmineClient to release resources
+                redmineClient.close()
+                exitApplication()
+            },
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
             state = rememberWindowState(width = 1100.dp, height = 900.dp),

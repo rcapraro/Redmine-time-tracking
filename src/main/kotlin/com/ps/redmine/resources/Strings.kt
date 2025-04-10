@@ -21,10 +21,9 @@ object Strings {
             "configuration_title" to "Configuration",
             "configuration_error" to "Veuillez remplir tous les champs",
             "redmine_uri" to "URL Redmine",
-            "username" to "Nom d'utilisateur",
-            "password" to "Mot de passe",
-            "show_password" to "Afficher",
-            "hide_password" to "Masquer",
+            "api_key" to "Clé d'API Redmine",
+            "show_api_key" to "Afficher",
+            "hide_api_key" to "Masquer",
             "save" to "Enregistrer",
             "settings" to "Paramètres",
             "language" to "Langue",
@@ -32,7 +31,7 @@ object Strings {
             "language_en" to "Anglais",
             "error_dialog_title" to "Erreur",
             "error_dialog_message" to "Une erreur s'est produite lors de l'opération.",
-            "error_api_unreachable" to "Impossible de se connecter à Redmine.\nVeuillez vérifier votre connexion internet et les paramètres de configuration (par exemple l'URL de Redmine et vos identifiants).",
+            "error_api_unreachable" to "Impossible de se connecter à Redmine.\nVeuillez vérifier votre connexion internet et les paramètres de configuration (par exemple l'URL de Redmine et votre clé d'API).",
             "show_details" to "Afficher les détails techniques",
             "hide_details" to "Masquer les détails techniques",
             "hours_max_value" to "Les heures ne peuvent pas dépasser 7.5",
@@ -108,16 +107,17 @@ object Strings {
             "previous_day" to "Jour précédent",
             "next_day" to "Jour suivant",
             "day_label" to "Jour",
-            "version" to "Version"
+            "version" to "Version",
+            "api_key_help" to "Comment obtenir votre clé d'API Redmine ?",
+            "api_key_help_content" to "Pour obtenir votre clé d'API Redmine :\n1. Connectez-vous à votre compte Redmine\n2. Accédez à 'Mon compte' (en haut à droite)\n3. Sur la page de votre compte, vous trouverez votre clé d'API dans la colonne de droite\n4. Si la clé n'est pas visible, cliquez sur 'Afficher' à côté de 'Clé d'accès API'\n5. Copiez cette clé et collez-la ici"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
             "configuration_error" to "Please fill all fields",
             "redmine_uri" to "Redmine URL",
-            "username" to "Username",
-            "password" to "Password",
-            "show_password" to "Show",
-            "hide_password" to "Hide",
+            "api_key" to "Redmine API Key",
+            "show_api_key" to "Show",
+            "hide_api_key" to "Hide",
             "save" to "Save",
             "settings" to "Settings",
             "language" to "Language",
@@ -125,7 +125,7 @@ object Strings {
             "language_en" to "English",
             "error_dialog_title" to "Error",
             "error_dialog_message" to "An error occurred during the operation.",
-            "error_api_unreachable" to "Unable to connect to Redmine.\nPlease check your internet connection and configuration settings (such as the URL of Redmine and your login credentials).",
+            "error_api_unreachable" to "Unable to connect to Redmine.\nPlease check your internet connection and configuration settings (such as the URL of Redmine and your API key).",
             "show_details" to "Show technical details",
             "hide_details" to "Hide technical details",
             "hours_max_value" to "Hours cannot exceed 7.5",
@@ -201,7 +201,9 @@ object Strings {
             "previous_day" to "Previous Day",
             "next_day" to "Next Day",
             "day_label" to "Day",
-            "version" to "Version"
+            "version" to "Version",
+            "api_key_help" to "How to get your Redmine API key?",
+            "api_key_help_content" to "To get your Redmine API key:\n1. Log in to your Redmine account\n2. Go to 'My account' (top right corner)\n3. On your account page, you'll find your API key in the right column\n4. If the key is not visible, click 'Show' next to 'API access key'\n5. Copy this key and paste it here"
         )
     )
 

@@ -43,7 +43,7 @@ RedmineTime is designed for:
 
 - **Language**: Kotlin 2.1.10
 - **UI Framework**: Compose for Desktop 1.7.3
-- **API Client**: Redmine Java API 3.1.3
+- **API Client**: Redmine Java API 4.0.0.rc4
 - **Asynchronous Operations**: Kotlin Coroutines 1.10.1
 - **Date/Time Handling**: Kotlinx DateTime 0.6.2
 - **Dependency Injection**: Koin 4.0.2

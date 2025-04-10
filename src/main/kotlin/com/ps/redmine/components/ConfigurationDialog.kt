@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.ps.redmine.api.RedmineClient
+import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
 import java.util.*
@@ -28,13 +28,14 @@ private fun getAppVersion(): String {
 
 @Composable
 fun ConfigurationDialog(
-    redmineClient: RedmineClient,
+    redmineClient: RedmineClientInterface,
     onDismiss: () -> Unit,
     onConfigSaved: (redmineConfigChanged: Boolean, languageChanged: Boolean, themeChanged: Boolean) -> Unit
 ) {
     var config by remember { mutableStateOf(ConfigurationManager.loadConfig()) }
     var showError by remember { mutableStateOf(false) }
-    var passwordVisible by remember { mutableStateOf(false) }
+    var apiKeyVisible by remember { mutableStateOf(false) }
+    var showApiKeyHelp by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -52,32 +53,45 @@ fun ConfigurationDialog(
                     singleLine = true
                 )
 
-                OutlinedTextField(
-                    value = config.username,
-                    onValueChange = { config = config.copy(username = it) },
-                    label = { Text(Strings["username"]) },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    singleLine = true
-                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = config.password,
-                        onValueChange = { config = config.copy(password = it) },
-                        label = { Text(Strings["password"]) },
-                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
-                    )
-                    TextButton(
-                        onClick = { passwordVisible = !passwordVisible },
-                        modifier = Modifier.padding(top = 8.dp)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (passwordVisible) Strings["hide_password"] else Strings["show_password"])
+                        OutlinedTextField(
+                            value = config.apiKey,
+                            onValueChange = { config = config.copy(apiKey = it) },
+                            label = { Text(Strings["api_key"]) },
+                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                            singleLine = true,
+                            visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation()
+                        )
+                        TextButton(
+                            onClick = { apiKeyVisible = !apiKeyVisible },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text(if (apiKeyVisible) Strings["hide_api_key"] else Strings["show_api_key"])
+                        }
+                    }
+
+                    // API Key help link
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { showApiKeyHelp = true },
+                            modifier = Modifier.padding(0.dp)
+                        ) {
+                            Text(
+                                text = Strings["api_key_help"],
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colors.primary
+                            )
+                        }
                     }
                 }
 
@@ -167,21 +181,20 @@ fun ConfigurationDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (config.redmineUri.isNotBlank() && config.username.isNotBlank() && config.password.isNotBlank()) {
+                    if (config.redmineUri.isNotBlank() && config.apiKey.isNotBlank()) {
                         // Check what has changed
                         val oldConfig = ConfigurationManager.loadConfig()
                         val languageChanged = oldConfig.language != config.language
                         val themeChanged = oldConfig.isDarkTheme != config.isDarkTheme
                         val redmineConfigChanged = oldConfig.redmineUri != config.redmineUri ||
-                                oldConfig.username != config.username ||
-                                oldConfig.password != config.password
+                                oldConfig.apiKey != config.apiKey
 
                         // Save to persistent storage
                         ConfigurationManager.saveConfig(config)
 
                         // Update RedmineClient if Redmine configuration changed
                         if (redmineConfigChanged) {
-                            redmineClient.updateConfiguration(config.redmineUri, config.username, config.password)
+                            redmineClient.updateConfiguration(config.redmineUri, config.apiKey)
                         }
 
                         // Update language if changed
@@ -214,4 +227,23 @@ fun ConfigurationDialog(
             }
         }
     )
+
+    // API Key help dialog
+    if (showApiKeyHelp) {
+        AlertDialog(
+            onDismissRequest = { showApiKeyHelp = false },
+            title = { Text(Strings["api_key_help"]) },
+            text = {
+                Text(
+                    text = Strings["api_key_help_content"],
+                    style = MaterialTheme.typography.body1
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showApiKeyHelp = false }) {
+                    Text(Strings["close"])
+                }
+            }
+        )
+    }
 }

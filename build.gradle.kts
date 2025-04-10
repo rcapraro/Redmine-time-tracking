@@ -1,10 +1,10 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.jetbrainsCompose)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
 }
 
 group = "com.ps"
@@ -13,6 +13,12 @@ version = project.findProperty("appVersion")?.toString() ?: "1.0.0"
 repositories {
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://maven.pkg.jetbrains.space/public/p/ktor/maven")
+    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
+    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
+    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/temporary")
+    maven("https://oss.sonatype.org/content/repositories/snapshots")
+    maven("https://oss.sonatype.org/content/repositories/releases")
     google()
     maven("https://jitpack.io")
 }
@@ -22,9 +28,11 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material)
 
-    // Redmine API Client
-    implementation(libs.redmine.api)
-    implementation(libs.httpclient)
+    // Ktor client dependencies
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    // We're using kotlinx.serialization directly without Ktor's content negotiation
+    implementation(libs.kotlinx.serialization.json)
 
     // Kotlin Coroutines
     implementation(libs.coroutines.core)
@@ -63,8 +71,8 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+    kotlinOptions {
+        jvmTarget = "17"
     }
 }
 

@@ -61,8 +61,7 @@ The application can be configured in two ways:
 Click the settings icon in the top bar to open the configuration dialog. You can set:
 
 - Redmine URL
-- Username
-- Password
+- API Key (the Redmine API key)
 - Dark Theme
 
 The configuration is automatically saved and stored securely using Java Preferences API in your system's preferences:
@@ -78,8 +77,7 @@ The configuration values are stored under the node `/com/ps/redmine` in these sy
 Alternatively, you can use environment variables (they take precedence over saved configuration):
 
 - `REDMINE_URL`: The URL of your Redmine server (default: "https://redmine-restreint.packsolutions.local")
-- `REDMINE_USERNAME`: Your Redmine username
-- `REDMINE_PASSWORD`: Your Redmine password
+- `REDMINE_API_KEY`: Your Redmine API key
 - `REDMINE_DARK_THEME`: Set to "true" to enable dark theme (default: "false")
 
 Note: Language settings can only be changed through the configuration panel.

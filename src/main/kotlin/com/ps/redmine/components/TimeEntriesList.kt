@@ -287,7 +287,7 @@ fun TimeEntryItem(
                     )
 
                     // Comments (if any)
-                    if (timeEntry.comments.isNotEmpty()) {
+                    if (timeEntry.comments?.isNotEmpty() == true) {
                         Text(
                             text = Strings["comment_item_format"].format(timeEntry.comments),
                             style = MaterialTheme.typography.caption,

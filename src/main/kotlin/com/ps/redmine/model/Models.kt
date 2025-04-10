@@ -9,7 +9,7 @@ data class TimeEntry(
     val activity: Activity,
     val project: Project,
     val issue: Issue,
-    val comments: String
+    val comments: String? = null
 )
 
 data class Activity(

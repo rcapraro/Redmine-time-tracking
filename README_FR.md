@@ -62,8 +62,7 @@ Cliquez sur l'icône des paramètres dans la barre supérieure pour ouvrir la bo
 pouvez définir :
 
 - URL Redmine
-- Nom d'utilisateur
-- Mot de passe
+- Clé d'API Redmine
 - Thème sombre
 
 La configuration est automatiquement sauvegardée et stockée de manière sécurisée via l'API Java Preferences dans les
@@ -81,8 +80,7 @@ Alternativement, vous pouvez utiliser des variables d'environnement (elles ont l
 sauvegardée) :
 
 - `REDMINE_URL`: L'URL de votre serveur Redmine (default: "https://redmine-restreint.packsolutions.local")
-- `REDMINE_USERNAME`: Votre nom d'utilisateur Redmine
-- `REDMINE_PASSWORD`: Votre mot de passe Redmine
+- `REDMINE_API_KEY`: Votre clé d'API Redmine
 - `REDMINE_DARK_THEME`: Définir à "true" pour activer le thème sombre (default: "false")
 
 Note : Les paramètres de langue ne peuvent être modifiés que via le panneau de configuration.
