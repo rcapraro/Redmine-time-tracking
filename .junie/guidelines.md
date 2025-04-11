@@ -41,13 +41,13 @@ RedmineTime is designed for:
 
 ### Technology Stack
 
-- **Language**: Kotlin 2.1.10
+- **Language**: Kotlin 2.1.20
 - **UI Framework**: Compose for Desktop 1.7.3
-- **API Client**: Redmine Java API 4.0.0.rc4
+- **HTTP Client**: Ktor 3.1.2
+- **Serialization**: Kotlinx Serialization 1.8.1
 - **Asynchronous Operations**: Kotlin Coroutines 1.10.1
 - **Date/Time Handling**: Kotlinx DateTime 0.6.2
-- **Dependency Injection**: Koin 4.0.2
-- **HTTP Client**: Apache HttpClient 4.5.14
+- **Dependency Injection**: Koin 4.0.4
 
 ### Architecture Overview
 

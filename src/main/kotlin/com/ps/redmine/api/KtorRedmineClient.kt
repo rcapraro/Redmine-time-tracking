@@ -25,13 +25,17 @@ import javax.net.ssl.X509TrustManager
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
 /**
- * Implementation of RedmineClientInterface that uses Ktor Client for HTTP requests.
- * This is a more Kotlin-idiomatic approach compared to the Java HttpClient used in DirectRedmineClient.
+ * Implementation of RedmineClientInterface in Ktor.
  */
 class KtorRedmineClient(
-    private var uri: String,
-    private var apiKey: String
+    private var uri: String, private var apiKey: String
 ) : RedmineClientInterface {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+    }
 
     /**
      * Enum representing different types of API errors
@@ -65,21 +69,7 @@ class KtorRedmineClient(
         return when (errorType) {
             ErrorType.CONFIGURATION_ERROR -> "Configuration error: Please check your Redmine URL and API key."
             ErrorType.CONNECTION_ERROR -> "Connection error: Unable to connect to Redmine server."
-            ErrorType.VALIDATION_ERROR -> {
-                // Try to extract specific validation errors from the response body
-                if (responseBody.contains("Activité") || responseBody.contains("Activity")) {
-                    "Validation error: Activity is required or invalid."
-                } else if (responseBody.contains("Projet") || responseBody.contains("Project")) {
-                    "Validation error: Project is required or invalid."
-                } else if (responseBody.contains("Demande") || responseBody.contains("Issue")) {
-                    "Validation error: Issue is required or invalid."
-                } else if (responseBody.contains("Heures") || responseBody.contains("Hours")) {
-                    "Validation error: Hours value is invalid."
-                } else {
-                    "Validation error: The time entry could not be saved due to validation errors."
-                }
-            }
-
+            ErrorType.VALIDATION_ERROR -> "Validation error: The time entry could not be saved due to validation errors."
             ErrorType.SERVER_ERROR -> "Server error: The Redmine server encountered an error. Please try again later."
             ErrorType.NOT_FOUND_ERROR -> "Not found error: The requested resource was not found."
             ErrorType.RATE_LIMIT_ERROR -> "Rate limit error: Too many requests. Please try again later."
@@ -200,29 +190,23 @@ class KtorRedmineClient(
      */
     private suspend inline fun <reified T> getAndParse(endpoint: String): T = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient?.get("$uri$endpoint")
-                ?: throw IOException("HTTP client not initialized")
+            val response = httpClient?.get("$uri$endpoint") ?: throw IOException("HTTP client not initialized")
 
             if (!response.status.isSuccess()) {
                 throw createApiException(
-                    statusCode = response.status.value,
-                    responseBody = response.bodyAsText()
+                    statusCode = response.status.value, responseBody = response.bodyAsText()
                 )
             }
 
             // Parse the response body using kotlinx.serialization
             val responseText = response.bodyAsText()
-            Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.decodeFromString<T>(responseText)
+            json.decodeFromString<T>(responseText)
         } catch (e: Exception) {
             when (e) {
                 is RedmineApiException -> throw e
-                is ConnectException,
-                is SocketTimeoutException,
-                is UnknownHostException -> throw createConnectionException(e)
+                is ConnectException, is SocketTimeoutException, is UnknownHostException -> throw createConnectionException(
+                    e
+                )
 
                 is HttpRequestTimeoutException -> throw RedmineApiException(
                     statusCode = 0,
@@ -247,12 +231,7 @@ class KtorRedmineClient(
     private suspend inline fun <reified R> postAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
             try {
-                // Create JSON serializer
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    encodeDefaults = true
-                }
+                // Use shared JSON serializer
 
                 val response = httpClient?.post("$uri$endpoint") {
                     setBody(body)
@@ -260,8 +239,7 @@ class KtorRedmineClient(
 
                 if (!response.status.isSuccess()) {
                     throw createApiException(
-                        statusCode = response.status.value,
-                        responseBody = response.bodyAsText()
+                        statusCode = response.status.value, responseBody = response.bodyAsText()
                     )
                 }
 
@@ -271,9 +249,9 @@ class KtorRedmineClient(
             } catch (e: Exception) {
                 when (e) {
                     is RedmineApiException -> throw e
-                    is ConnectException,
-                    is SocketTimeoutException,
-                    is UnknownHostException -> throw createConnectionException(e)
+                    is ConnectException, is SocketTimeoutException, is UnknownHostException -> throw createConnectionException(
+                        e
+                    )
 
                     is HttpRequestTimeoutException -> throw RedmineApiException(
                         statusCode = 0,
@@ -298,12 +276,7 @@ class KtorRedmineClient(
     private suspend inline fun <reified R> putAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
             try {
-                // Create JSON serializer
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    encodeDefaults = true
-                }
+                // Use shared JSON serializer
 
                 val response = httpClient?.put("$uri$endpoint") {
                     setBody(body)
@@ -311,8 +284,7 @@ class KtorRedmineClient(
 
                 if (!response.status.isSuccess()) {
                     throw createApiException(
-                        statusCode = response.status.value,
-                        responseBody = response.bodyAsText()
+                        statusCode = response.status.value, responseBody = response.bodyAsText()
                     )
                 }
 
@@ -322,9 +294,9 @@ class KtorRedmineClient(
             } catch (e: Exception) {
                 when (e) {
                     is RedmineApiException -> throw e
-                    is ConnectException,
-                    is SocketTimeoutException,
-                    is UnknownHostException -> throw createConnectionException(e)
+                    is ConnectException, is SocketTimeoutException, is UnknownHostException -> throw createConnectionException(
+                        e
+                    )
 
                     is HttpRequestTimeoutException -> throw RedmineApiException(
                         statusCode = 0,
@@ -348,21 +320,19 @@ class KtorRedmineClient(
      */
     private suspend fun delete(endpoint: String): Unit = withContext(Dispatchers.IO) {
         try {
-            val response = httpClient?.delete("$uri$endpoint")
-                ?: throw IOException("HTTP client not initialized")
+            val response = httpClient?.delete("$uri$endpoint") ?: throw IOException("HTTP client not initialized")
 
             if (!response.status.isSuccess()) {
                 throw createApiException(
-                    statusCode = response.status.value,
-                    responseBody = response.bodyAsText()
+                    statusCode = response.status.value, responseBody = response.bodyAsText()
                 )
             }
         } catch (e: Exception) {
             when (e) {
                 is RedmineApiException -> throw e
-                is ConnectException,
-                is SocketTimeoutException,
-                is UnknownHostException -> throw createConnectionException(e)
+                is ConnectException, is SocketTimeoutException, is UnknownHostException -> throw createConnectionException(
+                    e
+                )
 
                 is HttpRequestTimeoutException -> throw RedmineApiException(
                     statusCode = 0,
@@ -398,9 +368,7 @@ class KtorRedmineClient(
                 getProjectsWithActivities()
 
                 // Collect unique issue IDs
-                val uniqueIssueIds = response.timeEntries
-                    .mapNotNull { it.issue.id.takeIf { id -> id > 0 } }
-                    .distinct()
+                val uniqueIssueIds = response.timeEntries.mapNotNull { it.issue.id.takeIf { id -> id > 0 } }.distinct()
 
                 // Batch load issues
                 for (issueId in uniqueIssueIds) {
@@ -453,11 +421,7 @@ class KtorRedmineClient(
             val apiRequest = timeEntry.toApiRequest()
 
             // Create the request payload
-            val timeEntryJson = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
+            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
 
             val requestJson = """{"time_entry": $timeEntryJson}"""
 
@@ -474,9 +438,7 @@ class KtorRedmineClient(
 
             // For other exceptions, create a more descriptive error
             throw RedmineApiException(
-                statusCode = 0,
-                responseBody = e.message ?: "",
-                message = "Error creating time entry: ${e.message}"
+                statusCode = 0, responseBody = e.message ?: "", message = "Error creating time entry: ${e.message}"
             )
         }
     }
@@ -489,11 +451,7 @@ class KtorRedmineClient(
             val apiRequest = timeEntry.toApiRequest()
 
             // Create the request payload
-            val timeEntryJson = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
+            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
 
             val requestJson = """{"time_entry": $timeEntryJson}"""
 
@@ -633,9 +591,7 @@ class KtorRedmineClient(
             val response = getAndParse<RedmineIssuesResponse>(endpoint)
 
             // Convert and return the issues
-            response.issues
-                .filter { it.id > 0 && it.subject.isNotEmpty() }
-                .map { Issue(it.id, it.subject) }
+            response.issues.filter { it.id > 0 && it.subject.isNotEmpty() }.map { Issue(it.id, it.subject) }
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {

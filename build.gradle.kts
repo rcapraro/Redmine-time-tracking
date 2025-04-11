@@ -12,13 +12,6 @@ version = project.findProperty("appVersion")?.toString() ?: "1.0.0"
 
 repositories {
     mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-    maven("https://maven.pkg.jetbrains.space/public/p/ktor/maven")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/temporary")
-    maven("https://oss.sonatype.org/content/repositories/snapshots")
-    maven("https://oss.sonatype.org/content/repositories/releases")
     google()
     maven("https://jitpack.io")
 }
@@ -51,6 +44,9 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.junit)
+    // Additional JUnit 5 dependencies
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.junit.jupiter.engine)
 }
 
 tasks.test {
@@ -62,18 +58,16 @@ tasks.test {
 
 kotlin {
     jvmToolchain(17)
+
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
 
 // Ensure Java 17 is used for all tasks
 tasks.withType<JavaCompile>().configureEach {
     sourceCompatibility = JavaVersion.VERSION_17.toString()
     targetCompatibility = JavaVersion.VERSION_17.toString()
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 // Task to generate Version.kt file with the current version

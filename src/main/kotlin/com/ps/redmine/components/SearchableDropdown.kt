@@ -106,7 +106,7 @@ fun <T> SearchableDropdown(
                 searchText = ""  // Clear search when closing dropdown
             },
             modifier = Modifier
-                .width(400.dp)  // Use fixed width instead of percentage of parent
+                .widthIn(min = 300.dp, max = 500.dp)  // Responsive width with min and max constraints
                 .heightIn(max = 500.dp)  // Add explicit height constraint
         ) {
             // Search field
@@ -114,7 +114,7 @@ fun <T> SearchableDropdown(
                 value = searchText,
                 onValueChange = { searchText = it },
                 modifier = Modifier
-                    .width(380.dp)  // Use fixed width instead of fillMaxWidth
+                    .fillMaxWidth()  // Use available width
                     .padding(8.dp)
                     .heightIn(min = 56.dp)
                     .focusRequester(focusRequester),
@@ -138,7 +138,7 @@ fun <T> SearchableDropdown(
 
             // Show filtered items in a scrollable list with max height
             if (filteredItems.isEmpty()) {
-                Box(modifier = Modifier.width(380.dp).padding(8.dp).heightIn(min = 48.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(8.dp).heightIn(min = 48.dp)) {
                     Text(
                         text = if (searchText.isEmpty()) noItemsText else Strings["no_search_results"],
                         style = MaterialTheme.typography.body1,
@@ -149,8 +149,8 @@ fun <T> SearchableDropdown(
                 // Add a background to make the scrollable area more visible
                 Surface(
                     modifier = Modifier
-                        .width(380.dp)
-                        .height(340.dp),
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 340.dp),
                     color = MaterialTheme.colors.surface,
                     elevation = 1.dp,
                     shape = MaterialTheme.shapes.small

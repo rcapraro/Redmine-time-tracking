@@ -31,7 +31,7 @@ fun DatePicker(
             value = DateFormatter.formatShort(selectedDate, locale),
             onValueChange = {},
             label = { Text(Strings["date_label"]) },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            modifier = Modifier.fillMaxWidth(0.5f).heightIn(min = 56.dp),
             readOnly = true,
             trailingIcon = {
                 IconButton(onClick = { showDialog = true }) {
@@ -42,7 +42,7 @@ fun DatePicker(
 
         // Add buttons for previous/next business day
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            modifier = Modifier.fillMaxWidth(0.5f).padding(top = 4.dp),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -55,7 +55,7 @@ fun DatePicker(
             // Previous day button
             OutlinedButton(
                 onClick = { onDateSelected(selectedDate.previousBusinessDay()) },
-                modifier = Modifier.height(28.dp).width(40.dp),
+                modifier = Modifier.heightIn(min = 28.dp).widthIn(min = 40.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Text("←", style = MaterialTheme.typography.caption)
@@ -66,7 +66,7 @@ fun DatePicker(
             // Next day button
             OutlinedButton(
                 onClick = { onDateSelected(selectedDate.nextBusinessDay()) },
-                modifier = Modifier.height(28.dp).width(40.dp),
+                modifier = Modifier.heightIn(min = 28.dp).widthIn(min = 40.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Text("→", style = MaterialTheme.typography.caption)
@@ -76,9 +76,10 @@ fun DatePicker(
         if (showDialog) {
             AlertDialog(
                 onDismissRequest = { showDialog = false },
+                modifier = Modifier.widthIn(min = 450.dp, max = 450.dp).heightIn(min = 450.dp, max = 550.dp),
                 title = {
                     Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -124,7 +125,7 @@ fun DatePicker(
                     }
                 },
                 text = {
-                    Column(modifier = Modifier.heightIn(min = 200.dp, max = 200.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().heightIn(min = 280.dp)) {
                         // Days of week header
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).heightIn(min = 24.dp),
@@ -148,13 +149,16 @@ fun DatePicker(
 
                         for (week in 0 until weeks) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 30.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 for (dayOfWeek in 1..7) {
                                     val day = week * 7 + dayOfWeek - firstDayOfWeek + 1
                                     Box(
-                                        modifier = Modifier.size(30.dp).padding(2.dp)
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f) // Keep it square
+                                            .padding(2.dp)
                                     ) {
                                         if (day in 1..daysInMonth) {
                                             val javaDate = currentYearMonth.atDay(day)
@@ -188,7 +192,8 @@ fun DatePicker(
                                                             isSelected -> MaterialTheme.colors.onPrimary
                                                             isToday -> MaterialTheme.colors.primary
                                                             else -> MaterialTheme.colors.onSurface
-                                                        }
+                                                        },
+                                                        maxLines = 1
                                                     )
                                                 }
                                             }
@@ -201,10 +206,9 @@ fun DatePicker(
                 },
                 buttons = {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-                            .heightIn(min = 30.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom
                     ) {
                         TextButton(
                             onClick = {
@@ -216,7 +220,7 @@ fun DatePicker(
                         ) {
                             Text(Strings["today"])
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
                         TextButton(onClick = { showDialog = false }) {
                             Text(Strings["close"])
                         }

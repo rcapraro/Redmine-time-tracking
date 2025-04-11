@@ -176,13 +176,13 @@ application will restart to apply the new configuration.
 
 Built with:
 
-- Kotlin 2.1.10
+- Kotlin 2.1.20
 - Compose for Desktop 1.7.3
-- Redmine Java API 3.1.3
+- Ktor 3.1.2 (HTTP Client)
+- Kotlinx Serialization 1.8.1
 - Kotlin Coroutines 1.10.1
 - Kotlinx DateTime 0.6.2
-- Koin 4.0.2 (Dependency Injection)
-- Apache HttpClient 4.5.14
+- Koin 4.0.4 (Dependency Injection)
 
 ## Credits
 

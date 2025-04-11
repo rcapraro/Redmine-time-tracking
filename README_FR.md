@@ -179,13 +179,13 @@ paramètres dans la barre supérieure. L'application redémarrera pour appliquer
 
 Construit avec :
 
-- Kotlin 2.1.10
+- Kotlin 2.1.20
 - Compose for Desktop 1.7.3
-- Redmine Java API 3.1.3
+- Ktor 3.1.2 (Client HTTP)
+- Kotlinx Serialization 1.8.1
 - Coroutines Kotlin 1.10.1
 - DateTime Kotlinx 0.6.2
-- Koin 4.0.2 (Dependency Injection)
-- Apache HttpClient 4.5.14
+- Koin 4.0.4 (Dependency Injection)
 
 ## Crédits
 
