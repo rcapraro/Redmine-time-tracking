@@ -46,7 +46,7 @@ fun TimeEntriesList(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 600.dp)  // Add explicit height constraint
+            .fillMaxHeight()  // Allow the box to fill the available height
     ) {
         val listState = rememberLazyListState()
 
