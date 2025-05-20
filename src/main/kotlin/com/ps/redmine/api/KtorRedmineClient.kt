@@ -318,6 +318,13 @@ class KtorRedmineClient(
 
                 // Parse the response body using kotlinx.serialization
                 val responseText = response.bodyAsText()
+
+                // Handle empty responses when Unit is expected
+                if (responseText.isEmpty() && R::class == Unit::class) {
+                    @Suppress("UNCHECKED_CAST")
+                    return@withContext Unit as R
+                }
+
                 json.decodeFromString<R>(responseText)
             } catch (e: Exception) {
                 when (e) {

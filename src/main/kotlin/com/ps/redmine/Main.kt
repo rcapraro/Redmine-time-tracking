@@ -628,17 +628,19 @@ fun TimeEntryDetail(
     val scope = rememberCoroutineScope()
 
     // Check if the form is valid and not in a loading state
-    val isValid = remember(selectedProject, selectedActivity, hours, selectedIssue, isLoading, isGlobalLoading) {
-        val hasProject = selectedProject != null
-        val hasActivity = selectedActivity != null
-        val hasHours = hours.isNotEmpty()
-        val validHours = hours.toFloatOrNull() != null
-        val nonZeroHours = hours.toFloatOrNull() != 0f
-        val hasIssue = selectedIssue != null
-        val notLoading = !isLoading && !isGlobalLoading
+    val isValid =
+        remember(selectedProject, selectedActivity, hours, selectedIssue, comments, isLoading, isGlobalLoading) {
+            val hasProject = selectedProject != null
+            val hasActivity = selectedActivity != null
+            val hasHours = hours.isNotEmpty()
+            val validHours = hours.toFloatOrNull() != null
+            val nonZeroHours = hours.toFloatOrNull() != 0f
+            val hasIssue = selectedIssue != null
+            val hasComments = comments.isNotEmpty()
+            val notLoading = !isLoading && !isGlobalLoading
 
-        hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue && notLoading
-    }
+            hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue && hasComments && notLoading
+        }
 
     val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date, selectedIssue) {
         if (timeEntry == null) {
@@ -747,11 +749,17 @@ fun TimeEntryDetail(
         if (timeEntry != null && (selectedProject == null || timeEntry.id != null)) {
             if (selectedProject == null) {
                 selectedProject = projects.find { it.id == timeEntry.project.id }
-                selectedActivity = activities.find { it.id == timeEntry.activity.id }
                 selectedIssue = timeEntry.issue
                 hours = timeEntry.hours.toString()
                 comments = timeEntry.comments ?: ""
             }
+        }
+    }
+
+    // Update activity selection when activities list changes or timeEntry changes
+    LaunchedEffect(activities, timeEntry) {
+        if (timeEntry != null && activities.isNotEmpty()) {
+            selectedActivity = activities.find { it.id == timeEntry.activity.id }
         }
     }
 
@@ -1081,6 +1089,7 @@ fun TimeEntryDetail(
                 label = { Text(Strings["comments_label"]) },
                 minLines = 3,
                 enabled = !isLoading && !isGlobalLoading,
+                isError = !isLoading && comments.isEmpty(),
                 trailingIcon = if (comments.isNotEmpty()) {
                     {
                         IconButton(
@@ -1097,6 +1106,15 @@ fun TimeEntryDetail(
                     }
                 } else null
             )
+
+            if (!isLoading && comments.isEmpty()) {
+                Text(
+                    text = Strings["comments_required"],
+                    color = MaterialTheme.colors.error,
+                    style = MaterialTheme.typography.caption,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End

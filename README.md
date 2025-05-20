@@ -158,7 +158,7 @@ The released installers will be available on the GitHub Releases page.
     - Hours
     - Project
     - Activity
-    - Comments (optional)
+    - Comments
 6. Save the time entry
 
 Note: You can update your Redmine connection settings at any time by clicking the settings icon in the top bar. The
