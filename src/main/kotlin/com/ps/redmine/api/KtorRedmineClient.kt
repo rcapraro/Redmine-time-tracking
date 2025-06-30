@@ -33,6 +33,14 @@ class KtorRedmineClient(
     private var apiKey: String
 ) : RedmineClientInterface {
 
+    companion object {
+        private val json = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            encodeDefaults = true
+        }
+    }
+
     /**
      * Enum representing different types of API errors
      */
@@ -212,11 +220,7 @@ class KtorRedmineClient(
 
             // Parse the response body using kotlinx.serialization
             val responseText = response.bodyAsText()
-            Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.decodeFromString<T>(responseText)
+            json.decodeFromString<T>(responseText)
         } catch (e: Exception) {
             when (e) {
                 is RedmineApiException -> throw e
@@ -247,13 +251,6 @@ class KtorRedmineClient(
     private suspend inline fun <reified R> postAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
             try {
-                // Create JSON serializer
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    encodeDefaults = true
-                }
-
                 val response = httpClient?.post("$uri$endpoint") {
                     setBody(body)
                 } ?: throw IOException("HTTP client not initialized")
@@ -298,13 +295,6 @@ class KtorRedmineClient(
     private suspend inline fun <reified R> putAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
             try {
-                // Create JSON serializer
-                val json = Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    encodeDefaults = true
-                }
-
                 val response = httpClient?.put("$uri$endpoint") {
                     setBody(body)
                 } ?: throw IOException("HTTP client not initialized")
@@ -460,11 +450,7 @@ class KtorRedmineClient(
             val apiRequest = timeEntry.toApiRequest()
 
             // Create the request payload
-            val timeEntryJson = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
+            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
 
             val requestJson = """{"time_entry": $timeEntryJson}"""
 
@@ -496,11 +482,7 @@ class KtorRedmineClient(
             val apiRequest = timeEntry.toApiRequest()
 
             // Create the request payload
-            val timeEntryJson = Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-                encodeDefaults = true
-            }.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
+            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
 
             val requestJson = """{"time_entry": $timeEntryJson}"""
 
