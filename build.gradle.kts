@@ -1,10 +1,14 @@
+import nl.littlerobots.vcu.plugin.resolver.VersionSelectors
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.versionCatalogUpdate)
 }
 
 group = "com.ps"
@@ -12,21 +16,17 @@ version = project.findProperty("appVersion")?.toString() ?: "1.0.0"
 
 repositories {
     mavenCentral()
+    google()
+    // Only include JetBrains repositories that are actually needed
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     maven("https://maven.pkg.jetbrains.space/public/p/ktor/maven")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/bootstrap")
-    maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/temporary")
-    maven("https://oss.sonatype.org/content/repositories/snapshots")
-    maven("https://oss.sonatype.org/content/repositories/releases")
-    google()
-    maven("https://jitpack.io")
 }
 
 dependencies {
     // Compose Desktop
     implementation(compose.desktop.currentOs)
     implementation(compose.material)
+    implementation(compose.materialIconsExtended)
 
     // Ktor client dependencies
     implementation(libs.ktor.client.core)
@@ -51,6 +51,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.junit)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
@@ -60,20 +61,26 @@ tasks.test {
     }
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
-// Ensure Java 17 is used for all tasks
-tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = JavaVersion.VERSION_17.toString()
-    targetCompatibility = JavaVersion.VERSION_17.toString()
+configure<KotlinJvmProjectExtension> {
+    jvmToolchain(21)
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
+    compilerOptions {
+        freeCompilerArgs.addAll(
+            listOf(
+                "-opt-in=kotlin.time.ExperimentalTime",
+                "-opt-in=androidx.compose.material.ExperimentalMaterialApi",
+                "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
+                // Note: StrongSkipping is enabled by default in Compose 1.8.2
+            )
+        )
     }
+}
+
+versionCatalogUpdate {
+    sortByKey.set(false)
+    versionSelector(VersionSelectors.STABLE)
 }
 
 // Task to generate Version.kt file with the current version
@@ -105,6 +112,12 @@ tasks.named("compileKotlin") {
 compose.desktop {
     application {
         mainClass = "com.ps.redmine.MainKt"
+
+        jvmArgs += listOf(
+            // Performance optimizations
+            "-XX:+UseG1GC",
+            "-XX:+UseStringDeduplication"
+        )
 
         // Disable ProGuard to avoid Java version compatibility issues
         buildTypes.release.proguard {

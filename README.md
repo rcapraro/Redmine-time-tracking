@@ -11,16 +11,21 @@ enabled in the settings.*
 
 ## Features
 
-- Monthly time entry overview
-- Add and edit time entries
-- Project and activity selection
-- Easy navigation between months
-- Quick time entry creation and editing
-- SSL support (including self-signed certificates with automatic trust and hostname verification disabled)
-- Native look and feel
-- Light and dark theme support
-- Keyboard shortcuts for improved productivity
-- French language support
+- **Monthly time entry overview** with intuitive navigation
+- **Monthly progress tracking** with visual indicators showing completion percentage
+- **Working days calculation** and expected hours tracking (working days × 7.5 hours)
+- **Add and edit time entries** with comprehensive validation
+- **Project and activity selection** with searchable dropdowns
+- **Issue integration** - select issues associated with chosen projects
+- **Easy navigation between months** with keyboard shortcuts
+- **Quick time entry creation and editing** with intelligent defaults
+- **SSL support** (including self-signed certificates with automatic trust and hostname verification disabled)
+- **Native look and feel** that integrates with your operating system
+- **Light and dark theme support** with system integration
+- **Keyboard shortcuts** for improved productivity
+- **Multilingual support** (French and English) with intelligent fallback
+- **Robust error handling** with user-friendly error messages
+- **Real-time validation** for all form fields
 
 ## Language Support
 
@@ -49,8 +54,8 @@ Note: The application will automatically handle missing translations by falling 
 
 ## Prerequisites
 
-- Java Development Kit (JDK) 17 or later
-- Redmine server instance (with API access)
+- Java Development Kit (JDK) 21 or later
+- Redmine server instance (with API access enabled)
 
 ## Configuration
 
@@ -76,7 +81,7 @@ The configuration values are stored under the node `/com/ps/redmine` in these sy
 
 Alternatively, you can use environment variables (they take precedence over saved configuration):
 
-- `REDMINE_URL`: The URL of your Redmine server (default: "https://redmine-restreint.packsolutions.local")
+- `REDMINE_URL`: The URL of your Redmine server
 - `REDMINE_API_KEY`: Your Redmine API key
 - `REDMINE_DARK_THEME`: Set to "true" to enable dark theme (default: "false")
 
@@ -147,19 +152,43 @@ The released installers will be available on the GitHub Releases page.
 
 ## Usage
 
-1. Initial Setup
+### Initial Setup
+
+1. **Configure Redmine Connection**:
     - Option 1: Click the settings icon in the top bar to configure your Redmine connection
     - Option 2: Set the environment variables as described in the Configuration section
-2. Launch the application
-3. Navigate to the desired month using the navigation buttons or keyboard shortcuts
-4. Click the "+" button to add a new time entry
-5. Fill in the required information:
-    - Date
-    - Hours
-    - Project
-    - Activity
-    - Comments
-6. Save the time entry
+2. **Launch the application**
+
+### Managing Time Entries
+
+1. **Navigate between months** using the navigation buttons or keyboard shortcuts (Alt+← / Alt+→)
+2. **View monthly progress**: The application displays:
+    - Total hours logged for the month
+    - Monthly progress indicator showing completion percentage
+    - Working days calculation and expected hours (working days × 7.5)
+    - Remaining hours needed to complete the month
+3. **Add a new time entry**:
+    - Click the "+" button or select "New entry"
+    - Fill in the required information:
+        - **Date**: Select the date for the time entry
+        - **Hours**: Enter the number of hours worked
+        - **Project**: Choose from available projects (searchable dropdown)
+        - **Issue**: Select an issue from the chosen project
+        - **Activity**: Select the type of activity performed
+        - **Comments**: Add descriptive comments (required)
+4. **Edit existing entries**: Click on any time entry in the list to edit it
+5. **Save changes**: Use Ctrl/Cmd+S or click the Save button
+6. **Cancel changes**: Press Escape or click Cancel
+
+### Monthly Progress Tracking
+
+The application automatically calculates and displays:
+
+- **Working days** in the current month (excluding weekends)
+- **Expected hours** (working days × 7.5 hours)
+- **Completion percentage** with visual progress indicator
+- **Color-coded status**: Green when the month is completed
+- **Remaining hours** needed to reach the monthly target
 
 Note: You can update your Redmine connection settings at any time by clicking the settings icon in the top bar. The
 application will restart to apply the new configuration.
@@ -176,13 +205,26 @@ application will restart to apply the new configuration.
 
 Built with:
 
-- Kotlin 2.1.10
-- Compose for Desktop 1.7.3
-- Redmine Java API 3.1.3
-- Kotlin Coroutines 1.10.1
-- Kotlinx DateTime 0.6.2
-- Koin 4.0.2 (Dependency Injection)
-- Apache HttpClient 4.5.14
+- **Kotlin** 2.2.0
+- **Compose for Desktop** 1.8.2
+- **Ktor Client** 3.2.0 (HTTP client for API communication)
+- **Kotlin Coroutines** 1.10.2
+- **Kotlinx DateTime** 0.6.1
+- **Kotlinx Serialization** 1.9.0
+- **Koin** 4.1.0 (Dependency Injection)
+- **SLF4J** 2.0.16 + **Logback** 1.5.12 (Logging)
+- **JUnit 5** 5.13.2 (Testing framework)
+
+### Architecture
+
+The application follows modern Kotlin development practices:
+
+- **Compose UI**: Declarative UI framework for desktop applications
+- **Coroutines**: Asynchronous programming for non-blocking operations
+- **Dependency Injection**: Clean architecture with Koin
+- **HTTP Client**: Ktor for robust API communication with SSL support
+- **Serialization**: Kotlinx Serialization for JSON parsing
+- **Date/Time**: Kotlinx DateTime for cross-platform date handling
 
 ## Credits
 

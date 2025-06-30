@@ -110,7 +110,13 @@ object Strings {
             "day_label" to "Jour",
             "version" to "Version",
             "api_key_help" to "Comment obtenir votre clé d'API Redmine ?",
-            "api_key_help_content" to "Pour obtenir votre clé d'API Redmine :\n1. Connectez-vous à votre compte Redmine\n2. Accédez à 'Mon compte' (en haut à droite)\n3. Sur la page de votre compte, vous trouverez votre clé d'API dans la colonne de droite\n4. Si la clé n'est pas visible, cliquez sur 'Afficher' à côté de 'Clé d'accès API'\n5. Copiez cette clé et collez-la ici"
+            "api_key_help_content" to "Pour obtenir votre clé d'API Redmine :\n1. Connectez-vous à votre compte Redmine\n2. Accédez à 'Mon compte' (en haut à droite)\n3. Sur la page de votre compte, vous trouverez votre clé d'API dans la colonne de droite\n4. Si la clé n'est pas visible, cliquez sur 'Afficher' à côté de 'Clé d'accès API'\n5. Copiez cette clé et collez-la ici",
+            "monthly_progress" to "Progression mensuelle :",
+            "working_days" to "Jours ouvrables :",
+            "expected_hours" to "Heures attendues :",
+            "completion_percentage" to "%.1f%% complété",
+            "month_completed" to "Mois complété ✓",
+            "hours_remaining" to "%.1f heures restantes"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -205,7 +211,13 @@ object Strings {
             "day_label" to "Day",
             "version" to "Version",
             "api_key_help" to "How to get your Redmine API key?",
-            "api_key_help_content" to "To get your Redmine API key:\n1. Log in to your Redmine account\n2. Go to 'My account' (top right corner)\n3. On your account page, you'll find your API key in the right column\n4. If the key is not visible, click 'Show' next to 'API access key'\n5. Copy this key and paste it here"
+            "api_key_help_content" to "To get your Redmine API key:\n1. Log in to your Redmine account\n2. Go to 'My account' (top right corner)\n3. On your account page, you'll find your API key in the right column\n4. If the key is not visible, click 'Show' next to 'API access key'\n5. Copy this key and paste it here",
+            "monthly_progress" to "Monthly Progress:",
+            "working_days" to "Working Days:",
+            "expected_hours" to "Expected Hours:",
+            "completion_percentage" to "%.1f%% completed",
+            "month_completed" to "Month Completed ✓",
+            "hours_remaining" to "%.1f hours remaining"
         )
     )
 

@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -29,18 +28,16 @@ import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
-import com.ps.redmine.util.KeyShortcutManager
-import com.ps.redmine.util.format
-import com.ps.redmine.util.today
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.time.YearMonth
 import java.util.*
+import kotlin.time.Clock
 
 /**
  * Checks if an exception is a connection error.
@@ -454,7 +451,7 @@ fun App(redmineClient: RedmineClientInterface) {
                             }
 
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -467,6 +464,79 @@ fun App(redmineClient: RedmineClientInterface) {
                                     style = MaterialTheme.typography.h6,
                                     color = MaterialTheme.colors.primary
                                 )
+                            }
+
+                            // Monthly progress indicator
+                            val workingDays = remember(currentMonth) {
+                                getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
+                            }
+                            val expectedHours = workingDays * 7.5
+                            val completionPercentage = if (expectedHours > 0) {
+                                (totalHours / expectedHours * 100).coerceAtMost(100.0)
+                            } else {
+                                0.0
+                            }
+                            val isCompleted = totalHours >= expectedHours
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = Strings["monthly_progress"],
+                                        style = MaterialTheme.typography.subtitle2
+                                    )
+                                    Text(
+                                        text = if (isCompleted) {
+                                            Strings["month_completed"]
+                                        } else {
+                                            Strings["completion_percentage"].format(completionPercentage)
+                                        },
+                                        style = MaterialTheme.typography.body2,
+                                        color = if (isCompleted) MaterialTheme.colors.secondary else MaterialTheme.colors.onSurface
+                                    )
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = (completionPercentage / 100).toFloat(),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                    color = if (isCompleted) MaterialTheme.colors.secondary else MaterialTheme.colors.primary,
+                                    backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.12f)
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "${Strings["working_days"]} $workingDays",
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "${Strings["expected_hours"]} ${
+                                            Strings["total_hours_format"].format(
+                                                expectedHours
+                                            )
+                                        }",
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+
+                                if (!isCompleted && expectedHours > totalHours) {
+                                    val remainingHours = expectedHours - totalHours
+                                    Text(
+                                        text = Strings["hours_remaining"].format(remainingHours),
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
                             }
                         }
 
@@ -745,14 +815,17 @@ fun TimeEntryDetail(
     }
 
     // Update selections when timeEntry changes or lists are loaded
-    LaunchedEffect(timeEntry) {
-        if (timeEntry != null && (selectedProject == null || timeEntry.id != null)) {
-            if (selectedProject == null) {
-                selectedProject = projects.find { it.id == timeEntry.project.id }
-                selectedIssue = timeEntry.issue
-                hours = timeEntry.hours.toString()
-                comments = timeEntry.comments ?: ""
-            }
+    LaunchedEffect(timeEntry, projects) {
+        if (timeEntry != null && projects.isNotEmpty()) {
+            // Always update all fields when a time entry is selected
+            selectedProject = projects.find { it.id == timeEntry.project.id }
+            selectedIssue = timeEntry.issue
+            // Note: hours and comments are already handled by remember(timeEntry) above
+        } else if (timeEntry == null) {
+            // Clear selections when no time entry is selected
+            selectedProject = null
+            selectedIssue = null
+            selectedActivity = null
         }
     }
 
@@ -760,6 +833,8 @@ fun TimeEntryDetail(
     LaunchedEffect(activities, timeEntry) {
         if (timeEntry != null && activities.isNotEmpty()) {
             selectedActivity = activities.find { it.id == timeEntry.activity.id }
+        } else if (timeEntry == null) {
+            selectedActivity = null
         }
     }
 
@@ -1202,7 +1277,6 @@ fun main() {
             title = Strings["window_title"],
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
             state = rememberWindowState(width = 1100.dp, height = 900.dp),
-            icon = painterResource("/app_icon.ico")
         ) {
             App(redmineClient)
         }

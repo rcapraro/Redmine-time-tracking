@@ -10,17 +10,22 @@ sombre qui peut être activé dans les paramètres.*
 
 ## Fonctionnalités
 
-- Vue d'ensemble mensuelle des temps
-- Ajout et modification des temps
-- Sélection de projet et d'activité
-- Navigation facile entre les mois
-- Création et modification rapide des temps
-- Support SSL (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte
+- **Vue d'ensemble mensuelle des temps** avec navigation intuitive
+- **Suivi de progression mensuelle** avec indicateurs visuels montrant le pourcentage de completion
+- **Calcul des jours ouvrables** et suivi des heures attendues (jours ouvrables × 7,5 heures)
+- **Ajout et modification des temps** avec validation complète
+- **Sélection de projet et d'activité** avec menus déroulants recherchables
+- **Intégration des tickets** - sélection des tickets associés aux projets choisis
+- **Navigation facile entre les mois** avec raccourcis clavier
+- **Création et modification rapide des temps** avec valeurs par défaut intelligentes
+- **Support SSL** (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte
   désactivée)
-- Apparence native
-- Support des thèmes clair et sombre
-- Raccourcis clavier pour une meilleure productivité
-- Support de la langue française
+- **Apparence native** qui s'intègre avec votre système d'exploitation
+- **Support des thèmes clair et sombre** avec intégration système
+- **Raccourcis clavier** pour une productivité améliorée
+- **Support multilingue** (français et anglais) avec système de secours intelligent
+- **Gestion d'erreurs robuste** avec messages d'erreur conviviaux
+- **Validation en temps réel** pour tous les champs de formulaire
 
 ## Support linguistique
 
@@ -49,8 +54,8 @@ Note : L'application gère automatiquement les traductions manquantes en utilisa
 
 ## Prérequis
 
-- Java Development Kit (JDK) 17 ou supérieur
-- Instance serveur Redmine (avec accès API)
+- Java Development Kit (JDK) 21 ou supérieur
+- Instance serveur Redmine (avec accès API activé)
 
 ## Configuration
 
@@ -62,7 +67,7 @@ Cliquez sur l'icône des paramètres dans la barre supérieure pour ouvrir la bo
 pouvez définir :
 
 - URL Redmine
-- Clé d'API Redmine
+- Clé d'API (la clé d'API Redmine)
 - Thème sombre
 
 La configuration est automatiquement sauvegardée et stockée de manière sécurisée via l'API Java Preferences dans les
@@ -79,9 +84,9 @@ Les valeurs de configuration sont stockées sous le nœud `/com/ps/redmine` dans
 Alternativement, vous pouvez utiliser des variables d'environnement (elles ont la priorité sur la configuration
 sauvegardée) :
 
-- `REDMINE_URL`: L'URL de votre serveur Redmine (default: "https://redmine-restreint.packsolutions.local")
+- `REDMINE_URL`: L'URL de votre serveur Redmine
 - `REDMINE_API_KEY`: Votre clé d'API Redmine
-- `REDMINE_DARK_THEME`: Définir à "true" pour activer le thème sombre (default: "false")
+- `REDMINE_DARK_THEME`: Définir à "true" pour activer le thème sombre (défaut: "false")
 
 Note : Les paramètres de langue ne peuvent être modifiés que via le panneau de configuration.
 
@@ -150,19 +155,43 @@ Les installateurs publiés seront disponibles sur la page des versions GitHub.
 
 ## Utilisation
 
-1. Configuration initiale
-    - Option 1: Cliquer sur l'icône des paramètres dans la barre supérieure pour configurer votre connexion Redmine
-    - Option 2: Définir les variables d'environnement comme décrit dans la section Configuration
-2. Lancer l'application
-3. Naviguer vers le mois souhaité en utilisant les boutons de navigation ou les raccourcis clavier
-4. Cliquer sur le bouton "+" pour ajouter une nouvelle saisie de temps
-5. Remplir les informations requises :
-    - Date
-    - Heures
-    - Projet
-    - Activité
-    - Commentaires (optionnel)
-6. Sauvegarder la saisie de temps
+### Configuration initiale
+
+1. **Configurer la connexion Redmine** :
+    - Option 1 : Cliquez sur l'icône des paramètres dans la barre supérieure pour configurer votre connexion Redmine
+    - Option 2 : Définir les variables d'environnement comme décrit dans la section Configuration
+2. **Lancer l'application**
+
+### Gestion des saisies de temps
+
+1. **Naviguer entre les mois** en utilisant les boutons de navigation ou les raccourcis clavier (Alt+← / Alt+→)
+2. **Voir la progression mensuelle** : L'application affiche :
+    - Total des heures saisies pour le mois
+    - Indicateur de progression mensuelle montrant le pourcentage de completion
+    - Calcul des jours ouvrables et heures attendues (jours ouvrables × 7,5)
+    - Heures restantes nécessaires pour compléter le mois
+3. **Ajouter une nouvelle saisie de temps** :
+    - Cliquez sur le bouton "+" ou sélectionnez "Nouvelle saisie"
+    - Remplir les informations requises :
+        - **Date** : Sélectionner la date pour la saisie de temps
+        - **Heures** : Entrer le nombre d'heures travaillées
+        - **Projet** : Choisir parmi les projets disponibles (menu déroulant recherchable)
+        - **Ticket** : Sélectionner un ticket du projet choisi
+        - **Activité** : Sélectionner le type d'activité effectuée
+        - **Commentaires** : Ajouter des commentaires descriptifs (obligatoire)
+4. **Modifier les saisies existantes** : Cliquez sur n'importe quelle saisie de temps dans la liste pour la modifier
+5. **Sauvegarder les modifications** : Utilisez Ctrl/Cmd+S ou cliquez sur le bouton Sauvegarder
+6. **Annuler les modifications** : Appuyez sur Échap ou cliquez sur Annuler
+
+### Suivi de progression mensuelle
+
+L'application calcule et affiche automatiquement :
+
+- **Jours ouvrables** dans le mois actuel (excluant les week-ends)
+- **Heures attendues** (jours ouvrables × 7,5 heures)
+- **Pourcentage de completion** avec indicateur de progression visuel
+- **Statut codé par couleur** : Vert quand le mois est complété
+- **Heures restantes** nécessaires pour atteindre l'objectif mensuel
 
 Note : Vous pouvez mettre à jour vos paramètres de connexion Redmine à tout moment en cliquant sur l'icône des
 paramètres dans la barre supérieure. L'application redémarrera pour appliquer la nouvelle configuration.
@@ -179,13 +208,26 @@ paramètres dans la barre supérieure. L'application redémarrera pour appliquer
 
 Construit avec :
 
-- Kotlin 2.1.10
-- Compose for Desktop 1.7.3
-- Redmine Java API 3.1.3
-- Coroutines Kotlin 1.10.1
-- DateTime Kotlinx 0.6.2
-- Koin 4.0.2 (Dependency Injection)
-- Apache HttpClient 4.5.14
+- **Kotlin** 2.2.0
+- **Compose for Desktop** 1.8.2
+- **Ktor Client** 3.2.0 (client HTTP pour la communication API)
+- **Kotlin Coroutines** 1.10.2
+- **Kotlinx DateTime** 0.6.1
+- **Kotlinx Serialization** 1.9.0
+- **Koin** 4.1.0 (Injection de dépendances)
+- **SLF4J** 2.0.16 + **Logback** 1.5.12 (Journalisation)
+- **JUnit 5** 5.13.2 (Framework de test)
+
+### Architecture
+
+L'application suit les pratiques modernes de développement Kotlin :
+
+- **Interface utilisateur Compose** : Framework d'interface utilisateur déclarative pour applications de bureau
+- **Coroutines** : Programmation asynchrone pour des opérations non-bloquantes
+- **Injection de dépendances** : Architecture propre avec Koin
+- **Client HTTP** : Ktor pour une communication API robuste avec support SSL
+- **Sérialisation** : Kotlinx Serialization pour l'analyse JSON
+- **Date/Heure** : Kotlinx DateTime pour la gestion des dates multi-plateforme
 
 ## Crédits
 
