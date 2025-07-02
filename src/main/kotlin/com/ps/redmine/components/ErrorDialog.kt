@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.ElevationTokens
 
 /**
  * A dialog that displays an error message in a user-friendly way.
@@ -71,7 +72,7 @@ fun ErrorDialog(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colors.surface.copy(alpha = 0.7f),
-                            elevation = 1.dp
+                            elevation = ElevationTokens.Low
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(

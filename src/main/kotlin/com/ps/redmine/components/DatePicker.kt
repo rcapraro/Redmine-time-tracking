@@ -174,7 +174,7 @@ fun DatePicker(
                                                     isToday -> MaterialTheme.colors.primary.copy(alpha = 0.1f)
                                                     else -> MaterialTheme.colors.surface
                                                 },
-                                                elevation = if (isSelected) 4.dp else 0.dp,
+                                                elevation = if (isSelected) ElevationTokens.High else ElevationTokens.None,
                                                 shape = MaterialTheme.shapes.small
                                             ) {
                                                 Box(

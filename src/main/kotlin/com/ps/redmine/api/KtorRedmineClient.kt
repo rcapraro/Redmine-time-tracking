@@ -421,7 +421,7 @@ class KtorRedmineClient(
                 // Convert and return the time entries
                 response.timeEntries.mapNotNull { timeEntry ->
                     try {
-                        timeEntry.toDomainModel()
+                        timeEntry.toDomainModel(issueCache)
                     } catch (e: Exception) {
                         // Log the error but continue processing other time entries
                         // This allows us to return partial results even if some entries fail to convert
@@ -457,8 +457,21 @@ class KtorRedmineClient(
             // Make the API request
             val response = postAndParse<RedmineTimeEntryResponse>("/time_entries.json", requestJson)
 
+            // Ensure the issue is cached if it has a valid ID
+            val timeEntryResponse = response.timeEntry
+            if (timeEntryResponse.issue.id > 0 && !issueCache.containsKey(timeEntryResponse.issue.id)) {
+                try {
+                    val issueEndpoint = "/issues/${timeEntryResponse.issue.id}.json"
+                    val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
+                    val issue = issueResponse.issue
+                    issueCache[issue.id] = Issue(issue.id, issue.subject)
+                } catch (e: Exception) {
+                    issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
+                }
+            }
+
             // Convert and return the time entry
-            response.timeEntry.toDomainModel()
+            timeEntryResponse.toDomainModel(issueCache)
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {
@@ -493,8 +506,21 @@ class KtorRedmineClient(
             // Get the updated time entry
             val getResponse = getAndParse<RedmineTimeEntryResponse>(endpoint)
 
+            // Ensure the issue is cached if it has a valid ID
+            val timeEntryResponse = getResponse.timeEntry
+            if (timeEntryResponse.issue.id > 0 && !issueCache.containsKey(timeEntryResponse.issue.id)) {
+                try {
+                    val issueEndpoint = "/issues/${timeEntryResponse.issue.id}.json"
+                    val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
+                    val issue = issueResponse.issue
+                    issueCache[issue.id] = Issue(issue.id, issue.subject)
+                } catch (e: Exception) {
+                    issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
+                }
+            }
+
             // Convert and return the time entry
-            getResponse.timeEntry.toDomainModel()
+            timeEntryResponse.toDomainModel(issueCache)
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {

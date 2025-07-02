@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.ElevationTokens
 
 /**
  * A searchable dropdown component that limits the number of visible items and provides search functionality.
@@ -67,14 +68,14 @@ fun <T> SearchableDropdown(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)  // Use fixed height instead of intrinsic measurement
+            .heightIn(min = 48.dp)  // Use fixed height instead of intrinsic measurement
     ) {
         OutlinedTextField(
             value = selectedItem?.let { itemText(it) } ?: "",
             onValueChange = {},
             label = label,
             placeholder = placeholder,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             readOnly = readOnly,
             enabled = enabled,
             isError = isError,
@@ -115,8 +116,8 @@ fun <T> SearchableDropdown(
                 onValueChange = { searchText = it },
                 modifier = Modifier
                     .width(380.dp)  // Use fixed width instead of fillMaxWidth
-                    .padding(8.dp)
-                    .heightIn(min = 56.dp)
+                    .padding(6.dp)
+                    .heightIn(min = 48.dp)
                     .focusRequester(focusRequester),
                 placeholder = { Text(Strings["search"]) },
                 singleLine = true,
@@ -152,7 +153,7 @@ fun <T> SearchableDropdown(
                         .width(380.dp)
                         .height(340.dp),
                     color = MaterialTheme.colors.surface,
-                    elevation = 1.dp,
+                    elevation = ElevationTokens.Low,
                     shape = MaterialTheme.shapes.small
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {

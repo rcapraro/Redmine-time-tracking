@@ -78,7 +78,7 @@ data class RedmineProjectsWithActivitiesResponse(
  * Extension functions to convert between API models and domain models
  */
 
-fun RedmineTimeEntry.toDomainModel(): TimeEntry {
+fun RedmineTimeEntry.toDomainModel(issueCache: Map<Int, Issue> = emptyMap()): TimeEntry {
     // Parse the date from "YYYY-MM-DD" format
     val dateParts = spentOn.split("-").map { it.toInt() }
     val date = if (dateParts.size == 3) {
@@ -87,13 +87,20 @@ fun RedmineTimeEntry.toDomainModel(): TimeEntry {
         LocalDate(1970, 1, 1) // Fallback date
     }
 
+    // Use cached issue if available, otherwise fall back to the API response issue
+    val domainIssue = if (issue.id > 0 && issueCache.containsKey(issue.id)) {
+        issueCache[issue.id]!!
+    } else {
+        issue.toDomainModel()
+    }
+
     return TimeEntry(
         id = id,
         date = date,
         hours = hours,
         activity = activity.toDomainModel(),
         project = project.toDomainModel(),
-        issue = issue.toDomainModel(),
+        issue = domainIssue,
         comments = comments
     )
 }

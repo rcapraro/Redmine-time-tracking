@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
+import com.ps.redmine.util.ElevationTokens
 import kotlinx.datetime.LocalDate
 import java.util.*
 
@@ -52,8 +53,8 @@ fun TimeEntriesList(
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
@@ -105,11 +106,11 @@ fun DateHeader(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colors.surface,
-        elevation = 2.dp,
+        elevation = ElevationTokens.Medium,
         shape = MaterialTheme.shapes.small
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             // Date and total hours
             Row(
@@ -206,10 +207,10 @@ fun TimeEntryItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
             .clickable(enabled = !isLoading) { onClick() }
             .alpha(if (isLoading) 0.6f else 1f),
-        elevation = if (isSelected) 4.dp else 1.dp,
+        elevation = if (isSelected) ElevationTokens.High else ElevationTokens.Low,
         color = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.1f) else MaterialTheme.colors.surface,
         shape = MaterialTheme.shapes.small
     ) {
@@ -286,15 +287,6 @@ fun TimeEntryItem(
                         color = MaterialTheme.colors.secondary
                     )
 
-                    // Comments (if any)
-                    if (timeEntry.comments?.isNotEmpty() == true) {
-                        Text(
-                            text = Strings["comment_item_format"].format(timeEntry.comments),
-                            style = MaterialTheme.typography.caption,
-                            maxLines = 1,
-                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
                 }
             }
 

@@ -369,13 +369,16 @@ fun App(redmineClient: RedmineClientInterface) {
             },
         ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(8.dp)
+                modifier = Modifier.fillMaxSize().padding(4.dp)
             ) {
-                // Left panel - Time entries list
-                Box(
-                    modifier = Modifier.weight(1.5f).fillMaxHeight()
+                // Left panel - Time entries list (wrapped in card)
+                Surface(
+                    modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp),
+                    elevation = ElevationTokens.Medium,
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colors.surface
                 ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                         // Month navigation and total hours
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Column(
@@ -479,7 +482,7 @@ fun App(redmineClient: RedmineClientInterface) {
                             val isCompleted = totalHours >= expectedHours
 
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -566,9 +569,12 @@ fun App(redmineClient: RedmineClientInterface) {
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Right panel - Time entry details
-                Box(
-                    modifier = Modifier.weight(1.3f).fillMaxHeight()
+                // Right panel - Time entry details (wrapped in card)
+                Surface(
+                    modifier = Modifier.weight(1.3f).fillMaxHeight().padding(4.dp),
+                    elevation = ElevationTokens.Medium,
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colors.surface
                 ) {
                     // Use key parameter to force recomposition when language changes
                     key(currentLanguage) {
@@ -912,7 +918,7 @@ fun TimeEntryDetail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(12.dp)
             .then(shortcutHandler)
     ) {
         Row(
@@ -932,7 +938,7 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Date picker and Today button
         Row(
@@ -943,7 +949,7 @@ fun TimeEntryDetail(
             DatePicker(
                 selectedDate = date,
                 onDateSelected = { date = it },
-                modifier = Modifier.width(200.dp).heightIn(min = 56.dp),
+                modifier = Modifier.width(200.dp).heightIn(min = 48.dp),
                 locale = locale
             )
 
@@ -955,10 +961,10 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Project dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             SearchableDropdown(
                 items = projects,
                 selectedItem = selectedProject,
@@ -983,10 +989,10 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Hours
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1003,7 +1009,7 @@ fun TimeEntryDetail(
                             }
                         }
                     },
-                    modifier = Modifier.width(200.dp).heightIn(min = 56.dp).then(shortcutHandler),
+                    modifier = Modifier.width(200.dp).heightIn(min = 48.dp).then(shortcutHandler),
                     label = { Text(Strings["hours_label"]) },
                     isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
                     singleLine = true,
@@ -1057,10 +1063,10 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Issue dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             SearchableDropdown(
                 items = issues,
                 selectedItem = selectedIssue,
@@ -1122,10 +1128,10 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Activity dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             SearchableDropdown(
                 items = activities,
                 selectedItem = selectedActivity,
@@ -1149,10 +1155,10 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Comments
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)) {
             OutlinedTextField(
                 value = comments,
                 onValueChange = { newValue: String ->
@@ -1160,9 +1166,9 @@ fun TimeEntryDetail(
                         comments = newValue
                     }
                 },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).then(shortcutHandler),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).then(shortcutHandler),
                 label = { Text(Strings["comments_label"]) },
-                minLines = 3,
+                minLines = 5,
                 enabled = !isLoading && !isGlobalLoading,
                 isError = !isLoading && comments.isEmpty(),
                 trailingIcon = if (comments.isNotEmpty()) {
@@ -1204,7 +1210,7 @@ fun TimeEntryDetail(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
