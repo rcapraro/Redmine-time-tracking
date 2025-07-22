@@ -371,6 +371,16 @@ fun App(redmineClient: RedmineClientInterface) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(4.dp)
             ) {
+                // Weekly progress bars on the far left
+                // Use key parameter to force recomposition when language changes
+                key(currentLanguage) {
+                    WeeklyProgressBars(
+                        timeEntries = timeEntries,
+                        currentMonth = currentMonth,
+                        modifier = Modifier.padding(2.dp)
+                    )
+                }
+
                 // Left panel - Time entries list (wrapped in card)
                 Surface(
                     modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp),

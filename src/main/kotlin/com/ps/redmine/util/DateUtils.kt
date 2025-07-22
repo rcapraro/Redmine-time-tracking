@@ -63,3 +63,76 @@ fun getWorkingDaysInMonth(year: Int, month: Int): Int {
 
     return workingDays
 }
+
+/**
+ * Data class representing a week with its start date, end date, and working days count.
+ */
+data class WeekInfo(
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+    val workingDays: Int
+)
+
+/**
+ * Gets all weeks in a given month with their working days count.
+ * A week starts on Monday and ends on Sunday.
+ */
+fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
+    val firstDay = LocalDate(year, month, 1)
+    val lastDay = if (month == 12) {
+        LocalDate(year + 1, 1, 1).minus(1, DateTimeUnit.DAY)
+    } else {
+        LocalDate(year, month + 1, 1).minus(1, DateTimeUnit.DAY)
+    }
+
+    val weeks = mutableListOf<WeekInfo>()
+    var currentDate = firstDay
+
+    while (currentDate <= lastDay) {
+        // Find the start of the week (Monday)
+        val weekStart = currentDate.minus((currentDate.dayOfWeek.isoDayNumber - 1), DateTimeUnit.DAY)
+
+        // Find the end of the week (Sunday)
+        val weekEnd = weekStart.plus(6, DateTimeUnit.DAY)
+
+        // Calculate working days in this week that fall within the month
+        var workingDays = 0
+        var dayInWeek = weekStart
+
+        while (dayInWeek <= weekEnd) {
+            // Only count days that are within the month and are working days (Monday-Friday)
+            if (dayInWeek >= firstDay && dayInWeek <= lastDay && dayInWeek.dayOfWeek.isoDayNumber in 1..5) {
+                workingDays++
+            }
+            dayInWeek = dayInWeek.plus(1, DateTimeUnit.DAY)
+        }
+
+        // Only add weeks that have at least one day in the current month
+        if (weekEnd >= firstDay && weekStart <= lastDay) {
+            weeks.add(WeekInfo(weekStart, weekEnd, workingDays))
+        }
+
+        // Move to the next week
+        currentDate = weekEnd.plus(1, DateTimeUnit.DAY)
+    }
+
+    return weeks
+}
+
+/**
+ * Calculates the working days in a specific week that fall within a given month.
+ */
+fun getWorkingDaysInWeek(weekStart: LocalDate, weekEnd: LocalDate, monthStart: LocalDate, monthEnd: LocalDate): Int {
+    var workingDays = 0
+    var currentDay = weekStart
+
+    while (currentDay <= weekEnd) {
+        // Only count days that are within the month and are working days (Monday-Friday)
+        if (currentDay >= monthStart && currentDay <= monthEnd && currentDay.dayOfWeek.isoDayNumber in 1..5) {
+            workingDays++
+        }
+        currentDay = currentDay.plus(1, DateTimeUnit.DAY)
+    }
+
+    return workingDays
+}

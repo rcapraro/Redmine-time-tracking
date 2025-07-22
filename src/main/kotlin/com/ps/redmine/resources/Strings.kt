@@ -115,7 +115,8 @@ object Strings {
             "expected_hours" to "Heures attendues :",
             "completion_percentage" to "%.1f%% complété",
             "month_completed" to "Mois complété ✓",
-            "hours_remaining" to "%.1f heures restantes"
+            "hours_remaining" to "%.1f heures restantes",
+            "week_label" to "Sem. %d"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -215,7 +216,8 @@ object Strings {
             "expected_hours" to "Expected Hours:",
             "completion_percentage" to "%.1f%% completed",
             "month_completed" to "Month Completed ✓",
-            "hours_remaining" to "%.1f hours remaining"
+            "hours_remaining" to "%.1f hours remaining",
+            "week_label" to "Week %d"
         )
     )
 
