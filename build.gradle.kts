@@ -141,6 +141,9 @@ compose.desktop {
                 packageVersion = appVersionStr
                 msiPackageVersion = appVersionStr
                 exePackageVersion = appVersionStr
+                menuGroup = "RedmineTime"
+                shortcut = true
+                dirChooser = true
             }
 
             linux {
