@@ -1,5 +1,7 @@
 package com.ps.redmine.resources
 
+import com.ps.redmine.util.OSUtils
+
 enum class Language {
     ENGLISH,
     FRENCH
@@ -43,14 +45,19 @@ object Strings {
             "comments_label" to "Commentaires",
             "comments_required" to "Les commentaires sont obligatoires",
             "select_issue_placeholder" to "Sélectionner un ticket",
-            "add_entry" to "Ajouter (⌘S)",
-            "update_entry" to "Mettre à jour (⌘S)",
+            "add_entry" to "Ajouter (${OSUtils.formatShortcut("S", useModifier = true)})",
+            "update_entry" to "Mettre à jour (${OSUtils.formatShortcut("S", useModifier = true)})",
             "cancel" to "Annuler (Esc)",
             "discard" to "Abandonner",
             "continue_editing" to "Continuer l'édition",
             "discard_changes_title" to "Abandonner les modifications ?",
             "discard_changes_message" to "Vous avez des modifications non sauvegardées. Êtes-vous sûr de vouloir les abandonner ?",
-            "keyboard_shortcuts" to "Raccourcis clavier :\n⌘S - Sauvegarder, Esc - Annuler",
+            "keyboard_shortcuts" to "Raccourcis clavier :\n${
+                OSUtils.formatShortcut(
+                    "S",
+                    useModifier = true
+                )
+            } - Sauvegarder, Esc - Annuler",
             "today" to "Aujourd'hui",
             "today_shortcut" to "Aujourd'hui (Alt+T)",
             "set_to_today" to "Définir à aujourd'hui",
@@ -144,14 +151,19 @@ object Strings {
             "comments_label" to "Comments",
             "comments_required" to "Comments are required",
             "select_issue_placeholder" to "Select an issue",
-            "add_entry" to "Add Entry (⌘S)",
-            "update_entry" to "Update Entry (⌘S)",
+            "add_entry" to "Add Entry (${OSUtils.formatShortcut("S", useModifier = true)})",
+            "update_entry" to "Update Entry (${OSUtils.formatShortcut("S", useModifier = true)})",
             "cancel" to "Cancel (Esc)",
             "discard" to "Discard",
             "continue_editing" to "Continue Editing",
             "discard_changes_title" to "Discard Changes?",
             "discard_changes_message" to "You have unsaved changes. Are you sure you want to discard them?",
-            "keyboard_shortcuts" to "Keyboard shortcuts:\n⌘S - Save, Esc - Cancel",
+            "keyboard_shortcuts" to "Keyboard shortcuts:\n${
+                OSUtils.formatShortcut(
+                    "S",
+                    useModifier = true
+                )
+            } - Save, Esc - Cancel",
             "today" to "Today",
             "today_shortcut" to "Today (Alt+T)",
             "set_to_today" to "Set to Today",

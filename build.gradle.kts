@@ -27,6 +27,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material)
     implementation(compose.materialIconsExtended)
+    implementation(compose.components.resources)
 
     // Ktor client dependencies
     implementation(libs.ktor.client.core)
@@ -114,9 +115,9 @@ compose.desktop {
         mainClass = "com.ps.redmine.MainKt"
 
         jvmArgs += listOf(
-            // Performance optimizations
             "-XX:+UseG1GC",
-            "-XX:+UseStringDeduplication"
+            "-XX:+UseStringDeduplication",
+            "-Djava.awt.headless=false"
         )
 
         // Disable ProGuard to avoid Java version compatibility issues
@@ -144,6 +145,8 @@ compose.desktop {
                 menuGroup = "RedmineTime"
                 shortcut = true
                 dirChooser = true
+                console = false
+                upgradeUuid = "61DAB35E-17CB-43B0-81D5-B30E1C0BABE7"
             }
 
             linux {

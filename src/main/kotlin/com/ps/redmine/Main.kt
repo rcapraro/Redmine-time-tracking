@@ -30,9 +30,12 @@ import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
+import com.ps.redmine_time.generated.resources.Res
+import com.ps.redmine_time.generated.resources.app_icon
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.time.YearMonth
@@ -1291,6 +1294,7 @@ fun main() {
                 exitApplication()
             },
             title = Strings["window_title"],
+            icon = painterResource(Res.drawable.app_icon),
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
             state = rememberWindowState(width = 1100.dp, height = 900.dp),
         ) {

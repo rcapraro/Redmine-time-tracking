@@ -80,7 +80,7 @@ fun WeeklyProgressBars(
     }
 
     Column(
-        modifier = modifier.width(40.dp).fillMaxHeight(),
+        modifier = modifier.width(44.dp).fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         weeklyProgress.forEach { progress ->
