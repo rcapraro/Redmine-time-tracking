@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.ps.redmine.api.KtorRedmineClient
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
@@ -28,6 +29,7 @@ import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.update.UpdateManager
 import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
@@ -53,10 +55,7 @@ fun isConnectionError(e: Exception): Boolean {
             e is java.net.SocketTimeoutException ||
             e is java.net.UnknownHostException ||
             e is java.io.IOException ||
-            e.cause is java.net.ConnectException ||
-            e.cause is java.net.SocketTimeoutException ||
-            e.cause is java.net.UnknownHostException ||
-            e.cause is java.io.IOException
+            e is KtorRedmineClient.RedmineApiException && e.statusCode != 422
 }
 
 /**
@@ -73,43 +72,17 @@ fun handleException(
     errorDialogDetails: (String) -> Unit,
     showErrorDialog: (Boolean) -> Unit
 ) {
-    e.printStackTrace()
-
     // Check if it's a connection error
     val isConnectionError = isConnectionError(e)
 
     // Check if it's a Redmine API error with status 422 (Unprocessable Entity)
-    val isValidationError = e is com.ps.redmine.api.KtorRedmineClient.RedmineApiException &&
+    val isValidationError = e is KtorRedmineClient.RedmineApiException &&
             e.statusCode == 422
-
-    // For RedmineApiException, get additional details
-    if (e is com.ps.redmine.api.KtorRedmineClient.RedmineApiException) {
-        // Try to parse the error response for more details
-        if (e.statusCode == 422) {
-            val errorBody = e.responseBody
-
-            // Check for specific error patterns
-            val containsActivityError = errorBody.contains("Activité")
-            val containsProjectError = errorBody.contains("Projet")
-            val containsIssueError = errorBody.contains("Demande")
-        }
-    }
 
     // Set appropriate error message
     val userMessage = when {
         isConnectionError -> Strings["error_api_unreachable"]
-        isValidationError -> {
-            // For validation errors, provide a more specific message
-            val errorMsg = e.message ?: ""
-            if (errorMsg.contains("Activité") || errorMsg.contains("Projet") || errorMsg.contains("Demande")) {
-                // This is the specific error we're trying to fix
-                "Please ensure all required fields (Activity, Project, and Issue) are correctly selected."
-            } else {
-                // Other validation errors
-                "The time entry could not be saved due to validation errors: ${e.message}"
-            }
-        }
-
+        isValidationError -> e.message!!
         else -> Strings["error_dialog_message"]
     }
 
@@ -125,6 +98,8 @@ fun handleException(
 
 @Composable
 fun App(redmineClient: RedmineClientInterface) {
+    val updateManager: UpdateManager = koinInject()
+
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
     var timeEntries by remember { mutableStateOf<List<TimeEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) } // For data loading
@@ -138,6 +113,9 @@ fun App(redmineClient: RedmineClientInterface) {
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorDialogMessage by remember { mutableStateOf("") }
     var errorDialogDetails by remember { mutableStateOf<String?>(null) }
+
+    // Update state
+    val updateState by updateManager.updateState.collectAsState()
 
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
@@ -158,6 +136,19 @@ fun App(redmineClient: RedmineClientInterface) {
         Strings.updateLanguage(currentLanguage)
         // Update locale
         Locale.setDefault(currentLocale)
+    }
+
+    // Start update checks when app launches
+    LaunchedEffect(Unit) {
+        updateManager.startPeriodicUpdateChecks()
+        updateManager.checkForUpdates()
+    }
+
+    // Cleanup update manager when app is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            updateManager.cleanup()
+        }
     }
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -352,6 +343,24 @@ fun App(redmineClient: RedmineClientInterface) {
                 }
             )
         }
+
+        // Update dialog
+        if (updateState.showUpdateDialog) {
+            UpdateDialog(
+                updateInfo = updateState.availableUpdate,
+                isDownloading = updateState.isDownloading,
+                onDownloadUpdate = {
+                    updateManager.downloadAndInstallUpdate()
+                },
+                onDismiss = {
+                    updateManager.skipUpdate()
+                },
+                onRemindLater = {
+                    updateManager.remindLater()
+                }
+            )
+        }
+
         Scaffold(
             scaffoldState = scaffoldState,
             topBar = {
@@ -360,6 +369,17 @@ fun App(redmineClient: RedmineClientInterface) {
                     TopAppBar(
                         title = { Text(Strings["window_title"]) },
                         actions = {
+                            // Update indicator
+                            UpdateIndicator(
+                                hasUpdate = updateState.availableUpdate != null,
+                                onClick = {
+                                    if (updateState.availableUpdate != null) {
+                                        // Show update dialog directly
+                                        updateManager.showUpdateDialog()
+                                    }
+                                }
+                            )
+
                             IconButton(onClick = { showConfigDialog = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Settings,
@@ -417,7 +437,12 @@ fun App(redmineClient: RedmineClientInterface) {
                                         }
                                     }
                                     Text(
-                                        text = currentMonth.format(currentLocale),
+                                        text = "${
+                                            currentMonth.month.getDisplayName(
+                                                java.time.format.TextStyle.FULL,
+                                                currentLocale
+                                            )
+                                        } ${currentMonth.year}",
                                         style = MaterialTheme.typography.h6
                                     )
                                     IconButton(
@@ -797,8 +822,8 @@ fun TimeEntryDetail(
     LaunchedEffect(redmineClient, configVersion) {
         isLoading = true
         try {
-            // Get projects in a single call
-            projects = redmineClient.getProjectsWithActivities()
+            // Get projects that have open issues only
+            projects = redmineClient.getProjectsWithOpenIssues()
             // Activities will be loaded when a project is selected
         } catch (e: Exception) {
             println("Error loading data: ${e.message}")

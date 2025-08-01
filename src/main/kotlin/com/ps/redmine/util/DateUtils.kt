@@ -119,20 +119,3 @@ fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
     return weeks
 }
 
-/**
- * Calculates the working days in a specific week that fall within a given month.
- */
-fun getWorkingDaysInWeek(weekStart: LocalDate, weekEnd: LocalDate, monthStart: LocalDate, monthEnd: LocalDate): Int {
-    var workingDays = 0
-    var currentDay = weekStart
-
-    while (currentDay <= weekEnd) {
-        // Only count days that are within the month and are working days (Monday-Friday)
-        if (currentDay >= monthStart && currentDay <= monthEnd && currentDay.dayOfWeek.isoDayNumber in 1..5) {
-            workingDays++
-        }
-        currentDay = currentDay.plus(1, DateTimeUnit.DAY)
-    }
-
-    return workingDays
-}

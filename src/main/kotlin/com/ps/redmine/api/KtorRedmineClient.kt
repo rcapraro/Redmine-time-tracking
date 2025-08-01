@@ -73,20 +73,8 @@ class KtorRedmineClient(
         return when (errorType) {
             ErrorType.CONFIGURATION_ERROR -> "Configuration error: Please check your Redmine URL and API key."
             ErrorType.CONNECTION_ERROR -> "Connection error: Unable to connect to Redmine server."
-            ErrorType.VALIDATION_ERROR -> {
-                // Try to extract specific validation errors from the response body
-                if (responseBody.contains("Activité") || responseBody.contains("Activity")) {
-                    "Validation error: Activity is required or invalid."
-                } else if (responseBody.contains("Projet") || responseBody.contains("Project")) {
-                    "Validation error: Project is required or invalid."
-                } else if (responseBody.contains("Demande") || responseBody.contains("Issue")) {
-                    "Validation error: Issue is required or invalid."
-                } else if (responseBody.contains("Heures") || responseBody.contains("Hours")) {
-                    "Validation error: Hours value is invalid."
-                } else {
-                    "Validation error: The time entry could not be saved due to validation errors."
-                }
-            }
+            ErrorType.VALIDATION_ERROR ->
+                "Validation error: The time entry could not be saved due to validation errors: $responseBody"
 
             ErrorType.SERVER_ERROR -> "Server error: The Redmine server encountered an error. Please try again later."
             ErrorType.NOT_FOUND_ERROR -> "Not found error: The requested resource was not found."
@@ -122,6 +110,9 @@ class KtorRedmineClient(
     // Cache for activities by project
     private val projectActivitiesCache = mutableMapOf<Int, MutableMap<Int, Activity>>()
 
+    // Cache for issues by project
+    private val projectIssuesCache = mutableMapOf<Int, List<Issue>>()
+
     private val issueCache = mutableMapOf<Int, Issue>()
     private var httpClient: HttpClient? = null
 
@@ -145,13 +136,10 @@ class KtorRedmineClient(
         httpClient = HttpClient(CIO) {
             // Configure timeout
             install(HttpTimeout) {
-                requestTimeoutMillis = 10000 // 10 seconds
-                connectTimeoutMillis = 10000 // 10 seconds
-                socketTimeoutMillis = 10000 // 10 seconds
+                requestTimeoutMillis = 30000
+                connectTimeoutMillis = 10000
+                socketTimeoutMillis = 10000
             }
-
-            // We'll handle serialization manually for now
-            // TODO: Configure content negotiation with JSON serialization when dependencies are fixed
 
             // Configure default request
             defaultRequest {
@@ -187,6 +175,7 @@ class KtorRedmineClient(
         cachedProjects = null
         projectCache.clear()
         projectActivitiesCache.clear()
+        projectIssuesCache.clear()
         issueCache.clear()
 
         // Recreate the HTTP client
@@ -201,7 +190,7 @@ class KtorRedmineClient(
         val statusCode: Int,
         val responseBody: String,
         message: String = "Redmine API error: $statusCode - $responseBody"
-    ) : IOException(message)
+    ) : Exception(message)
 
     /**
      * Helper method to make a GET request to the Redmine API
@@ -412,7 +401,7 @@ class KtorRedmineClient(
                             } else {
                                 issueCache[issueId] = Issue(issueId, "Unknown Issue")
                             }
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             issueCache[issueId] = Issue(issueId, "Unknown Issue")
                         }
                     }
@@ -465,7 +454,7 @@ class KtorRedmineClient(
                     val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
                     val issue = issueResponse.issue
                     issueCache[issue.id] = Issue(issue.id, issue.subject)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
                 }
             }
@@ -639,18 +628,44 @@ class KtorRedmineClient(
         }
     }
 
-    override suspend fun getIssues(projectId: Int): List<Issue> = withContext(Dispatchers.IO) {
+    override suspend fun getProjectsWithOpenIssues(): List<Project> = withContext(Dispatchers.IO) {
         try {
-            // Create endpoint with query parameters
-            val endpoint = "/issues.json?project_id=$projectId&status_id=open&limit=100&sort=updated_on:desc"
+            // First, get all projects with activities
+            val allProjects = getProjectsWithActivities()
 
-            // Make the API request
-            val response = getAndParse<RedmineIssuesResponse>(endpoint)
+            // Load issues for all projects upfront and cache them
+            for (project in allProjects) {
+                try {
+                    // Only load issues if not already cached
+                    if (!projectIssuesCache.containsKey(project.id)) {
+                        // Create endpoint with query parameters
+                        val endpoint =
+                            "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
 
-            // Convert and return the issues
-            response.issues
-                .filter { it.id > 0 && it.subject.isNotEmpty() }
-                .map { Issue(it.id, it.subject) }
+                        // Make the API request
+                        val response = getAndParse<RedmineIssuesResponse>(endpoint)
+
+                        // Convert the issues
+                        val issues = response.issues
+                            .filter { it.id > 0 && it.subject.isNotEmpty() }
+                            .map { Issue(it.id, it.subject) }
+
+                        // Cache the issues for this project
+                        projectIssuesCache[project.id] = issues
+                    }
+                } catch (_: Exception) {
+                    // If we can't get issues for a project, cache an empty list
+                    // This handles cases where the user might not have permission to view issues
+                    projectIssuesCache[project.id] = emptyList()
+                }
+            }
+
+            // Filter projects that have open issues (now all issues are cached)
+            val projectsWithOpenIssues = allProjects.filter { project ->
+                projectIssuesCache[project.id]?.isNotEmpty() == true
+            }
+
+            projectsWithOpenIssues
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {
@@ -661,8 +676,14 @@ class KtorRedmineClient(
             throw RedmineApiException(
                 statusCode = 0,
                 responseBody = e.message ?: "",
-                message = "Error fetching issues for project (ID: $projectId): ${e.message}"
+                message = "Error fetching projects with open issues: ${e.message}"
             )
         }
+    }
+
+    override suspend fun getIssues(projectId: Int): List<Issue> = withContext(Dispatchers.IO) {
+        // Return cached issues for this project
+        // Issues should already be cached by getProjectsWithOpenIssues()
+        projectIssuesCache[projectId] ?: emptyList()
     }
 }

@@ -58,6 +58,12 @@ interface RedmineClientInterface : Closeable {
     suspend fun getProjectsWithActivities(): List<Project>
 
     /**
+     * Gets projects that have open issues, with their activities.
+     * This method filters out projects that don't have any open tickets.
+     */
+    suspend fun getProjectsWithOpenIssues(): List<Project>
+
+    /**
      * Gets issues for a specific project.
      */
     suspend fun getIssues(projectId: Int): List<Issue>

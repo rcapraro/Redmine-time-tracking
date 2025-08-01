@@ -2,6 +2,8 @@ package com.ps.redmine.di
 
 import com.ps.redmine.api.KtorRedmineClient
 import com.ps.redmine.api.RedmineClientInterface
+import com.ps.redmine.update.UpdateManager
+import com.ps.redmine.update.UpdateService
 import org.koin.dsl.module
 
 val appModule = module {
@@ -12,4 +14,8 @@ val appModule = module {
             apiKey = getProperty("redmine.apiKey")
         )
     }
+
+    // Register update-related services
+    single { UpdateService() }
+    single { UpdateManager(get()) }
 }

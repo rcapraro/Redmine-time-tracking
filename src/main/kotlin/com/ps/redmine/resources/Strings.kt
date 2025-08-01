@@ -123,7 +123,15 @@ object Strings {
             "completion_percentage" to "%.1f%% complété",
             "month_completed" to "Mois complété ✓",
             "hours_remaining" to "%.1f heures restantes",
-            "week_label" to "Sem. %d"
+            "week_label" to "Sem. %d",
+            "update_available_title" to "Mise à jour disponible",
+            "update_version_format" to "Version %s",
+            "update_release_notes" to "Notes de version",
+            "update_downloading" to "Téléchargement en cours...",
+            "update_download_install" to "Télécharger et installer",
+            "update_remind_later" to "Rappeler plus tard",
+            "update_skip" to "Ignorer",
+            "update_no_download_available" to "Aucun téléchargement disponible pour votre plateforme"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -229,7 +237,15 @@ object Strings {
             "completion_percentage" to "%.1f%% completed",
             "month_completed" to "Month Completed ✓",
             "hours_remaining" to "%.1f hours remaining",
-            "week_label" to "Week %d"
+            "week_label" to "Week %d",
+            "update_available_title" to "Update Available",
+            "update_version_format" to "Version %s",
+            "update_release_notes" to "Release Notes",
+            "update_downloading" to "Downloading...",
+            "update_download_install" to "Download & Install",
+            "update_remind_later" to "Remind Later",
+            "update_skip" to "Skip",
+            "update_no_download_available" to "No download available for your platform"
         )
     )
 
