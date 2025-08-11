@@ -17,6 +17,12 @@ interface RedmineClientInterface : Closeable {
     fun updateConfiguration(newUri: String, newApiKey: String)
 
     /**
+     * Gets the user's theoretical weekly working hours from Redmine (custom field id 27).
+     * Returns null if not available.
+     */
+    suspend fun getUserWeeklyHours(): Float?
+
+    /**
      * Gets time entries for a specific month.
      */
     suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry>

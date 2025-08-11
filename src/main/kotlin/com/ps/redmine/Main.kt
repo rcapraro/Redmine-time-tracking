@@ -144,6 +144,18 @@ fun App(redmineClient: RedmineClientInterface) {
         updateManager.checkForUpdates()
     }
 
+    // Weekly hours for current user (from Redmine custom field id 27)
+    var weeklyHours by remember { mutableStateOf(37.5f) }
+    LaunchedEffect(redmineClient) {
+        try {
+            redmineClient.getUserWeeklyHours()?.let { weekly ->
+                if (weekly > 0f) weeklyHours = weekly
+            }
+        } catch (_: Exception) {
+            // Keep default 37.5 if API call fails
+        }
+    }
+
     // Cleanup update manager when app is disposed
     DisposableEffect(Unit) {
         onDispose {
@@ -400,6 +412,7 @@ fun App(redmineClient: RedmineClientInterface) {
                     WeeklyProgressBars(
                         timeEntries = timeEntries,
                         currentMonth = currentMonth,
+                        weeklyHours = weeklyHours,
                         modifier = Modifier.padding(2.dp)
                     )
                 }
@@ -511,7 +524,7 @@ fun App(redmineClient: RedmineClientInterface) {
                             val workingDays = remember(currentMonth) {
                                 getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
                             }
-                            val expectedHours = workingDays * 7.5
+                            val expectedHours = (workingDays / 5.0) * weeklyHours
                             val completionPercentage = if (expectedHours > 0) {
                                 (totalHours / expectedHours * 100).coerceAtMost(100.0)
                             } else {

@@ -10,7 +10,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class RedmineTimeEntriesResponse(
-    @SerialName("time_entries") val timeEntries: List<RedmineTimeEntry> = emptyList()
+    @SerialName("time_entries") val timeEntries: List<RedmineTimeEntry> = emptyList(),
+    @SerialName("total_count") val totalCount: Int = 0,
+    val offset: Int = 0,
+    val limit: Int = 25
 )
 
 @Serializable
@@ -159,3 +162,30 @@ fun TimeEntry.toApiRequest(): RedmineTimeEntryRequest {
 fun Activity.toApiModel(): RedmineActivity = RedmineActivity(id, name)
 fun Project.toApiModel(): RedmineProject = RedmineProject(id, name)
 fun Issue.toApiModel(): RedmineIssue = RedmineIssue(id, subject)
+
+
+@Serializable
+data class RedmineAccountResponse(
+    val user: RedmineUser
+)
+
+@Serializable
+data class RedmineUser(
+    val id: Int = -1,
+    val login: String = "",
+    val admin: Boolean = false,
+    val firstname: String = "",
+    val lastname: String = "",
+    val mail: String = "",
+    @SerialName("created_on") val createdOn: String? = null,
+    @SerialName("last_login_on") val lastLoginOn: String? = null,
+    @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("custom_fields") val customFields: List<RedmineCustomField> = emptyList()
+)
+
+@Serializable
+data class RedmineCustomField(
+    val id: Int,
+    val name: String = "",
+    val value: String? = null
+)

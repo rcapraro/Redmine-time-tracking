@@ -7,8 +7,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -32,6 +31,8 @@ class KtorRedmineClient(
     private var uri: String,
     private var apiKey: String
 ) : RedmineClientInterface {
+
+    private var cachedWeeklyHours: Float? = null
 
     companion object {
         private val json = Json {
@@ -177,6 +178,7 @@ class KtorRedmineClient(
         projectActivitiesCache.clear()
         projectIssuesCache.clear()
         issueCache.clear()
+        cachedWeeklyHours = null
 
         // Recreate the HTTP client
         close()
@@ -191,6 +193,23 @@ class KtorRedmineClient(
         val responseBody: String,
         message: String = "Redmine API error: $statusCode - $responseBody"
     ) : Exception(message)
+
+    override suspend fun getUserWeeklyHours(): Float? {
+        // Return cached value if available
+        cachedWeeklyHours?.let { return it }
+        return try {
+            val account = getAndParse<RedmineAccountResponse>("/my/account.json")
+            val value = account.user.customFields.firstOrNull { it.id == 27 }?.value
+            val weekly = value?.toFloatOrNull()
+            if (weekly != null && weekly > 0f) {
+                cachedWeeklyHours = weekly
+            }
+            weekly
+        } catch (e: Exception) {
+            // Don't propagate failure for this optional information; just return null
+            null
+        }
+    }
 
     /**
      * Helper method to make a GET request to the Redmine API
@@ -367,24 +386,68 @@ class KtorRedmineClient(
         }
     }
 
+    /**
+     * Fetches all time entries for a date range using pagination.
+     * Uses parallel coroutines to fetch multiple pages simultaneously for better performance.
+     */
+    private suspend fun fetchAllTimeEntriesWithPagination(
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): List<RedmineTimeEntry> {
+        val limit = 100 // Use a reasonable page size
+
+        // First, fetch the first page to get the total count
+        val firstPageEndpoint = "/time_entries.json?from=${startDate}&to=${endDate}&user_id=me&limit=${limit}&offset=0"
+        val firstPageResponse = getAndParse<RedmineTimeEntriesResponse>(firstPageEndpoint)
+
+        val allTimeEntries = mutableListOf<RedmineTimeEntry>()
+        allTimeEntries.addAll(firstPageResponse.timeEntries)
+
+        // If there are more pages, fetch them in parallel
+        val totalCount = firstPageResponse.totalCount
+        if (totalCount > limit) {
+            val remainingPages = mutableListOf<Int>()
+            var offset = limit
+            while (offset < totalCount) {
+                remainingPages.add(offset)
+                offset += limit
+            }
+
+            // Fetch remaining pages in parallel using coroutines
+            val remainingResponses = coroutineScope {
+                remainingPages.map { pageOffset ->
+                    async {
+                        val endpoint =
+                            "/time_entries.json?from=${startDate}&to=${endDate}&user_id=me&limit=${limit}&offset=${pageOffset}"
+                        getAndParse<RedmineTimeEntriesResponse>(endpoint)
+                    }
+                }.awaitAll()
+            }
+
+            // Add all entries from remaining pages
+            remainingResponses.forEach { response ->
+                allTimeEntries.addAll(response.timeEntries)
+            }
+        }
+
+        return allTimeEntries
+    }
+
     override suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> =
         withContext(Dispatchers.IO) {
             // Calculate date range for the month
             val startDate = LocalDate(year, month, 1)
             val endDate = startDate.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
 
-            // Create endpoint with query parameters
-            val endpoint = "/time_entries.json?from=${startDate}&to=${endDate}&user_id=me"
-
             try {
-                // Make the API request and parse the response
-                val response = getAndParse<RedmineTimeEntriesResponse>(endpoint)
+                // Fetch all pages of time entries using pagination
+                val allTimeEntries = fetchAllTimeEntriesWithPagination(startDate, endDate)
 
                 // Pre-load activities and projects
                 getProjectsWithActivities()
 
-                // Collect unique issue IDs
-                val uniqueIssueIds = response.timeEntries
+                // Collect unique issue IDs from all entries
+                val uniqueIssueIds = allTimeEntries
                     .mapNotNull { it.issue.id.takeIf { id -> id > 0 } }
                     .distinct()
 
@@ -408,7 +471,7 @@ class KtorRedmineClient(
                 }
 
                 // Convert and return the time entries
-                response.timeEntries.mapNotNull { timeEntry ->
+                allTimeEntries.mapNotNull { timeEntry ->
                     try {
                         timeEntry.toDomainModel(issueCache)
                     } catch (e: Exception) {
