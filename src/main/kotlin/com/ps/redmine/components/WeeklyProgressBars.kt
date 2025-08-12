@@ -33,7 +33,8 @@ data class WeeklyProgress(
     val weekInfo: WeekInfo,
     val actualHours: Float,
     val expectedHours: Float,
-    val progressPercentage: Float
+    val progressPercentage: Float,
+    val isNonWorkedWeek: Boolean
 )
 
 /**
@@ -66,7 +67,9 @@ fun calculateWeeklyProgress(
 
         var effectiveWorkingDaysInWeek = 0
         var dateCursor = rangeStart
+        var clampedDaysCount = 0
         while (!dateCursor.isAfter(rangeEnd)) {
+            clampedDaysCount++
             val iso = dateCursor.dayOfWeek.value // 1=Mon..7=Sun
             if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) {
                 effectiveWorkingDaysInWeek++
@@ -75,18 +78,22 @@ fun calculateWeeklyProgress(
         }
         val expectedHours = effectiveWorkingDaysInWeek * 7.5f
 
+        // Determine if this is a non-worked week within the current month (only non-working days fall inside the month)
+        val isNonWorkedWeek = clampedDaysCount > 0 && effectiveWorkingDaysInWeek == 0
+
         // Calculate progress percentage
         val progressPercentage = if (expectedHours > 0) {
             (actualHours / expectedHours * 100).coerceAtMost(100f)
         } else {
-            0f
+            if (isNonWorkedWeek) 100f else 0f
         }
 
         WeeklyProgress(
             weekInfo = weekInfo,
             actualHours = actualHours,
             expectedHours = expectedHours,
-            progressPercentage = progressPercentage
+            progressPercentage = progressPercentage,
+            isNonWorkedWeek = isNonWorkedWeek
         )
     }
 }
@@ -139,6 +146,7 @@ private fun WeekProgressBar(
     val backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.12f)
     val isCompleted = progress.actualHours >= progress.expectedHours
     val currentWeekStrokeColor = MaterialTheme.colors.onSurface.copy(alpha = 0.35f)
+    val nonWorkedMarkerColor = MaterialTheme.colors.onSurface.copy(alpha = 0.45f)
 
     // Calculate the real ISO week number from the week's start date
     val isoWeekNumber = progress.weekInfo.startDate.toJava().get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
@@ -197,12 +205,29 @@ private fun WeekProgressBar(
                     size = Size(barWidth, progressHeight),
                     cornerRadius = cornerRadius
                 )
+
+                // Special marker for non-worked week: draw a subtle cross overlay
+                if (progress.isNonWorkedWeek) {
+                    val stroke = 1.5f
+                    drawLine(
+                        color = nonWorkedMarkerColor,
+                        start = Offset(0f, 0f),
+                        end = Offset(barWidth, barHeight),
+                        strokeWidth = stroke
+                    )
+                    drawLine(
+                        color = nonWorkedMarkerColor,
+                        start = Offset(barWidth, 0f),
+                        end = Offset(0f, barHeight),
+                        strokeWidth = stroke
+                    )
+                }
             }
         }
 
         // Progress percentage text
         Text(
-            text = "${progress.progressPercentage.toInt()}%",
+            text = "${progress.progressPercentage.toInt()}%" + if (progress.isNonWorkedWeek) "•" else "",
             fontSize = 9.sp, // Increased font size for better readability
             color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
             textAlign = TextAlign.Center,

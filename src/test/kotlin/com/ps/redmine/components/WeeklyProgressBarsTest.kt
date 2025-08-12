@@ -399,4 +399,22 @@ class WeeklyProgressBarsTest {
         val expectedMonthPct = if (totalExpectedDays > 0) (totalActualHours / (totalExpectedDays * 7.5f)) * 100f else 0f
         assertEquals(expectedMonthPct, monthPercentage(progress), 0.0001f)
     }
+
+    @Test
+    fun `non-worked week within month should be marked 100 percent with marker`() {
+        // February 2025 starts on Saturday, so the first overlapping week inside the month contains only Sat-Sun
+        val ym = YearMonth.of(2025, 2)
+        val progress = calculateWeeklyProgress(emptyList(), ym, excludedIsoDays = emptySet())
+
+        // Find weeks with zero expected hours (i.e., no working days within month) — should be treated as 100% non-worked
+        val zeroExpectedWeeks = progress.filter { it.expectedHours == 0f }
+        assertTrue(
+            zeroExpectedWeeks.isNotEmpty(),
+            "There should be at least one week with zero expected hours in Feb 2025"
+        )
+        zeroExpectedWeeks.forEach { wp ->
+            assertTrue(wp.isNonWorkedWeek, "Week with zero expected hours should be flagged as non-worked")
+            assertEquals(100f, wp.progressPercentage, 0.0001f)
+        }
+    }
 }
