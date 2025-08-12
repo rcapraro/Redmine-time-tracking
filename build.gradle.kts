@@ -52,6 +52,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.junit)
+    testImplementation(libs.ktor.client.mock)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

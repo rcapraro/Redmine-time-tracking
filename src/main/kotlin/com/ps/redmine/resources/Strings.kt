@@ -127,11 +127,21 @@ object Strings {
             "update_available_title" to "Mise à jour disponible",
             "update_version_format" to "Version %s",
             "update_release_notes" to "Notes de version",
-            "update_downloading" to "Téléchargement en cours...",
-            "update_download_install" to "Télécharger et installer",
+            "update_open_release_page" to "Ouvrir la page de téléchargement",
+            "update_download_for_os" to "Télécharger pour cet OS",
             "update_remind_later" to "Rappeler plus tard",
             "update_skip" to "Ignorer",
-            "update_no_download_available" to "Aucun téléchargement disponible pour votre plateforme"
+            "update_no_download_available" to "Aucun téléchargement disponible pour votre plateforme",
+            "weekly_hours_label" to "Heures de travail par semaine",
+            "non_working_day_label" to "Jour non travaillé",
+            "non_working_days_label" to "Jours non travaillés",
+            "working_weekly_hours" to "Heures de travail hebdomadaires: %.1f",
+            "monday" to "Lundi",
+            "tuesday" to "Mardi",
+            "wednesday" to "Mercredi",
+            "thursday" to "Jeudi",
+            "friday" to "Vendredi",
+            "weekly_hours_range_error" to "Les heures hebdomadaires doivent être entre 7,5 et 39"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -241,11 +251,19 @@ object Strings {
             "update_available_title" to "Update Available",
             "update_version_format" to "Version %s",
             "update_release_notes" to "Release Notes",
-            "update_downloading" to "Downloading...",
-            "update_download_install" to "Download & Install",
+            "update_open_release_page" to "Open download page",
+            "update_download_for_os" to "Download for this OS",
             "update_remind_later" to "Remind Later",
             "update_skip" to "Skip",
-            "update_no_download_available" to "No download available for your platform"
+            "update_no_download_available" to "No download available for your platform",
+            "weekly_hours_label" to "Working hours per week",
+            "non_working_day_label" to "Non-working day",
+            "non_working_days_label" to "Non-working days",
+            "working_weekly_hours" to "Weekly working hours: %.1f",
+            "monday" to "Monday",
+            "tuesday" to "Tuesday",
+            "wednesday" to "Wednesday",
+            "weekly_hours_range_error" to "Weekly hours must be between 7.5 and 39"
         )
     )
 

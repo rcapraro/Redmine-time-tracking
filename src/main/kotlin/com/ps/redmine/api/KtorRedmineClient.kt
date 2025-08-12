@@ -29,7 +29,8 @@ import com.ps.redmine.model.TimeEntry as AppTimeEntry
  */
 class KtorRedmineClient(
     private var uri: String,
-    private var apiKey: String
+    private var apiKey: String,
+    private val httpClientOverride: HttpClient? = null
 ) : RedmineClientInterface {
 
     private var cachedWeeklyHours: Float? = null
@@ -104,6 +105,37 @@ class KtorRedmineClient(
         )
     }
 
+    private suspend fun mapAndThrow(e: Exception, defaultMessage: String): Nothing {
+        when (e) {
+            is RedmineApiException -> throw e
+            is ConnectException,
+            is SocketTimeoutException,
+            is UnknownHostException -> throw createConnectionException(e)
+
+            is HttpRequestTimeoutException -> throw RedmineApiException(
+                statusCode = 0,
+                responseBody = e.message ?: "",
+                message = "Request timeout: Unable to connect to Redmine server."
+            )
+
+            is ResponseException -> {
+                val status = e.response.status.value
+                val body = try {
+                    e.response.bodyAsText()
+                } catch (_: Exception) {
+                    e.message ?: ""
+                }
+                throw createApiException(statusCode = status, responseBody = body)
+            }
+
+            else -> throw RedmineApiException(
+                statusCode = 0,
+                responseBody = e.message ?: "",
+                message = "$defaultMessage: ${e.message}"
+            )
+        }
+    }
+
     // Cache for projects
     private var cachedProjects: Map<Int, Project>? = null
     private val projectCache = mutableMapOf<Int, Project>()
@@ -118,7 +150,11 @@ class KtorRedmineClient(
     private var httpClient: HttpClient? = null
 
     init {
-        createHttpClient()
+        if (httpClientOverride != null) {
+            httpClient = httpClientOverride
+        } else {
+            createHttpClient()
+        }
     }
 
     private fun createHttpClient() {
@@ -180,9 +216,11 @@ class KtorRedmineClient(
         issueCache.clear()
         cachedWeeklyHours = null
 
-        // Recreate the HTTP client
-        close()
-        createHttpClient()
+        // Recreate the HTTP client only when not using an injected client (tests)
+        if (httpClientOverride == null) {
+            close()
+            createHttpClient()
+        }
     }
 
     /**
@@ -230,26 +268,7 @@ class KtorRedmineClient(
             val responseText = response.bodyAsText()
             json.decodeFromString<T>(responseText)
         } catch (e: Exception) {
-            when (e) {
-                is RedmineApiException -> throw e
-                is ConnectException,
-                is SocketTimeoutException,
-                is UnknownHostException -> throw createConnectionException(e)
-
-                is HttpRequestTimeoutException -> throw RedmineApiException(
-                    statusCode = 0,
-                    responseBody = e.message ?: "",
-                    message = "Request timeout: Unable to connect to Redmine server."
-                )
-
-                else -> {
-                    throw RedmineApiException(
-                        statusCode = 0,
-                        responseBody = e.message ?: "",
-                        message = "Error retrieving data from Redmine: ${e.message}"
-                    )
-                }
-            }
+            mapAndThrow(e, "Error retrieving data from Redmine")
         }
     }
 
@@ -274,26 +293,7 @@ class KtorRedmineClient(
                 val responseText = response.bodyAsText()
                 json.decodeFromString<R>(responseText)
             } catch (e: Exception) {
-                when (e) {
-                    is RedmineApiException -> throw e
-                    is ConnectException,
-                    is SocketTimeoutException,
-                    is UnknownHostException -> throw createConnectionException(e)
-
-                    is HttpRequestTimeoutException -> throw RedmineApiException(
-                        statusCode = 0,
-                        responseBody = e.message ?: "",
-                        message = "Request timeout: Unable to connect to Redmine server."
-                    )
-
-                    else -> {
-                        throw RedmineApiException(
-                            statusCode = 0,
-                            responseBody = e.message ?: "",
-                            message = "Error saving data to Redmine: ${e.message}"
-                        )
-                    }
-                }
+                mapAndThrow(e, "Error saving data to Redmine")
             }
         }
 
@@ -325,26 +325,7 @@ class KtorRedmineClient(
 
                 json.decodeFromString<R>(responseText)
             } catch (e: Exception) {
-                when (e) {
-                    is RedmineApiException -> throw e
-                    is ConnectException,
-                    is SocketTimeoutException,
-                    is UnknownHostException -> throw createConnectionException(e)
-
-                    is HttpRequestTimeoutException -> throw RedmineApiException(
-                        statusCode = 0,
-                        responseBody = e.message ?: "",
-                        message = "Request timeout: Unable to connect to Redmine server."
-                    )
-
-                    else -> {
-                        throw RedmineApiException(
-                            statusCode = 0,
-                            responseBody = e.message ?: "",
-                            message = "Error updating data in Redmine: ${e.message}"
-                        )
-                    }
-                }
+                mapAndThrow(e, "Error updating data in Redmine")
             }
         }
 
@@ -363,26 +344,7 @@ class KtorRedmineClient(
                 )
             }
         } catch (e: Exception) {
-            when (e) {
-                is RedmineApiException -> throw e
-                is ConnectException,
-                is SocketTimeoutException,
-                is UnknownHostException -> throw createConnectionException(e)
-
-                is HttpRequestTimeoutException -> throw RedmineApiException(
-                    statusCode = 0,
-                    responseBody = e.message ?: "",
-                    message = "Request timeout: Unable to connect to Redmine server."
-                )
-
-                else -> {
-                    throw RedmineApiException(
-                        statusCode = 0,
-                        responseBody = e.message ?: "",
-                        message = "Error deleting data from Redmine: ${e.message}"
-                    )
-                }
-            }
+            mapAndThrow(e, "Error deleting data from Redmine")
         }
     }
 

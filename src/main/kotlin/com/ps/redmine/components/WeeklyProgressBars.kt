@@ -42,7 +42,7 @@ data class WeeklyProgress(
 fun calculateWeeklyProgress(
     timeEntries: List<TimeEntry>,
     yearMonth: YearMonth,
-    weeklyHours: Float = 37.5f
+    excludedIsoDays: Set<Int> = emptySet() // Allowed: 1=Mon,2=Tue,3=Wed
 ): List<WeeklyProgress> {
     val weeks = getWeeksInMonth(yearMonth.year, yearMonth.monthValue)
 
@@ -55,8 +55,25 @@ fun calculateWeeklyProgress(
             .sumOf { it.hours.toDouble() }
             .toFloat()
 
-        // Calculate expected hours using weekly hours proportionally to working days (workingDays/5 * weeklyHours)
-        val expectedHours = (weekInfo.workingDays / 5f) * weeklyHours
+        // Calculate expected hours using weekly hours proportionally to effective working days, possibly excluding a fixed non-working weekday
+        val firstDayOfMonth = java.time.LocalDate.of(yearMonth.year, yearMonth.monthValue, 1)
+        val lastDayOfMonth = firstDayOfMonth.withDayOfMonth(firstDayOfMonth.lengthOfMonth())
+        // Clamp the week range to the current month
+        val rawStart = weekInfo.startDate.toJava()
+        val rawEnd = weekInfo.endDate.toJava()
+        val rangeStart = if (rawStart.isBefore(firstDayOfMonth)) firstDayOfMonth else rawStart
+        val rangeEnd = if (rawEnd.isAfter(lastDayOfMonth)) lastDayOfMonth else rawEnd
+
+        var effectiveWorkingDaysInWeek = 0
+        var dateCursor = rangeStart
+        while (!dateCursor.isAfter(rangeEnd)) {
+            val iso = dateCursor.dayOfWeek.value // 1=Mon..7=Sun
+            if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) {
+                effectiveWorkingDaysInWeek++
+            }
+            dateCursor = dateCursor.plusDays(1)
+        }
+        val expectedHours = effectiveWorkingDaysInWeek * 7.5f
 
         // Calculate progress percentage
         val progressPercentage = if (expectedHours > 0) {
@@ -81,11 +98,11 @@ fun calculateWeeklyProgress(
 fun WeeklyProgressBars(
     timeEntries: List<TimeEntry>,
     currentMonth: YearMonth,
-    weeklyHours: Float,
+    excludedIsoDays: Set<Int> = emptySet(),
     modifier: Modifier = Modifier
 ) {
-    val weeklyProgress = remember(timeEntries, currentMonth, weeklyHours) {
-        calculateWeeklyProgress(timeEntries, currentMonth, weeklyHours).reversed()
+    val weeklyProgress = remember(timeEntries, currentMonth, excludedIsoDays) {
+        calculateWeeklyProgress(timeEntries, currentMonth, excludedIsoDays).reversed()
     }
 
     // Determine today's date and whether the displayed month is the current calendar month

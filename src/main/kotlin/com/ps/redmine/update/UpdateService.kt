@@ -2,7 +2,6 @@ package com.ps.redmine.update
 
 import com.ps.redmine.Version
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -65,6 +64,7 @@ class UpdateService {
                     UpdateInfo(
                         version = latestVersion,
                         downloadUrl = platformAsset?.browserDownloadUrl,
+                        releasePageUrl = release.htmlUrl,
                         releaseNotes = release.body ?: "",
                         publishedAt = release.publishedAt,
                         fileSize = platformAsset?.size ?: -1L
@@ -81,33 +81,6 @@ class UpdateService {
         }
     }
 
-    /**
-     * Downloads the update file to the specified path.
-     */
-    suspend fun downloadUpdate(
-        downloadUrl: String,
-        targetPath: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val file = java.io.File(targetPath)
-            file.parentFile?.mkdirs()
-
-            val response: HttpResponse = httpClient.get(downloadUrl) {
-                header(HttpHeaders.Accept, "*/*")
-                header(HttpHeaders.UserAgent, "RedmineTime/${Version.VERSION}")
-            }
-
-            if (response.status == HttpStatusCode.OK) {
-                file.writeBytes(response.body())
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            println("Failed to download update: ${e.message}")
-            false
-        }
-    }
 
     /**
      * Compares two version strings to determine if the second is newer.
@@ -167,6 +140,7 @@ class UpdateService {
 data class UpdateInfo(
     val version: String,
     val downloadUrl: String?,
+    val releasePageUrl: String?,
     val releaseNotes: String,
     val publishedAt: String,
     val fileSize: Long = -1L
@@ -183,6 +157,8 @@ data class GitHubRelease(
     val body: String?,
     @SerialName("published_at")
     val publishedAt: String,
+    @SerialName("html_url")
+    val htmlUrl: String,
     val assets: List<GitHubAsset>
 )
 

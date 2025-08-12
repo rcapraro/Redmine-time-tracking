@@ -16,6 +16,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.update.UpdateInfo
+import java.net.URI
 
 /**
  * Dialog component for displaying update notifications and handling update downloads.
@@ -23,17 +24,14 @@ import com.ps.redmine.update.UpdateInfo
 @Composable
 fun UpdateDialog(
     updateInfo: UpdateInfo?,
-    isDownloading: Boolean = false,
-    onDownloadUpdate: () -> Unit,
-    onDismiss: () -> Unit,
-    onRemindLater: () -> Unit
+    onDismiss: () -> Unit
 ) {
     if (updateInfo != null) {
         Dialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(
-                dismissOnBackPress = !isDownloading,
-                dismissOnClickOutside = !isDownloading
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
             )
         ) {
             Card(
@@ -99,51 +97,36 @@ fun UpdateDialog(
                         }
                     }
 
-                    // Download status
-                    if (isDownloading) {
-                        Text(
-                            text = Strings["update_downloading"],
-                            style = MaterialTheme.typography.body1
-                        )
-                    }
-
-                    // Action buttons
-                    Row(
+                    // Links inside content
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (!isDownloading) {
-                            TextButton(onClick = onRemindLater) {
-                                Text(Strings["update_remind_later"])
-                            }
-                            TextButton(onClick = onDismiss) {
-                                Text(Strings["update_skip"])
+                        if (updateInfo.releasePageUrl != null) {
+                            TextButton(onClick = { openUrl(updateInfo.releasePageUrl) }) {
+                                Text(Strings["update_open_release_page"])
                             }
                         }
-
-                        Button(
-                            onClick = onDownloadUpdate,
-                            enabled = !isDownloading && updateInfo.downloadUrl != null
-                        ) {
-                            if (isDownloading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colors.onPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            } else {
+                        if (updateInfo.downloadUrl != null) {
+                            Button(onClick = { openUrl(updateInfo.downloadUrl) }) {
                                 Icon(
                                     imageVector = Icons.Default.Download,
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
+                                Text(Strings["update_download_for_os"])
                             }
-                            Text(
-                                if (isDownloading) Strings["update_downloading"]
-                                else Strings["update_download_install"]
-                            )
+                        }
+                    }
+
+                    // Bottom action: only Close button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text(Strings["close"])
                         }
                     }
 
@@ -164,6 +147,19 @@ fun UpdateDialog(
                 }
             }
         }
+    }
+}
+
+private fun openUrl(url: String) {
+    try {
+        if (java.awt.Desktop.isDesktopSupported()) {
+            val desktop = java.awt.Desktop.getDesktop()
+            if (desktop.isSupported(java.awt.Desktop.Action.BROWSE)) {
+                desktop.browse(URI(url))
+            }
+        }
+    } catch (_: Exception) {
+        // Ignore failures silently; user can copy link from release page
     }
 }
 

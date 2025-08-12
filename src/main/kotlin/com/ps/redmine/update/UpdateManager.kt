@@ -4,14 +4,13 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.prefs.Preferences
 
 /**
- * Manages the application update process including checking for updates,
- * downloading, and coordinating the update UI.
+ * Manages the application update process including checking for updates
+ * and coordinating the update UI.
  */
 class UpdateManager(
     private val updateService: UpdateService
@@ -23,7 +22,6 @@ class UpdateManager(
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
     private var updateCheckJob: Job? = null
-    private var downloadJob: Job? = null
 
     /**
      * Starts periodic update checks if enabled in configuration.
@@ -58,12 +56,11 @@ class UpdateManager(
 
         try {
             val updateInfo = updateService.checkForUpdates()
-            val shouldShow = updateInfo != null && shouldShowUpdateNotification(updateInfo)
 
             _updateState.value = _updateState.value.copy(
                 isChecking = false,
                 availableUpdate = updateInfo,
-                showUpdateDialog = shouldShow,
+                showUpdateDialog = false,
                 lastCheckTime = LocalDateTime.now()
             )
 
@@ -78,51 +75,6 @@ class UpdateManager(
         }
     }
 
-    /**
-     * Downloads and installs the available update.
-     */
-    fun downloadAndInstallUpdate() {
-        val updateInfo = _updateState.value.availableUpdate ?: return
-        val downloadUrl = updateInfo.downloadUrl ?: return
-
-        if (_updateState.value.isDownloading) return
-
-        downloadJob?.cancel()
-        downloadJob = scope.launch {
-            _updateState.value = _updateState.value.copy(
-                isDownloading = true,
-                error = null
-            )
-
-            try {
-                val downloadPath = getDownloadPath(updateInfo.version)
-                val success = updateService.downloadUpdate(
-                    downloadUrl = downloadUrl,
-                    targetPath = downloadPath
-                )
-
-                if (success) {
-                    _updateState.value = _updateState.value.copy(
-                        isDownloading = false,
-                        downloadedFilePath = downloadPath
-                    )
-
-                    // Install the update
-                    installUpdate(downloadPath)
-                } else {
-                    _updateState.value = _updateState.value.copy(
-                        isDownloading = false,
-                        error = "Failed to download update"
-                    )
-                }
-            } catch (e: Exception) {
-                _updateState.value = _updateState.value.copy(
-                    isDownloading = false,
-                    error = e.message
-                )
-            }
-        }
-    }
 
     /**
      * Shows the update dialog if an update is available.
@@ -141,144 +93,10 @@ class UpdateManager(
     }
 
     /**
-     * Reminds the user later about the update.
-     */
-    fun remindLater() {
-        val updateInfo = _updateState.value.availableUpdate
-        if (updateInfo != null) {
-            saveSkippedVersion(updateInfo.version, isRemindLater = true)
-        }
-        dismissUpdateDialog()
-    }
-
-    /**
-     * Skips the current update version.
-     */
-    fun skipUpdate() {
-        val updateInfo = _updateState.value.availableUpdate
-        if (updateInfo != null) {
-            saveSkippedVersion(updateInfo.version, isRemindLater = false)
-        }
-        dismissUpdateDialog()
-    }
-
-    /**
      * Clears any error state.
      */
     fun clearError() {
         _updateState.value = _updateState.value.copy(error = null)
-    }
-
-    /**
-     * Installs the downloaded update file.
-     */
-    private suspend fun installUpdate(filePath: String) = withContext(Dispatchers.IO) {
-        try {
-            val file = File(filePath)
-            if (!file.exists()) {
-                _updateState.value = _updateState.value.copy(error = "Downloaded file not found")
-                return@withContext
-            }
-
-            val osName = System.getProperty("os.name").lowercase()
-
-            val process = when {
-                osName.contains("mac") -> {
-                    // On macOS, open the DMG file
-                    ProcessBuilder("open", filePath).start()
-                }
-
-                osName.contains("win") -> {
-                    // On Windows, run the installer
-                    ProcessBuilder(filePath).start()
-                }
-
-                osName.contains("linux") -> {
-                    // On Linux, install the DEB package
-                    ProcessBuilder("sudo", "dpkg", "-i", filePath).start()
-                }
-
-                else -> {
-                    _updateState.value = _updateState.value.copy(error = "Unsupported operating system")
-                    return@withContext
-                }
-            }
-
-            // Wait a moment to ensure the installer process starts properly
-            delay(1000)
-
-            // Check if the process is still alive (installer started successfully)
-            if (process.isAlive) {
-                // For macOS DMG files, we don't need to wait as 'open' command returns immediately
-                // For Windows and Linux installers, we also don't wait as they should run independently
-
-                // Schedule application exit after a delay to allow installer to fully initialize
-                delay(2000)
-                exitApplication()
-            } else {
-                // Process exited immediately, check exit code
-                val exitCode = process.exitValue()
-                if (exitCode != 0) {
-                    _updateState.value = _updateState.value.copy(
-                        error = "Installer failed to start (exit code: $exitCode)"
-                    )
-                } else {
-                    // Process completed successfully (e.g., macOS 'open' command)
-                    delay(2000)
-                    exitApplication()
-                }
-            }
-
-        } catch (e: Exception) {
-            _updateState.value = _updateState.value.copy(error = "Failed to install update: ${e.message}")
-        }
-    }
-
-    /**
-     * Exits the application.
-     */
-    private fun exitApplication() {
-        scope.cancel()
-        updateService.close()
-        kotlin.system.exitProcess(0)
-    }
-
-    /**
-     * Determines if update notifications should be shown for the given update.
-     */
-    private fun shouldShowUpdateNotification(updateInfo: UpdateInfo): Boolean {
-        val skippedVersions = getSkippedVersions()
-        val skippedInfo = skippedVersions[updateInfo.version]
-
-        return when {
-            skippedInfo == null -> true // Never seen this version
-            skippedInfo.isRemindLater -> {
-                // Check if enough time has passed since remind later
-                val hoursSinceSkipped = java.time.Duration.between(
-                    skippedInfo.skippedAt,
-                    LocalDateTime.now()
-                ).toHours()
-                hoursSinceSkipped >= 24 // Remind after 24 hours
-            }
-
-            else -> false // User chose to skip this version
-        }
-    }
-
-    /**
-     * Gets the download path for the update file.
-     */
-    private fun getDownloadPath(version: String): String {
-        val osName = System.getProperty("os.name").lowercase()
-        val extension = when {
-            osName.contains("mac") -> "dmg"
-            osName.contains("win") -> "msi"
-            osName.contains("linux") -> "deb"
-            else -> "bin"
-        }
-
-        val downloadsDir = File(System.getProperty("user.home"), "Downloads")
-        return File(downloadsDir, "RedmineTime-$version.$extension").absolutePath
     }
 
     /**
@@ -296,48 +114,6 @@ class UpdateManager(
         return hours * 60 * 60 * 1000L // Convert to milliseconds
     }
 
-    /**
-     * Saves information about a skipped version.
-     */
-    private fun saveSkippedVersion(version: String, isRemindLater: Boolean) {
-        val skippedVersions = getSkippedVersions().toMutableMap()
-        skippedVersions[version] = SkippedVersionInfo(
-            version = version,
-            isRemindLater = isRemindLater,
-            skippedAt = LocalDateTime.now()
-        )
-
-        val serialized = skippedVersions.entries.joinToString(";") { (version, info) ->
-            "$version,${info.isRemindLater},${info.skippedAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)}"
-        }
-
-        preferences.put("skipped_versions", serialized)
-        preferences.flush()
-    }
-
-    /**
-     * Gets information about skipped versions.
-     */
-    private fun getSkippedVersions(): Map<String, SkippedVersionInfo> {
-        val serialized = preferences.get("skipped_versions", "")
-        if (serialized.isEmpty()) return emptyMap()
-
-        return try {
-            serialized.split(";").associate { entry ->
-                val parts = entry.split(",")
-                if (parts.size == 3) {
-                    val version = parts[0]
-                    val isRemindLater = parts[1].toBoolean()
-                    val skippedAt = LocalDateTime.parse(parts[2], DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    version to SkippedVersionInfo(version, isRemindLater, skippedAt)
-                } else {
-                    throw IllegalArgumentException("Invalid format")
-                }
-            }
-        } catch (e: Exception) {
-            emptyMap()
-        }
-    }
 
     /**
      * Saves the last update check time.
@@ -362,19 +138,8 @@ class UpdateManager(
  */
 data class UpdateState(
     val isChecking: Boolean = false,
-    val isDownloading: Boolean = false,
     val availableUpdate: UpdateInfo? = null,
     val showUpdateDialog: Boolean = false,
-    val downloadedFilePath: String? = null,
     val lastCheckTime: LocalDateTime? = null,
     val error: String? = null
-)
-
-/**
- * Information about a skipped version.
- */
-private data class SkippedVersionInfo(
-    val version: String,
-    val isRemindLater: Boolean,
-    val skippedAt: LocalDateTime
 )

@@ -155,6 +155,57 @@ fun ConfigurationDialog(
                     }
                 }
 
+                // Non-working days selection (Mon–Fri), max 4 days
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = Strings["non_working_days_label"],
+                        style = MaterialTheme.typography.body1
+                    )
+                    val dayOptions = listOf(
+                        1 to Strings["monday"],
+                        2 to Strings["tuesday"],
+                        3 to Strings["wednesday"],
+                        4 to Strings["thursday"],
+                        5 to Strings["friday"]
+                    )
+                    val selectedCount = config.nonWorkingIsoDays.size
+                    val limitReached = selectedCount >= 4
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        dayOptions.forEach { (iso, label) ->
+                            val selected = remember(config.nonWorkingIsoDays) { config.nonWorkingIsoDays.contains(iso) }
+                            val enabled = selected || !limitReached
+                            DayChip(
+                                label = label,
+                                selected = selected,
+                                enabled = enabled,
+                                onToggle = {
+                                    val current = config.nonWorkingIsoDays.toMutableSet()
+                                    if (selected) {
+                                        current.remove(iso)
+                                    } else if (current.size < 4) {
+                                        current.add(iso)
+                                    }
+                                    config = config.copy(nonWorkingIsoDays = current)
+                                }
+                            )
+                        }
+                    }
+                    // Helper showing derived weekly hours
+                    val derivedWeekly = 7.5f * (5 - config.nonWorkingIsoDays.size)
+                    Text(
+                        text = Strings["working_weekly_hours"].format(derivedWeekly),
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
                 if (showError) {
                     Text(
                         text = Strings["configuration_error"],
@@ -245,5 +296,29 @@ fun ConfigurationDialog(
                 }
             }
         )
+    }
+}
+
+
+@Composable
+private fun DayChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onToggle,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.small,
+        colors = ButtonDefaults.outlinedButtonColors(
+            backgroundColor = if (selected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface,
+            contentColor = if (selected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface
+        ),
+        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colors.primary)
+        else ButtonDefaults.outlinedBorder,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(label)
     }
 }

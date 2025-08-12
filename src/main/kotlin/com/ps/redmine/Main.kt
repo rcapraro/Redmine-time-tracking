@@ -1,8 +1,13 @@
 package com.ps.redmine
 
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -144,17 +149,8 @@ fun App(redmineClient: RedmineClientInterface) {
         updateManager.checkForUpdates()
     }
 
-    // Weekly hours for current user (from Redmine custom field id 27)
-    var weeklyHours by remember { mutableStateOf(37.5f) }
-    LaunchedEffect(redmineClient) {
-        try {
-            redmineClient.getUserWeeklyHours()?.let { weekly ->
-                if (weekly > 0f) weeklyHours = weekly
-            }
-        } catch (_: Exception) {
-            // Keep default 37.5 if API call fails
-        }
-    }
+    // Non-working days (Mon–Wed) from configuration
+    var nonWorkingIsoDays by remember { mutableStateOf(ConfigurationManager.loadConfig().nonWorkingIsoDays) }
 
     // Cleanup update manager when app is disposed
     DisposableEffect(Unit) {
@@ -336,6 +332,7 @@ fun App(redmineClient: RedmineClientInterface) {
                         // Reload configuration to get updated preferences
                         val newConfig = ConfigurationManager.loadConfig()
                         isDarkTheme = newConfig.isDarkTheme
+                        nonWorkingIsoDays = newConfig.nonWorkingIsoDays
                         // Update the language state to trigger recomposition
                         currentLanguage = newConfig.language
 
@@ -360,21 +357,47 @@ fun App(redmineClient: RedmineClientInterface) {
         if (updateState.showUpdateDialog) {
             UpdateDialog(
                 updateInfo = updateState.availableUpdate,
-                isDownloading = updateState.isDownloading,
-                onDownloadUpdate = {
-                    updateManager.downloadAndInstallUpdate()
-                },
                 onDismiss = {
-                    updateManager.skipUpdate()
-                },
-                onRemindLater = {
-                    updateManager.remindLater()
+                    updateManager.dismissUpdateDialog()
                 }
             )
         }
 
         Scaffold(
             scaffoldState = scaffoldState,
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = scaffoldState.snackbarHostState,
+                    modifier = Modifier.padding(8.dp)
+                ) { data ->
+                    Snackbar(
+                        modifier = Modifier.alpha(0.90f),
+                        action = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                data.actionLabel?.let { label ->
+                                    TextButton(onClick = { data.dismiss() }) {
+                                        Text(label)
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { data.dismiss() },
+                                    modifier = Modifier.semantics { contentDescription = Strings["close"] }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Text(
+                            data.message,
+                            style = MaterialTheme.typography.body2
+                        )
+                    }
+                }
+            },
             topBar = {
                 // Use key parameter to force recomposition when language changes
                 key(currentLanguage) {
@@ -407,12 +430,12 @@ fun App(redmineClient: RedmineClientInterface) {
                 modifier = Modifier.fillMaxSize().padding(4.dp)
             ) {
                 // Weekly progress bars on the far left
-                // Use key parameter to force recomposition when language changes
-                key(currentLanguage) {
+                // Use key parameter to force recomposition when language or non-working days change
+                key(currentLanguage, nonWorkingIsoDays) {
                     WeeklyProgressBars(
                         timeEntries = timeEntries,
                         currentMonth = currentMonth,
-                        weeklyHours = weeklyHours,
+                        excludedIsoDays = nonWorkingIsoDays,
                         modifier = Modifier.padding(2.dp)
                     )
                 }
@@ -524,7 +547,22 @@ fun App(redmineClient: RedmineClientInterface) {
                             val workingDays = remember(currentMonth) {
                                 getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
                             }
-                            val expectedHours = (workingDays / 5.0) * weeklyHours
+                            val excludedCount = remember(currentMonth, nonWorkingIsoDays) {
+                                if (nonWorkingIsoDays.isEmpty()) 0 else {
+                                    val first = java.time.LocalDate.of(currentMonth.year, currentMonth.monthValue, 1)
+                                    val last = first.withDayOfMonth(first.lengthOfMonth())
+                                    var count = 0
+                                    var d = first
+                                    while (!d.isAfter(last)) {
+                                        val iso = d.dayOfWeek.value
+                                        if (iso in 1..5 && nonWorkingIsoDays.contains(iso)) count++
+                                        d = d.plusDays(1)
+                                    }
+                                    count
+                                }
+                            }
+                            val effectiveDays = workingDays - excludedCount
+                            val expectedHours = effectiveDays * 7.5
                             val completionPercentage = if (expectedHours > 0) {
                                 (totalHours / expectedHours * 100).coerceAtMost(100.0)
                             } else {
@@ -966,109 +1004,270 @@ fun TimeEntryDetail(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp)
-            .then(shortcutHandler)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    // Make the right pane scrollable with a visible scrollbar so the bottom action button is always reachable on small heights
+    val scrollState = rememberScrollState()
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+                .verticalScroll(scrollState)
+                .then(shortcutHandler)
         ) {
-            Text(
-                text = if (timeEntry == null) Strings["add_time_entry"] else Strings["edit_time_entry"],
-                style = MaterialTheme.typography.h6
-            )
-            Button(
-                onClick = { handleCancel() },
-                enabled = !isLoading && !isSaving && !isGlobalLoading
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(Strings["cancel_shortcut"])
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Date picker and Today button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DatePicker(
-                selectedDate = date,
-                onDateSelected = { date = it },
-                modifier = Modifier.width(200.dp).heightIn(min = 48.dp),
-                locale = locale
-            )
-
-            TextButton(
-                onClick = { date = today },
-                enabled = !isLoading && !isSaving && !isGlobalLoading
-            ) {
-                Text(Strings["today"])
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Project dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            SearchableDropdown(
-                items = projects,
-                selectedItem = selectedProject,
-                onItemSelected = { project: Project ->
-                    selectedProject = project
-                    selectedIssue = null  // Reset only issue selection
-                },
-                itemText = { project: Project -> project.name },
-                label = { Text(Strings["project_label"]) },
-                isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
-                enabled = !isLoading && !isGlobalLoading,
-                isLoading = isLoading,
-                noItemsText = Strings["no_projects"]
-            )
-            if (!isLoading && projects.isEmpty()) {
                 Text(
-                    text = Strings["no_projects"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    text = if (timeEntry == null) Strings["add_time_entry"] else Strings["edit_time_entry"],
+                    style = MaterialTheme.typography.h6
                 )
+                Button(
+                    onClick = { handleCancel() },
+                    enabled = !isLoading && !isSaving && !isGlobalLoading
+                ) {
+                    Text(Strings["cancel_shortcut"])
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Hours
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            // Date picker and Today button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = hours,
-                    onValueChange = { input: String ->
-                        if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
-                            val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
-                            val floatValue = newValue.toFloatOrNull()
-                            if (floatValue == null || floatValue <= 7.5f) {
-                                hours = newValue
+                DatePicker(
+                    selectedDate = date,
+                    onDateSelected = { date = it },
+                    modifier = Modifier.width(200.dp).heightIn(min = 48.dp),
+                    locale = locale
+                )
+
+                TextButton(
+                    onClick = { date = today },
+                    enabled = !isLoading && !isSaving && !isGlobalLoading
+                ) {
+                    Text(Strings["today"])
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Project dropdown
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                SearchableDropdown(
+                    items = projects,
+                    selectedItem = selectedProject,
+                    onItemSelected = { project: Project ->
+                        selectedProject = project
+                        selectedIssue = null  // Reset only issue selection
+                    },
+                    itemText = { project: Project -> project.name },
+                    label = { Text(Strings["project_label"]) },
+                    isError = !isLoading && projects.isNotEmpty() && selectedProject == null,
+                    enabled = !isLoading && !isGlobalLoading,
+                    isLoading = isLoading,
+                    noItemsText = Strings["no_projects"]
+                )
+                if (!isLoading && projects.isEmpty()) {
+                    Text(
+                        text = Strings["no_projects"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Hours
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = hours,
+                        onValueChange = { input: String ->
+                            if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
+                                val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
+                                val floatValue = newValue.toFloatOrNull()
+                                if (floatValue == null || floatValue <= 7.5f) {
+                                    hours = newValue
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(200.dp).heightIn(min = 48.dp).then(shortcutHandler),
+                        label = { Text(Strings["hours_label"]) },
+                        isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
+                        singleLine = true,
+                        enabled = !isLoading && !isGlobalLoading,
+                        trailingIcon = {
+                            if (hours.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { hours = "" },
+                                    enabled = !isLoading && !isGlobalLoading
+                                ) {
+                                    Text(
+                                        text = Strings["clear_button"],
+                                        modifier = Modifier.semantics {
+                                            contentDescription = Strings["clear_button_description"]
+                                        }
+                                    )
+                                }
                             }
                         }
+                    )
+
+                    TextButton(
+                        onClick = { hours = "7.5" },
+                        enabled = !isLoading && !isGlobalLoading
+                    ) {
+                        Text(Strings["full_day"])
+                    }
+                }
+
+                if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
+                    Text(
+                        text = Strings["invalid_number"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
+                    Text(
+                        text = Strings["hours_must_be_positive"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
+                    Text(
+                        text = Strings["hours_max_value"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Issue dropdown
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                SearchableDropdown(
+                    items = issues,
+                    selectedItem = selectedIssue,
+                    onItemSelected = { issue: Issue ->
+                        selectedIssue = issue
                     },
-                    modifier = Modifier.width(200.dp).heightIn(min = 48.dp).then(shortcutHandler),
-                    label = { Text(Strings["hours_label"]) },
-                    isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
-                    singleLine = true,
+                    itemText = { issue: Issue -> "#${issue.id} - ${issue.subject}" },
+                    label = { Text(Strings["issue_label"]) },
+                    placeholder = { Text(Strings["select_issue_placeholder"]) },
+                    isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
                     enabled = !isLoading && !isGlobalLoading,
-                    trailingIcon = {
-                        if (hours.isNotEmpty()) {
+                    isLoading = isLoadingIssues,
+                    noItemsText = Strings["no_issues_available"]
+                )
+                when {
+                    isLoadingIssues -> {
+                        val project = selectedProject
+                        Text(
+                            text = if (project != null)
+                                Strings["loading_issues_for_project"].format(project.name)
+                            else
+                                Strings["loading_issues"],
+                            color = MaterialTheme.colors.secondary,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+
+                    selectedProject == null -> {
+                        Text(
+                            text = Strings["select_project_first"],
+                            color = MaterialTheme.colors.secondary,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+
+                    issues.isEmpty() && selectedIssue != null -> {
+                        Text(
+                            text = Strings["showing_issue"].format(selectedIssue!!.id),
+                            color = MaterialTheme.colors.secondary,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+
+                    issues.isEmpty() -> {
+                        val project = selectedProject
+                        Text(
+                            text = if (project != null)
+                                Strings["no_issues_for_project"].format(project.name)
+                            else
+                                Strings["no_issues_available"],
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Activity dropdown
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                SearchableDropdown(
+                    items = activities,
+                    selectedItem = selectedActivity,
+                    onItemSelected = { activity: Activity ->
+                        selectedActivity = activity
+                    },
+                    itemText = { activity: Activity -> activity.name },
+                    label = { Text(Strings["activity_label"]) },
+                    isError = !isLoading && activities.isNotEmpty() && selectedActivity == null,
+                    enabled = !isLoading && !isGlobalLoading,
+                    isLoading = isLoading,
+                    noItemsText = Strings["no_activities"]
+                )
+                if (!isLoading && activities.isEmpty()) {
+                    Text(
+                        text = Strings["no_activities"],
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Comments
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)) {
+                OutlinedTextField(
+                    value = comments,
+                    onValueChange = { newValue: String ->
+                        if (newValue.length <= 255) {
+                            comments = newValue
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).then(shortcutHandler),
+                    label = { Text(Strings["comments_label"]) },
+                    minLines = 5,
+                    enabled = !isLoading && !isGlobalLoading,
+                    isError = !isLoading && comments.isEmpty(),
+                    trailingIcon = if (comments.isNotEmpty()) {
+                        {
                             IconButton(
-                                onClick = { hours = "" },
+                                onClick = { comments = "" },
                                 enabled = !isLoading && !isGlobalLoading
                             ) {
                                 Text(
@@ -1079,222 +1278,71 @@ fun TimeEntryDetail(
                                 )
                             }
                         }
-                    }
+                    } else null
                 )
 
-                TextButton(
-                    onClick = { hours = "7.5" },
-                    enabled = !isLoading && !isGlobalLoading
-                ) {
-                    Text(Strings["full_day"])
-                }
-            }
-
-            if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
-                Text(
-                    text = Strings["invalid_number"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
-                Text(
-                    text = Strings["hours_must_be_positive"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
-                Text(
-                    text = Strings["hours_max_value"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Issue dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            SearchableDropdown(
-                items = issues,
-                selectedItem = selectedIssue,
-                onItemSelected = { issue: Issue ->
-                    selectedIssue = issue
-                },
-                itemText = { issue: Issue -> "#${issue.id} - ${issue.subject}" },
-                label = { Text(Strings["issue_label"]) },
-                placeholder = { Text(Strings["select_issue_placeholder"]) },
-                isError = !isLoading && issues.isNotEmpty() && selectedIssue == null,
-                enabled = !isLoading && !isGlobalLoading,
-                isLoading = isLoadingIssues,
-                noItemsText = Strings["no_issues_available"]
-            )
-            when {
-                isLoadingIssues -> {
-                    val project = selectedProject
+                if (!isLoading && comments.isEmpty()) {
                     Text(
-                        text = if (project != null)
-                            Strings["loading_issues_for_project"].format(project.name)
-                        else
-                            Strings["loading_issues"],
-                        color = MaterialTheme.colors.secondary,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
-
-                selectedProject == null -> {
-                    Text(
-                        text = Strings["select_project_first"],
-                        color = MaterialTheme.colors.secondary,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
-
-                issues.isEmpty() && selectedIssue != null -> {
-                    Text(
-                        text = Strings["showing_issue"].format(selectedIssue!!.id),
-                        color = MaterialTheme.colors.secondary,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
-
-                issues.isEmpty() -> {
-                    val project = selectedProject
-                    Text(
-                        text = if (project != null)
-                            Strings["no_issues_for_project"].format(project.name)
-                        else
-                            Strings["no_issues_available"],
+                        text = Strings["comments_required"],
                         color = MaterialTheme.colors.error,
                         style = MaterialTheme.typography.caption,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Activity dropdown
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            SearchableDropdown(
-                items = activities,
-                selectedItem = selectedActivity,
-                onItemSelected = { activity: Activity ->
-                    selectedActivity = activity
-                },
-                itemText = { activity: Activity -> activity.name },
-                label = { Text(Strings["activity_label"]) },
-                isError = !isLoading && activities.isNotEmpty() && selectedActivity == null,
-                enabled = !isLoading && !isGlobalLoading,
-                isLoading = isLoading,
-                noItemsText = Strings["no_activities"]
-            )
-            if (!isLoading && activities.isEmpty()) {
-                Text(
-                    text = Strings["no_activities"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Comments
-        Column(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)) {
-            OutlinedTextField(
-                value = comments,
-                onValueChange = { newValue: String ->
-                    if (newValue.length <= 255) {
-                        comments = newValue
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp).then(shortcutHandler),
-                label = { Text(Strings["comments_label"]) },
-                minLines = 5,
-                enabled = !isLoading && !isGlobalLoading,
-                isError = !isLoading && comments.isEmpty(),
-                trailingIcon = if (comments.isNotEmpty()) {
-                    {
-                        IconButton(
-                            onClick = { comments = "" },
-                            enabled = !isLoading && !isGlobalLoading
-                        ) {
-                            Text(
-                                text = Strings["clear_button"],
-                                modifier = Modifier.semantics {
-                                    contentDescription = Strings["clear_button_description"]
-                                }
-                            )
-                        }
-                    }
-                } else null
-            )
-
-            if (!isLoading && comments.isEmpty()) {
-                Text(
-                    text = Strings["comments_required"],
-                    color = MaterialTheme.colors.error,
-                    style = MaterialTheme.typography.caption,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Text(
-                    text = Strings["char_count"].format(comments.length),
-                    style = MaterialTheme.typography.caption,
-                    color = if (comments.length > 240) MaterialTheme.colors.error else MaterialTheme.colors.onSurface.copy(
-                        alpha = 0.6f
-                    )
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Keyboard shortcuts help
-            Text(
-                text = Strings["keyboard_shortcuts"],
-                style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-            )
-
-            Button(
-                onClick = { saveEntry() },
-                enabled = isValid && !isLoading && !isSaving && !isGlobalLoading
-            ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
+                    Text(
+                        text = Strings["char_count"].format(comments.length),
+                        style = MaterialTheme.typography.caption,
+                        color = if (comments.length > 240) MaterialTheme.colors.error else MaterialTheme.colors.onSurface.copy(
+                            alpha = 0.6f
                         )
-                    }
-                    Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Keyboard shortcuts help
+                Text(
+                    text = Strings["keyboard_shortcuts"],
+                    style = MaterialTheme.typography.caption,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                )
+
+                Button(
+                    onClick = { saveEntry() },
+                    enabled = isValid && !isLoading && !isSaving && !isGlobalLoading
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Text(if (timeEntry?.id == null) Strings["add_entry"] else Strings["update_entry"])
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        VerticalScrollbar(
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            adapter = rememberScrollbarAdapter(scrollState)
+        )
     }
 }
 
