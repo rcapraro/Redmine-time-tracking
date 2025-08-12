@@ -605,7 +605,7 @@ fun App(redmineClient: RedmineClientInterface) {
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "${Strings["working_days"]} $workingDays",
+                                        text = "${Strings["working_days"]} $effectiveDays",
                                         style = MaterialTheme.typography.caption,
                                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
                                     )
