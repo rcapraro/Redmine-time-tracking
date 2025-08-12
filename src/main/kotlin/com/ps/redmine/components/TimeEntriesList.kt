@@ -19,6 +19,7 @@ import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
 import com.ps.redmine.util.ElevationTokens
+import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.LocalDate
 import java.util.*
 
@@ -99,9 +100,9 @@ fun DateHeader(
     totalHours: Float,
     locale: Locale = Locale.getDefault()
 ) {
-    val missingHours = if (totalHours < 7.5f) 7.5f - totalHours else 0f
-    val excessHours = if (totalHours > 7.5f) totalHours - 7.5f else 0f
-    val isPerfectHours = totalHours == 7.5f
+    val missingHours = if (totalHours < WorkHours.DAILY_STANDARD_HOURS) WorkHours.DAILY_STANDARD_HOURS - totalHours else 0f
+    val excessHours = if (totalHours > WorkHours.DAILY_STANDARD_HOURS) totalHours - WorkHours.DAILY_STANDARD_HOURS else 0f
+    val isPerfectHours = totalHours == WorkHours.DAILY_STANDARD_HOURS
 
     Surface(
         modifier = Modifier.fillMaxWidth(),

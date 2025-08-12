@@ -143,11 +143,22 @@ class KtorRedmineClient(
     // Cache for activities by project
     private val projectActivitiesCache = mutableMapOf<Int, MutableMap<Int, Activity>>()
 
-    // Cache for issues by project
-    private val projectIssuesCache = mutableMapOf<Int, List<Issue>>()
+    // TTL-based cache for issues by project
+    private data class CachedValue<T>(val value: T, val timestampMs: Long)
+    private val projectIssuesCache = mutableMapOf<Int, CachedValue<List<Issue>>>()
 
     private val issueCache = mutableMapOf<Int, Issue>()
     private var httpClient: HttpClient? = null
+
+    // Cache timing
+    private val PROJECTS_TTL_MS = 10 * 60 * 1000L // 10 minutes
+    private val ISSUES_TTL_MS = 5 * 60 * 1000L // 5 minutes
+    private val cacheMutex = kotlinx.coroutines.sync.Mutex()
+    private var projectsFetchedAtMs: Long = 0L
+
+    private fun <T> isFresh(cached: CachedValue<T>?, ttlMs: Long, now: Long = System.currentTimeMillis()): Boolean {
+        return cached != null && (now - cached.timestampMs) < ttlMs
+    }
 
     init {
         if (httpClientOverride != null) {
@@ -215,6 +226,7 @@ class KtorRedmineClient(
         projectIssuesCache.clear()
         issueCache.clear()
         cachedWeeklyHours = null
+        projectsFetchedAtMs = 0L
 
         // Recreate the HTTP client only when not using an injected client (tests)
         if (httpClientOverride == null) {
@@ -588,116 +600,102 @@ class KtorRedmineClient(
     }
 
     override suspend fun getProjectsWithActivities(): List<Project> = withContext(Dispatchers.IO) {
-        // Return cached projects if available
-        cachedProjects?.values?.toList()?.let {
-            // If we have at least some project activities cached, return the projects
-            if (projectActivitiesCache.isNotEmpty()) {
-                return@withContext it
+        val now = System.currentTimeMillis()
+        cachedProjects?.values?.toList()?.let { cachedList ->
+            if (projectActivitiesCache.isNotEmpty() && (now - projectsFetchedAtMs) < PROJECTS_TTL_MS) {
+                return@withContext cachedList
             }
         }
 
+        cacheMutex.lock()
         try {
+            // Re-check inside lock to avoid duplicate reloads
+            val nowLocked = System.currentTimeMillis()
+            cachedProjects?.values?.toList()?.let { cachedList ->
+                if (projectActivitiesCache.isNotEmpty() && (nowLocked - projectsFetchedAtMs) < PROJECTS_TTL_MS) {
+                    return@withContext cachedList
+                }
+            }
+
             // Get projects with time entry activities included
-            val response =
-                getAndParse<RedmineProjectsWithActivitiesResponse>("/projects.json?include=time_entry_activities&limit=100")
+            val response = getAndParse<RedmineProjectsWithActivitiesResponse>("/projects.json?include=time_entry_activities&limit=100")
 
             // Process all projects and their activities
+            projectCache.clear()
+            projectActivitiesCache.clear()
             val parsedProjects = mutableListOf<Project>()
 
             for (projectWithActivities in response.projects) {
                 val id = projectWithActivities.id
                 val name = projectWithActivities.name
-
                 if (id <= 0 || name.isEmpty()) continue
 
                 val project = Project(id, name)
                 projectCache[id] = project
                 parsedProjects.add(project)
 
-                // Extract time entry activities for this project
                 val timeEntryActivities = projectWithActivities.timeEntryActivities
                 if (timeEntryActivities.isNotEmpty()) {
-                    // Create a map for this project's activities if it doesn't exist
                     val projectActivities = projectActivitiesCache.getOrPut(id) { mutableMapOf() }
-
                     for (activityApi in timeEntryActivities) {
                         val activityId = activityApi.id
                         val activityName = activityApi.name
-
                         if (activityId <= 0 || activityName.isEmpty()) continue
-
-                        // Add to project-specific activity cache
-                        val activity = Activity(activityId, activityName)
-                        projectActivities[activityId] = activity
-
+                        projectActivities[activityId] = Activity(activityId, activityName)
                     }
                 }
             }
 
-            // Cache the projects
             cachedProjects = projectCache.toMap()
-
+            projectsFetchedAtMs = System.currentTimeMillis()
             parsedProjects
         } catch (e: Exception) {
-            // Rethrow RedmineApiException as it already has a descriptive message
-            if (e is RedmineApiException) {
-                throw e
-            }
-
-            // For other exceptions, create a more descriptive error
+            if (e is RedmineApiException) throw e
             throw RedmineApiException(
                 statusCode = 0,
                 responseBody = e.message ?: "",
                 message = "Error fetching projects and activities: ${e.message}"
             )
+        } finally {
+            cacheMutex.unlock()
         }
     }
 
     override suspend fun getProjectsWithOpenIssues(): List<Project> = withContext(Dispatchers.IO) {
         try {
-            // First, get all projects with activities
             val allProjects = getProjectsWithActivities()
+            val now = System.currentTimeMillis()
 
-            // Load issues for all projects upfront and cache them
-            for (project in allProjects) {
-                try {
-                    // Only load issues if not already cached
-                    if (!projectIssuesCache.containsKey(project.id)) {
-                        // Create endpoint with query parameters
-                        val endpoint =
-                            "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
+            // Limit concurrency to avoid overwhelming the server
+            val semaphore = kotlinx.coroutines.sync.Semaphore(permits = 4)
+            coroutineScope {
+                allProjects.map { project ->
+                    async {
+                        val cached = projectIssuesCache[project.id]
+                        if (isFresh(cached, ISSUES_TTL_MS, now)) return@async
 
-                        // Make the API request
-                        val response = getAndParse<RedmineIssuesResponse>(endpoint)
-
-                        // Convert the issues
-                        val issues = response.issues
-                            .filter { it.id > 0 && it.subject.isNotEmpty() }
-                            .map { Issue(it.id, it.subject) }
-
-                        // Cache the issues for this project
-                        projectIssuesCache[project.id] = issues
+                        semaphore.acquire()
+                        try {
+                            val endpoint = "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
+                            val response = getAndParse<RedmineIssuesResponse>(endpoint)
+                            val issues = response.issues
+                                .filter { it.id > 0 && it.subject.isNotEmpty() }
+                                .map { Issue(it.id, it.subject) }
+                            projectIssuesCache[project.id] = CachedValue(issues, System.currentTimeMillis())
+                        } catch (_: Exception) {
+                            projectIssuesCache[project.id] = CachedValue(emptyList(), System.currentTimeMillis())
+                        } finally {
+                            semaphore.release()
+                        }
                     }
-                } catch (_: Exception) {
-                    // If we can't get issues for a project, cache an empty list
-                    // This handles cases where the user might not have permission to view issues
-                    projectIssuesCache[project.id] = emptyList()
-                }
+                }.awaitAll()
             }
 
-            // Filter projects that have open issues (now all issues are cached)
-            val projectsWithOpenIssues = allProjects.filter { project ->
-                projectIssuesCache[project.id]?.isNotEmpty() == true
+            allProjects.filter { project ->
+                projectIssuesCache[project.id]?.value?.isNotEmpty() == true
             }
-
-            projectsWithOpenIssues
         } catch (e: Exception) {
-            // Rethrow RedmineApiException as it already has a descriptive message
-            if (e is RedmineApiException) {
-                throw e
-            }
-
-            // For other exceptions, create a more descriptive error
+            if (e is RedmineApiException) throw e
             throw RedmineApiException(
                 statusCode = 0,
                 responseBody = e.message ?: "",
@@ -707,8 +705,23 @@ class KtorRedmineClient(
     }
 
     override suspend fun getIssues(projectId: Int): List<Issue> = withContext(Dispatchers.IO) {
-        // Return cached issues for this project
-        // Issues should already be cached by getProjectsWithOpenIssues()
-        projectIssuesCache[projectId] ?: emptyList()
+        val now = System.currentTimeMillis()
+        val cached = projectIssuesCache[projectId]
+        if (isFresh(cached, ISSUES_TTL_MS, now)) {
+            return@withContext cached!!.value
+        }
+        return@withContext try {
+            val endpoint = "/issues.json?project_id=${projectId}&status_id=open&limit=100&sort=updated_on:desc"
+            val response = getAndParse<RedmineIssuesResponse>(endpoint)
+            val issues = response.issues
+                .filter { it.id > 0 && it.subject.isNotEmpty() }
+                .map { Issue(it.id, it.subject) }
+            projectIssuesCache[projectId] = CachedValue(issues, System.currentTimeMillis())
+            issues
+        } catch (_: Exception) {
+            val empty = emptyList<Issue>()
+            projectIssuesCache[projectId] = CachedValue(empty, System.currentTimeMillis())
+            empty
+        }
     }
 }

@@ -15,8 +15,6 @@ object ConfigurationManager {
     private const val KEY_DARK_THEME = "redmine.darkTheme"
     private const val KEY_LANGUAGE = "redmine.language"
     private const val KEY_NON_WORKING_ISO_DAYS = "redmine.nonWorkingIsoDays"
-    private const val KEY_NON_WORKING_ISO_DAY = "redmine.nonWorkingIsoDay" // legacy
-    private const val KEY_WEEKLY_HOURS = "redmine.weeklyHours" // legacy
 
     private val preferences = java.util.prefs.Preferences.userRoot().node(PREFERENCES_NODE)
 
@@ -33,9 +31,7 @@ object ConfigurationManager {
             val csv = preferences.get(KEY_NON_WORKING_ISO_DAYS, "")
             val parsed = csv.split(',').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..5 }.toSet()
             if (parsed.isNotEmpty()) return@run parsed
-            // Fallback for legacy single day (previously supported 1..3)
-            val legacyDay = preferences.getInt(KEY_NON_WORKING_ISO_DAY, -1).takeIf { it in 1..5 }
-            legacyDay?.let { setOf(it) } ?: emptySet()
+            emptySet()
         }
     )
 

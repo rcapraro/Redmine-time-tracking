@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.WorkHours
 import java.util.*
 
 // Helper function to get the application version
@@ -198,7 +199,7 @@ fun ConfigurationDialog(
                         }
                     }
                     // Helper showing derived weekly hours
-                    val derivedWeekly = 7.5f * (5 - config.nonWorkingIsoDays.size)
+                    val derivedWeekly = WorkHours.DAILY_STANDARD_HOURS * (5 - config.nonWorkingIsoDays.size)
                     Text(
                         text = Strings["working_weekly_hours"].format(derivedWeekly),
                         style = MaterialTheme.typography.caption,

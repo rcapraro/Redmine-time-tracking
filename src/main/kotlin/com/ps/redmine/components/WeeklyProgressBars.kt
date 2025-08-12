@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.WeekInfo
+import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.getWeeksInMonth
 import com.ps.redmine.util.toJava
 import kotlinx.datetime.TimeZone
@@ -76,7 +77,7 @@ fun calculateWeeklyProgress(
             }
             dateCursor = dateCursor.plusDays(1)
         }
-        val expectedHours = effectiveWorkingDaysInWeek * 7.5f
+        val expectedHours = effectiveWorkingDaysInWeek * WorkHours.DAILY_STANDARD_HOURS
 
         // Determine if this is a non-worked week within the current month (only non-working days fall inside the month)
         val isNonWorkedWeek = clampedDaysCount > 0 && effectiveWorkingDaysInWeek == 0
