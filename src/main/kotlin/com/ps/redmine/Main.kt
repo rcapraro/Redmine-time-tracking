@@ -13,6 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
@@ -40,14 +43,14 @@ import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
 import com.ps.redmine_time.generated.resources.app_icon
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.time.YearMonth
 import java.util.*
-import kotlin.time.Clock
 
 /**
  * Checks if an exception is a connection error.
@@ -162,6 +165,49 @@ fun App(redmineClient: RedmineClientInterface) {
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
 
+    // Selected calendar date used to initialize the date field when creating a new entry
+    var selectedDate by remember { mutableStateOf(com.ps.redmine.util.today) }
+
+    // Compute the earliest non-complete working day in the given month
+    fun computeFirstIncompleteDate(
+        yearMonth: YearMonth,
+        entries: List<TimeEntry>,
+        excludedIsoDays: Set<Int>
+    ): kotlinx.datetime.LocalDate {
+        val firstDay = kotlinx.datetime.LocalDate(yearMonth.year, yearMonth.monthValue, 1)
+        val lastDay = if (yearMonth.monthValue == 12) {
+            kotlinx.datetime.LocalDate(yearMonth.year + 1, 1, 1).minus(1, kotlinx.datetime.DateTimeUnit.DAY)
+        } else {
+            kotlinx.datetime.LocalDate(yearMonth.year, yearMonth.monthValue + 1, 1)
+                .minus(1, kotlinx.datetime.DateTimeUnit.DAY)
+        }
+
+        var d = firstDay
+        while (d <= lastDay) {
+            val iso = d.dayOfWeek.isoDayNumber // 1..7
+            val isWorkingDay = iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))
+            if (isWorkingDay) {
+                val totalForDay = entries
+                    .asSequence()
+                    .filter { it.date == d }
+                    .sumOf { it.hours.toDouble() }
+                    .toFloat()
+                if (totalForDay < com.ps.redmine.util.WorkHours.DAILY_STANDARD_HOURS) {
+                    return d
+                }
+            }
+            d = d.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
+        }
+        // Fallback: first working day of month, else today
+        d = firstDay
+        while (d <= lastDay) {
+            val iso = d.dayOfWeek.isoDayNumber
+            if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) return d
+            d = d.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
+        }
+        return com.ps.redmine.util.today
+    }
+
     fun loadTimeEntries(yearMonth: YearMonth) {
         scope.launch {
             isLoading = true
@@ -170,6 +216,8 @@ fun App(redmineClient: RedmineClientInterface) {
                     yearMonth.year,
                     yearMonth.monthValue
                 )
+                // After loading, set selectedDate to first non-complete day of the month
+                selectedDate = computeFirstIncompleteDate(yearMonth, timeEntries, nonWorkingIsoDays)
             } catch (e: Exception) {
                 // Handle the exception
                 handleException(
@@ -180,6 +228,7 @@ fun App(redmineClient: RedmineClientInterface) {
                 )
                 // Clear the time entries list when an error occurs
                 timeEntries = emptyList()
+                // In case of error, keep selectedDate unchanged
             } finally {
                 isLoading = false
                 // If this was triggered by a config change, also update isGlobalLoading
@@ -436,13 +485,16 @@ fun App(redmineClient: RedmineClientInterface) {
                         timeEntries = timeEntries,
                         currentMonth = currentMonth,
                         excludedIsoDays = nonWorkingIsoDays,
-                        modifier = Modifier.padding(2.dp)
+                        modifier = Modifier.padding(2.dp).focusProperties { canFocus = false },
+                        onWeekClick = { weekInfo ->
+                            selectedDate = weekInfo.startDate
+                        }
                     )
                 }
 
                 // Left panel - Time entries list (wrapped in card)
                 Surface(
-                    modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp),
+                    modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp).focusProperties { canFocus = false },
                     elevation = ElevationTokens.Medium,
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colors.surface
@@ -549,14 +601,18 @@ fun App(redmineClient: RedmineClientInterface) {
                             }
                             val excludedCount = remember(currentMonth, nonWorkingIsoDays) {
                                 if (nonWorkingIsoDays.isEmpty()) 0 else {
-                                    val first = java.time.LocalDate.of(currentMonth.year, currentMonth.monthValue, 1)
-                                    val last = first.withDayOfMonth(first.lengthOfMonth())
+                                    val firstK = kotlinx.datetime.LocalDate(currentMonth.year, currentMonth.monthValue, 1)
+                                    val lastK = kotlinx.datetime.LocalDate(
+                                        currentMonth.year,
+                                        currentMonth.monthValue,
+                                        java.time.YearMonth.of(currentMonth.year, currentMonth.monthValue).lengthOfMonth()
+                                    )
                                     var count = 0
-                                    var d = first
-                                    while (!d.isAfter(last)) {
-                                        val iso = d.dayOfWeek.value
+                                    var dK = firstK
+                                    while (dK <= lastK) {
+                                        val iso = dK.dayOfWeek.isoDayNumber
                                         if (iso in 1..5 && nonWorkingIsoDays.contains(iso)) count++
-                                        d = d.plusDays(1)
+                                        dK = dK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
                                     }
                                     count
                                 }
@@ -667,6 +723,9 @@ fun App(redmineClient: RedmineClientInterface) {
                 ) {
                     // Use key parameter to force recomposition when language changes
                     key(currentLanguage) {
+                        // Manage focus reset to Date field after save/cancel
+                        var focusRequestKey by remember { mutableStateOf(0) }
+
                         TimeEntryDetail(
                             timeEntry = selectedTimeEntry,
                             redmineClient = redmineClient,
@@ -690,6 +749,9 @@ fun App(redmineClient: RedmineClientInterface) {
                                         else
                                             Strings["entry_updated"]
                                         scaffoldState.snackbarHostState.showSnackbar(message)
+
+                                        // Trigger focus back to Date field for next entry
+                                        focusRequestKey++
                                     } catch (e: Exception) {
                                         // Handle the exception
                                         handleException(
@@ -701,10 +763,16 @@ fun App(redmineClient: RedmineClientInterface) {
                                     }
                                 }
                             },
-                            onCancel = { selectedTimeEntry = null },
+                            onCancel = {
+                                selectedTimeEntry = null
+                                // Trigger focus back to Date field when cancelling entry
+                                focusRequestKey++
+                            },
                             locale = currentLocale,
                             configVersion = configVersion,
-                            isGlobalLoading = isGlobalLoading
+                            isGlobalLoading = isGlobalLoading,
+                            focusRequestKey = focusRequestKey,
+                            initialDate = selectedDate
                         )
                     }
                 }
@@ -760,12 +828,20 @@ fun TimeEntryDetail(
     onCancel: () -> Unit = {},
     locale: Locale = Locale.getDefault(),
     configVersion: Int = 0,
-    isGlobalLoading: Boolean = false
+    isGlobalLoading: Boolean = false,
+    focusRequestKey: Int = 0,
+    initialDate: kotlinx.datetime.LocalDate
 ) {
-    var date by remember(timeEntry) {
+    var date by remember(timeEntry, initialDate) {
         mutableStateOf(
-            timeEntry?.date ?: Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            timeEntry?.date ?: initialDate
         )
+    }
+    // Keep date in sync with selected initialDate when creating a new entry
+    LaunchedEffect(initialDate, timeEntry) {
+        if (timeEntry == null) {
+            date = initialDate
+        }
     }
     var hours by remember(timeEntry) {
         mutableStateOf(timeEntry?.hours?.toString() ?: "")
@@ -858,7 +934,7 @@ fun TimeEntryDetail(
             showCancelConfirmation = true
         } else {
             // Reset all fields before canceling
-            date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            date = java.time.LocalDate.now().toKotlin()
             hours = ""
             comments = ""
             selectedProject = null
@@ -964,7 +1040,7 @@ fun TimeEntryDetail(
                     onClick = {
                         showCancelConfirmation = false
                         // Reset all fields before canceling
-                        date = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                        date = com.ps.redmine.util.today
                         hours = ""
                         comments = ""
                         selectedProject = null
@@ -994,7 +1070,7 @@ fun TimeEntryDetail(
             }
 
             event.key == Key.Escape -> {
-                if (!isGlobalLoading) {
+                if (timeEntry != null && !isGlobalLoading) {
                     handleCancel()
                     true
                 } else false
@@ -1006,6 +1082,16 @@ fun TimeEntryDetail(
 
     // Make the right pane scrollable with a visible scrollbar so the bottom action button is always reachable on small heights
     val scrollState = rememberScrollState()
+
+    // Ensure the Date field is the first to receive focus in the right pane
+    val dateFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(timeEntry, isGlobalLoading, focusRequestKey) {
+        if (!isGlobalLoading) {
+            // Defer to give Compose time to lay out the node tree, then request focus
+            dateFocusRequester.requestFocus()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -1025,7 +1111,7 @@ fun TimeEntryDetail(
                 )
                 Button(
                     onClick = { handleCancel() },
-                    enabled = !isLoading && !isSaving && !isGlobalLoading
+                    enabled = timeEntry != null && !isLoading && !isSaving && !isGlobalLoading
                 ) {
                     Text(Strings["cancel_shortcut"])
                 }
@@ -1042,7 +1128,7 @@ fun TimeEntryDetail(
                 DatePicker(
                     selectedDate = date,
                     onDateSelected = { date = it },
-                    modifier = Modifier.width(200.dp).heightIn(min = 48.dp),
+                    modifier = Modifier.width(200.dp).heightIn(min = 48.dp).focusRequester(dateFocusRequester),
                     locale = locale
                 )
 

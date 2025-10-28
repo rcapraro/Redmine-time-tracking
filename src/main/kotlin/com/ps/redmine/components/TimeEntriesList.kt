@@ -100,8 +100,10 @@ fun DateHeader(
     totalHours: Float,
     locale: Locale = Locale.getDefault()
 ) {
-    val missingHours = if (totalHours < WorkHours.DAILY_STANDARD_HOURS) WorkHours.DAILY_STANDARD_HOURS - totalHours else 0f
-    val excessHours = if (totalHours > WorkHours.DAILY_STANDARD_HOURS) totalHours - WorkHours.DAILY_STANDARD_HOURS else 0f
+    val missingHours =
+        if (totalHours < WorkHours.DAILY_STANDARD_HOURS) WorkHours.DAILY_STANDARD_HOURS - totalHours else 0f
+    val excessHours =
+        if (totalHours > WorkHours.DAILY_STANDARD_HOURS) totalHours - WorkHours.DAILY_STANDARD_HOURS else 0f
     val isPerfectHours = totalHours == WorkHours.DAILY_STANDARD_HOURS
 
     Surface(

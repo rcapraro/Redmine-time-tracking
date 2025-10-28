@@ -1,6 +1,7 @@
 package com.ps.redmine.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -21,11 +22,12 @@ import com.ps.redmine.util.WeekInfo
 import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.getWeeksInMonth
 import com.ps.redmine.util.toJava
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.number
+import kotlinx.datetime.plus
 import java.time.YearMonth
 import java.time.temporal.IsoFields
-import kotlin.time.Clock
 
 /**
  * Data class representing weekly progress information.
@@ -58,24 +60,23 @@ fun calculateWeeklyProgress(
             .toFloat()
 
         // Calculate expected hours using weekly hours proportionally to effective working days, possibly excluding a fixed non-working weekday
-        val firstDayOfMonth = java.time.LocalDate.of(yearMonth.year, yearMonth.monthValue, 1)
-        val lastDayOfMonth = firstDayOfMonth.withDayOfMonth(firstDayOfMonth.lengthOfMonth())
-        // Clamp the week range to the current month
-        val rawStart = weekInfo.startDate.toJava()
-        val rawEnd = weekInfo.endDate.toJava()
-        val rangeStart = if (rawStart.isBefore(firstDayOfMonth)) firstDayOfMonth else rawStart
-        val rangeEnd = if (rawEnd.isAfter(lastDayOfMonth)) lastDayOfMonth else rawEnd
+        // First and last day of the current month using Kotlin dates
+        val firstDayOfMonthK = LocalDate(yearMonth.year, yearMonth.monthValue, 1)
+        val lastDayOfMonthK = LocalDate(yearMonth.year, yearMonth.monthValue, java.time.YearMonth.of(yearMonth.year, yearMonth.monthValue).lengthOfMonth())
+        // Clamp the week range to the current month using Kotlin dates
+        val rangeStartK = if (weekInfo.startDate < firstDayOfMonthK) firstDayOfMonthK else weekInfo.startDate
+        val rangeEndK = if (weekInfo.endDate > lastDayOfMonthK) lastDayOfMonthK else weekInfo.endDate
 
         var effectiveWorkingDaysInWeek = 0
-        var dateCursor = rangeStart
+        var dateCursorK = rangeStartK
         var clampedDaysCount = 0
-        while (!dateCursor.isAfter(rangeEnd)) {
+        while (dateCursorK <= rangeEndK) {
             clampedDaysCount++
-            val iso = dateCursor.dayOfWeek.value // 1=Mon..7=Sun
+            val iso = dateCursorK.dayOfWeek.isoDayNumber // 1=Mon..7=Sun
             if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) {
                 effectiveWorkingDaysInWeek++
             }
-            dateCursor = dateCursor.plusDays(1)
+            dateCursorK = dateCursorK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
         }
         val expectedHours = effectiveWorkingDaysInWeek * WorkHours.DAILY_STANDARD_HOURS
 
@@ -107,15 +108,16 @@ fun WeeklyProgressBars(
     timeEntries: List<TimeEntry>,
     currentMonth: YearMonth,
     excludedIsoDays: Set<Int> = emptySet(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onWeekClick: ((WeekInfo) -> Unit)? = null
 ) {
     val weeklyProgress = remember(timeEntries, currentMonth, excludedIsoDays) {
         calculateWeeklyProgress(timeEntries, currentMonth, excludedIsoDays).reversed()
     }
 
     // Determine today's date and whether the displayed month is the current calendar month
-    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    val isCurrentMonth = currentMonth == YearMonth.now()
+    val today = com.ps.redmine.util.today
+    val isCurrentMonth = currentMonth.year == today.year && currentMonth.monthValue == today.month.number
 
     Column(
         modifier = modifier.width(44.dp).fillMaxHeight(),
@@ -127,7 +129,9 @@ fun WeeklyProgressBars(
             WeekProgressBar(
                 progress = progress,
                 isCurrentWeek = isCurrentWeek,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(enabled = onWeekClick != null) { onWeekClick?.invoke(progress.weekInfo) }
             )
         }
     }

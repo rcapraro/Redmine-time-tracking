@@ -145,6 +145,7 @@ class KtorRedmineClient(
 
     // TTL-based cache for issues by project
     private data class CachedValue<T>(val value: T, val timestampMs: Long)
+
     private val projectIssuesCache = mutableMapOf<Int, CachedValue<List<Issue>>>()
 
     private val issueCache = mutableMapOf<Int, Issue>()
@@ -618,7 +619,8 @@ class KtorRedmineClient(
             }
 
             // Get projects with time entry activities included
-            val response = getAndParse<RedmineProjectsWithActivitiesResponse>("/projects.json?include=time_entry_activities&limit=100")
+            val response =
+                getAndParse<RedmineProjectsWithActivitiesResponse>("/projects.json?include=time_entry_activities&limit=100")
 
             // Process all projects and their activities
             projectCache.clear()
@@ -676,7 +678,8 @@ class KtorRedmineClient(
 
                         semaphore.acquire()
                         try {
-                            val endpoint = "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
+                            val endpoint =
+                                "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
                             val response = getAndParse<RedmineIssuesResponse>(endpoint)
                             val issues = response.issues
                                 .filter { it.id > 0 && it.subject.isNotEmpty() }

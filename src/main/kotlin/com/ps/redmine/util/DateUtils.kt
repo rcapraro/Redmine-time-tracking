@@ -1,12 +1,11 @@
 package com.ps.redmine.util
 
 import kotlinx.datetime.*
-import kotlin.time.Clock
 import java.time.LocalDate as JavaLocalDate
 import java.time.YearMonth as JavaYearMonth
 
 val today: LocalDate
-    get() = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    get() = java.time.LocalDate.now().toKotlin()
 
 fun LocalDate.toJava(): JavaLocalDate = JavaLocalDate.of(year, month.number, day)
 
