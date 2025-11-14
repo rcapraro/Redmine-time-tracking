@@ -4,13 +4,11 @@ import com.ps.redmine.model.Activity
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
-import com.ps.redmine.util.toJava
-import kotlinx.datetime.LocalDate
+import com.ps.redmine.util.isoWeekNumber
+import kotlinx.datetime.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.time.YearMonth
-import java.time.temporal.IsoFields
 
 class WeeklyProgressBarsTest {
 
@@ -32,7 +30,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test calculateWeeklyProgress with empty time entries`() {
-        val yearMonth = YearMonth.of(2024, 1) // January 2024
+        val yearMonth = YearMonth(2024, 1) // January 2024
         val excluded = emptySet<Int>()
         val timeEntries = emptyList<TimeEntry>()
 
@@ -60,7 +58,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test calculateWeeklyProgress with time entries`() {
-        val yearMonth = YearMonth.of(2024, 1) // January 2024
+        val yearMonth = YearMonth(2024, 1) // January 2024
         val excluded = emptySet<Int>()
         val timeEntries = listOf(
             TimeEntry(
@@ -123,7 +121,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test calculateWeeklyProgress progress percentage calculation`() {
-        val yearMonth = YearMonth.of(2024, 1) // January 2024
+        val yearMonth = YearMonth(2024, 1) // January 2024
         val excluded = emptySet<Int>()
         val timeEntries = listOf(
             TimeEntry(
@@ -158,7 +156,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test calculateWeeklyProgress with over 100 percent progress`() {
-        val yearMonth = YearMonth.of(2024, 1) // January 2024
+        val yearMonth = YearMonth(2024, 1) // January 2024
         val excluded = emptySet<Int>()
         val timeEntries = listOf(
             TimeEntry(
@@ -191,7 +189,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test calculateWeeklyProgress excludes weekends`() {
-        val yearMonth = YearMonth.of(2024, 1) // January 2024
+        val yearMonth = YearMonth(2024, 1) // January 2024
         val excluded = emptySet<Int>()
         val timeEntries = listOf(
             TimeEntry(
@@ -242,9 +240,9 @@ class WeeklyProgressBarsTest {
         val july21_2025 = LocalDate(2025, 7, 21) // Monday
         val july25_2025 = LocalDate(2025, 7, 25) // Friday
 
-        // Convert to Java LocalDate and get ISO week number
-        val weekNumber21 = july21_2025.toJava().get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-        val weekNumber25 = july25_2025.toJava().get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+        // Get ISO week number using Kotlin-only implementation
+        val weekNumber21 = isoWeekNumber(july21_2025)
+        val weekNumber25 = isoWeekNumber(july25_2025)
 
         // Both dates should be in week 30
         assertEquals(30, weekNumber21, "July 21, 2025 should be in week 30")
@@ -256,7 +254,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `test July 2025 total working days with exclusions`() {
-        val ym = YearMonth.of(2025, 7)
+        val ym = YearMonth(2025, 7)
         val noEntries = emptyList<TimeEntry>()
 
         // No non-working weekdays excluded => 23 working days (from issue description)
@@ -265,15 +263,15 @@ class WeeklyProgressBarsTest {
 
         // Additionally, when we fill every working day (Mon-Fri) with 7.5h, total hours should match and each week's progress should be 100%
         val fullMonthEntries = buildList {
-            var d = java.time.LocalDate.of(2025, 7, 1)
-            val end = java.time.LocalDate.of(2025, 7, 31)
-            while (!d.isAfter(end)) {
-                val iso = d.dayOfWeek.value // 1..7
+            var d = LocalDate(2025, 7, 1)
+            val end = LocalDate(2025, 7, 31)
+            while (d <= end) {
+                val iso = d.dayOfWeek.isoDayNumber // 1..7
                 if (iso in 1..5) {
                     add(
                         TimeEntry(
                             id = size + 1,
-                            date = LocalDate(d.year, d.monthValue, d.dayOfMonth),
+                            date = d,
                             hours = 7.5f,
                             activity = testActivity,
                             project = testProject,
@@ -281,7 +279,7 @@ class WeeklyProgressBarsTest {
                         )
                     )
                 }
-                d = d.plusDays(1)
+                d = d.plus(1, DateTimeUnit.DAY)
             }
         }
         val p0Full = calculateWeeklyProgress(fullMonthEntries, ym, excludedIsoDays = emptySet())
@@ -316,7 +314,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `boundary weeks clamp to month when excluding weekdays`() {
-        val ym = YearMonth.of(2025, 7)
+        val ym = YearMonth(2025, 7)
         val noEntries = emptyList<TimeEntry>()
 
         // Exclude Monday but first week starts on 2025-06-30 (a Monday outside July)
@@ -349,7 +347,7 @@ class WeeklyProgressBarsTest {
 
     @Test
     fun `actual hours and percentages computed correctly with exclusions`() {
-        val ym = YearMonth.of(2025, 7)
+        val ym = YearMonth(2025, 7)
         // Create entries only on Tuesdays (2), but then mark Tuesday as excluded, so expected should not count Tuesdays
         val entries = listOf(
             TimeEntry(1, LocalDate(2025, 7, 1), 7.5f, testActivity, testProject, testIssue),
@@ -403,7 +401,7 @@ class WeeklyProgressBarsTest {
     @Test
     fun `non-worked week within month should be marked 100 percent with marker`() {
         // February 2025 starts on Saturday, so the first overlapping week inside the month contains only Sat-Sun
-        val ym = YearMonth.of(2025, 2)
+        val ym = YearMonth(2025, 2)
         val progress = calculateWeeklyProgress(emptyList(), ym, excludedIsoDays = emptySet())
 
         // Find weeks with zero expected hours (i.e., no working days within month) — should be treated as 100% non-worked

@@ -18,16 +18,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.WeekInfo
-import com.ps.redmine.util.WorkHours
-import com.ps.redmine.util.getWeeksInMonth
-import com.ps.redmine.util.toJava
-import kotlinx.datetime.LocalDate
+import com.ps.redmine.util.*
+import kotlinx.datetime.YearMonth
 import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.number
 import kotlinx.datetime.plus
-import java.time.YearMonth
-import java.time.temporal.IsoFields
 
 /**
  * Data class representing weekly progress information.
@@ -61,8 +55,8 @@ fun calculateWeeklyProgress(
 
         // Calculate expected hours using weekly hours proportionally to effective working days, possibly excluding a fixed non-working weekday
         // First and last day of the current month using Kotlin dates
-        val firstDayOfMonthK = LocalDate(yearMonth.year, yearMonth.monthValue, 1)
-        val lastDayOfMonthK = LocalDate(yearMonth.year, yearMonth.monthValue, java.time.YearMonth.of(yearMonth.year, yearMonth.monthValue).lengthOfMonth())
+        val firstDayOfMonthK = yearMonth.atDay(1)
+        val lastDayOfMonthK = yearMonth.atDay(yearMonth.lengthOfMonth())
         // Clamp the week range to the current month using Kotlin dates
         val rangeStartK = if (weekInfo.startDate < firstDayOfMonthK) firstDayOfMonthK else weekInfo.startDate
         val rangeEndK = if (weekInfo.endDate > lastDayOfMonthK) lastDayOfMonthK else weekInfo.endDate
@@ -100,6 +94,8 @@ fun calculateWeeklyProgress(
     }
 }
 
+// Note: Uses kotlinx.datetime.YearMonth throughout
+
 /**
  * Composable that displays vertical progress bars for each week of the month.
  */
@@ -116,8 +112,8 @@ fun WeeklyProgressBars(
     }
 
     // Determine today's date and whether the displayed month is the current calendar month
-    val today = com.ps.redmine.util.today
-    val isCurrentMonth = currentMonth.year == today.year && currentMonth.monthValue == today.month.number
+    val today = today
+    val isCurrentMonth = currentMonth.year == today.year && currentMonth.month == today.month
 
     Column(
         modifier = modifier.width(44.dp).fillMaxHeight(),
@@ -154,7 +150,7 @@ private fun WeekProgressBar(
     val nonWorkedMarkerColor = MaterialTheme.colors.onSurface.copy(alpha = 0.45f)
 
     // Calculate the real ISO week number from the week's start date
-    val isoWeekNumber = progress.weekInfo.startDate.toJava().get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+    val isoWeekNumber = isoWeekNumber(progress.weekInfo.startDate)
 
     Column(
         modifier = modifier.fillMaxWidth(),

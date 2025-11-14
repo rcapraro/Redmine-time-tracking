@@ -1,17 +1,30 @@
 package com.ps.redmine.util
 
 import kotlinx.datetime.*
-import java.time.LocalDate as JavaLocalDate
-import java.time.YearMonth as JavaYearMonth
+import kotlin.time.Duration.Companion.milliseconds
 
 val today: LocalDate
-    get() = java.time.LocalDate.now().toKotlin()
+    get() = run {
+        // Compute current date in UTC using only Kotlin stdlib + kotlinx-datetime
+        val epochDays = System.currentTimeMillis().milliseconds.inWholeDays.toInt()
+        LocalDate.fromEpochDays(epochDays)
+    }
 
-fun LocalDate.toJava(): JavaLocalDate = JavaLocalDate.of(year, month.number, day)
+private val WEEKEND_ISO_DAYS: Set<Int> = setOf(6, 7) // Saturday=6, Sunday=7
 
-fun JavaLocalDate.toKotlin(): LocalDate = LocalDate(year, monthValue, dayOfMonth)
+private fun lastDayOfMonth(year: Int, month: Int): LocalDate {
+    val firstOfNext = if (month == 12) LocalDate(year + 1, 1, 1) else LocalDate(year, month + 1, 1)
+    return firstOfNext.minus(1, DateTimeUnit.DAY)
+}
 
-fun LocalDate.toJavaYearMonth(): JavaYearMonth = JavaYearMonth.of(year, month.number)
+/**
+ * Returns the length of the given month (1..12) in the given year.
+ */
+fun lengthOfMonth(year: Int, month: Int): Int {
+    require(month in 1..12) { "month must be 1..12" }
+    val lastOfThis = lastDayOfMonth(year, month)
+    return lastOfThis.day
+}
 
 /**
  * Returns the next business day (skipping weekends).
@@ -19,7 +32,7 @@ fun LocalDate.toJavaYearMonth(): JavaYearMonth = JavaYearMonth.of(year, month.nu
 fun LocalDate.nextBusinessDay(): LocalDate {
     var nextDay = this.plus(1, DateTimeUnit.DAY)
     // Skip Saturday (6) and Sunday (7)
-    while (nextDay.dayOfWeek.isoDayNumber == 6 || nextDay.dayOfWeek.isoDayNumber == 7) {
+    while (nextDay.dayOfWeek.isoDayNumber in WEEKEND_ISO_DAYS) {
         nextDay = nextDay.plus(1, DateTimeUnit.DAY)
     }
     return nextDay
@@ -31,7 +44,7 @@ fun LocalDate.nextBusinessDay(): LocalDate {
 fun LocalDate.previousBusinessDay(): LocalDate {
     var prevDay = this.minus(1, DateTimeUnit.DAY)
     // Skip Saturday (6) and Sunday (7)
-    while (prevDay.dayOfWeek.isoDayNumber == 6 || prevDay.dayOfWeek.isoDayNumber == 7) {
+    while (prevDay.dayOfWeek.isoDayNumber in WEEKEND_ISO_DAYS) {
         prevDay = prevDay.minus(1, DateTimeUnit.DAY)
     }
     return prevDay
@@ -43,11 +56,7 @@ fun LocalDate.previousBusinessDay(): LocalDate {
 fun getWorkingDaysInMonth(year: Int, month: Int): Int {
     val firstDay = LocalDate(year, month, 1)
     // Get the last day of the month by going to the first day of next month and subtracting 1 day
-    val lastDay = if (month == 12) {
-        LocalDate(year + 1, 1, 1).minus(1, DateTimeUnit.DAY)
-    } else {
-        LocalDate(year, month + 1, 1).minus(1, DateTimeUnit.DAY)
-    }
+    val lastDay = lastDayOfMonth(year, month)
 
     var workingDays = 0
     var currentDay = firstDay
@@ -78,11 +87,7 @@ data class WeekInfo(
  */
 fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
     val firstDay = LocalDate(year, month, 1)
-    val lastDay = if (month == 12) {
-        LocalDate(year + 1, 1, 1).minus(1, DateTimeUnit.DAY)
-    } else {
-        LocalDate(year, month + 1, 1).minus(1, DateTimeUnit.DAY)
-    }
+    val lastDay = lastDayOfMonth(year, month)
 
     val weeks = mutableListOf<WeekInfo>()
     var currentDate = firstDay
@@ -100,7 +105,7 @@ fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
 
         while (dayInWeek <= weekEnd) {
             // Only count days that are within the month and are working days (Monday-Friday)
-            if (dayInWeek >= firstDay && dayInWeek <= lastDay && dayInWeek.dayOfWeek.isoDayNumber in 1..5) {
+            if (dayInWeek in firstDay..lastDay && dayInWeek.dayOfWeek.isoDayNumber in 1..5) {
                 workingDays++
             }
             dayInWeek = dayInWeek.plus(1, DateTimeUnit.DAY)
@@ -116,5 +121,21 @@ fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
     }
 
     return weeks
+}
+
+/**
+ * Calculates the ISO-8601 week number for the given date.
+ * Algorithm: use Thursday-based week definition.
+ */
+fun isoWeekNumber(date: LocalDate): Int {
+    val dayIso = date.dayOfWeek.isoDayNumber // 1=Mon..7=Sun
+    // Thursday for this week
+    val thursday = date.plus(4 - dayIso, DateTimeUnit.DAY)
+    // First week of week-based-year contains Jan 4
+    val firstWeekThursday = LocalDate(thursday.year, 1, 4)
+    val firstWeekStart = firstWeekThursday.minus(firstWeekThursday.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+    val thisWeekStart = thursday.minus(thursday.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+    val daysBetween = firstWeekStart.daysUntil(thisWeekStart)
+    return (daysBetween / 7) + 1
 }
 

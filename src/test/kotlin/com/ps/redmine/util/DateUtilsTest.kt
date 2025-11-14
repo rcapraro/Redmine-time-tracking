@@ -45,7 +45,7 @@ class DateUtilsTest {
     @Test
     fun `test working days calculation for current month`() {
         // Test with current month to ensure it doesn't crash
-        val currentMonth = java.time.YearMonth.now()
+        val currentMonth = kotlinx.datetime.YearMonth.now()
         val workingDays = getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
         assertTrue(workingDays > 0, "Working days should be positive")
         assertTrue(workingDays <= 31, "Working days should not exceed 31")

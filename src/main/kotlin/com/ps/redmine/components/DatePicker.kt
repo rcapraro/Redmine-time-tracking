@@ -10,9 +10,10 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
-import java.time.DayOfWeek
-import java.time.format.TextStyle
+import kotlinx.datetime.YearMonth
+import kotlinx.datetime.isoDayNumber
 import java.util.*
 
 @Composable
@@ -23,7 +24,7 @@ fun DatePicker(
     locale: Locale = Locale.getDefault()
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    var currentYearMonth by remember { mutableStateOf(selectedDate.toJavaYearMonth()) }
+    var currentYearMonth by remember { mutableStateOf(YearMonth(selectedDate.year, selectedDate.month)) }
     val currentToday by remember { mutableStateOf(today) }
 
     Column(modifier = modifier.heightIn(min = 56.dp)) {
@@ -99,9 +100,10 @@ fun DatePicker(
                         }
                         Text(
                             text = "${
-                                currentYearMonth.month.getDisplayName(
-                                    TextStyle.FULL,
-                                    locale
+                                LocaleNames.monthName(
+                                    currentYearMonth.monthValue,
+                                    locale,
+                                    full = true
                                 )
                             } ${currentYearMonth.year}",
                             style = MaterialTheme.typography.h6
@@ -132,7 +134,7 @@ fun DatePicker(
                         ) {
                             for (dayOfWeek in DayOfWeek.entries) {
                                 Text(
-                                    text = dayOfWeek.getDisplayName(TextStyle.SHORT, locale),
+                                    text = LocaleNames.weekdayName(dayOfWeek.isoDayNumber, locale, full = false),
                                     style = MaterialTheme.typography.caption,
                                     color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                                     modifier = Modifier.padding(4.dp)
@@ -143,7 +145,7 @@ fun DatePicker(
                         // Calendar grid
                         val firstDayOfMonth = currentYearMonth.atDay(1)
                         val daysInMonth = currentYearMonth.lengthOfMonth()
-                        val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value
+                        val firstDayOfWeek = firstDayOfMonth.dayOfWeek.isoDayNumber
                         val weeks = (daysInMonth + firstDayOfWeek - 1 + 6) / 7
 
                         for (week in 0 until weeks) {
@@ -157,8 +159,7 @@ fun DatePicker(
                                         modifier = Modifier.size(30.dp).padding(2.dp)
                                     ) {
                                         if (day in 1..daysInMonth) {
-                                            val javaDate = currentYearMonth.atDay(day)
-                                            val kotlinDate = javaDate.toKotlin()
+                                            val kotlinDate = currentYearMonth.atDay(day)
                                             val isSelected = kotlinDate == selectedDate
                                             val isToday = kotlinDate == currentToday
 
@@ -210,7 +211,7 @@ fun DatePicker(
                             onClick = {
                                 val todayDate = today
                                 onDateSelected(todayDate)
-                                currentYearMonth = todayDate.toJavaYearMonth()
+                                currentYearMonth = YearMonth(todayDate.year, todayDate.month)
                                 showDialog = false
                             }
                         ) {

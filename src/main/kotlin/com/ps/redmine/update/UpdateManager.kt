@@ -4,8 +4,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.prefs.Preferences
 
 /**
@@ -22,6 +20,10 @@ class UpdateManager(
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
     private var updateCheckJob: Job? = null
+
+    private companion object {
+        const val MILLIS_PER_HOUR: Long = 3_600_000L
+    }
 
     /**
      * Starts periodic update checks if enabled in configuration.
@@ -60,12 +62,8 @@ class UpdateManager(
             _updateState.value = _updateState.value.copy(
                 isChecking = false,
                 availableUpdate = updateInfo,
-                showUpdateDialog = false,
-                lastCheckTime = LocalDateTime.now()
+                showUpdateDialog = false
             )
-
-            // Save last check time
-            saveLastCheckTime()
 
         } catch (e: Exception) {
             _updateState.value = _updateState.value.copy(
@@ -74,7 +72,6 @@ class UpdateManager(
             )
         }
     }
-
 
     /**
      * Shows the update dialog if an update is available.
@@ -111,18 +108,11 @@ class UpdateManager(
      */
     private fun getUpdateCheckInterval(): Long {
         val hours = preferences.getInt("update_check_interval_hours", 24)
-        return hours * 60 * 60 * 1000L // Convert to milliseconds
+        return hours * MILLIS_PER_HOUR // Convert to milliseconds
     }
 
 
-    /**
-     * Saves the last update check time.
-     */
-    private fun saveLastCheckTime() {
-        val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        preferences.put("last_update_check", now)
-        preferences.flush()
-    }
+    // Legacy "last update check" persistence removed
 
     /**
      * Cleans up resources.
@@ -140,6 +130,5 @@ data class UpdateState(
     val isChecking: Boolean = false,
     val availableUpdate: UpdateInfo? = null,
     val showUpdateDialog: Boolean = false,
-    val lastCheckTime: LocalDateTime? = null,
     val error: String? = null
 )

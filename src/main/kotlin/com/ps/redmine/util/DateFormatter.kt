@@ -1,20 +1,24 @@
 package com.ps.redmine.util
 
 import kotlinx.datetime.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.number
 import java.util.*
 
 object DateFormatter {
-    private fun getFormatter(style: FormatStyle, locale: Locale = Locale.getDefault()): DateTimeFormatter {
-        return DateTimeFormatter.ofLocalizedDate(style).withLocale(locale)
-    }
-
     fun formatShort(date: LocalDate, locale: Locale = Locale.getDefault()): String {
-        return date.toJava().format(getFormatter(FormatStyle.SHORT, locale))
+        return when (locale.language.lowercase()) {
+            "en" -> String.format("%02d/%02d/%02d", date.month.number, date.day, date.year % 100)
+            else -> String.format("%02d/%02d/%04d", date.day, date.month.number, date.year)
+        }
     }
 
     fun formatFull(date: LocalDate, locale: Locale = Locale.getDefault()): String {
-        return date.toJava().format(getFormatter(FormatStyle.FULL, locale))
+        val dayName = LocaleNames.weekdayName(date.dayOfWeek.isoDayNumber, locale, full = true)
+        val monthName = LocaleNames.monthName(date.monthNumber, locale, full = true)
+        return when (locale.language.lowercase()) {
+            "en" -> "$dayName, $monthName ${date.day}, ${date.year}"
+            else -> "$dayName ${date.day} $monthName ${date.year}"
+        }
     }
 }
