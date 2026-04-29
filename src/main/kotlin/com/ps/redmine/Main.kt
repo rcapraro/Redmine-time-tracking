@@ -43,14 +43,18 @@ import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
 import com.ps.redmine_time.generated.resources.app_icon
 import kotlinx.coroutines.launch
-import kotlinx.datetime.YearMonth
-import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.minus
-import kotlinx.datetime.plus
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.util.*
+
+/**
+ * Validates that a string is a valid hours input (digits, optional . or , decimal, max 1 fractional digit).
+ * Hoisted out of the onValueChange lambda so it isn't recompiled on every keystroke.
+ */
+private val HOURS_INPUT_REGEX = Regex("^\\d*([\\.,]\\d{0,1})?$")
 
 /**
  * Checks if an exception is a connection error.
@@ -172,10 +176,10 @@ fun App(
 
     // Compute the earliest non-complete working day in the given month
     fun computeFirstIncompleteDate(
-        yearMonth: kotlinx.datetime.YearMonth,
+        yearMonth: YearMonth,
         entries: List<TimeEntry>,
         excludedIsoDays: Set<Int>
-    ): kotlinx.datetime.LocalDate {
+    ): LocalDate {
         val firstDay = yearMonth.atDay(1)
         val lastDay = if (yearMonth.monthValue == 12) {
             kotlinx.datetime.LocalDate(yearMonth.year + 1, 1, 1).minus(1, kotlinx.datetime.DateTimeUnit.DAY)
@@ -194,7 +198,7 @@ fun App(
                     .filter { it.date == d }
                     .sumOf { it.hours.toDouble() }
                     .toFloat()
-                if (totalForDay < WorkHours.DAILY_STANDARD_HOURS) {
+                if (totalForDay < WorkHours.configuredDailyHours()) {
                     return d
                 }
             }
@@ -220,6 +224,8 @@ fun App(
                 )
                 // After loading, set selectedDate to first non-complete day of the month
                 selectedDate = computeFirstIncompleteDate(yearMonth, timeEntries, nonWorkingIsoDays)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Handle the exception
                 handleException(
@@ -248,6 +254,8 @@ fun App(
                 try {
                     redmineClient.deleteTimeEntry(id)
                     scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     // Handle the exception
                     handleException(
@@ -309,58 +317,45 @@ fun App(
                 actionLabel = Strings["dismiss"],
                 duration = SnackbarDuration.Long
             )
-            errorMessage = null
         }
     }
 
-    // Custom typography with harmonized font sizes
-    val customTypography = Typography(
-        h6 = TextStyle(
-            fontWeight = FontWeight.Medium,
-            fontSize = 18.sp // Reduced from default 20sp
-        ),
-        subtitle1 = TextStyle(
-            fontWeight = FontWeight.Normal,
-            fontSize = 16.sp // Harmonized
-        ),
-        subtitle2 = TextStyle(
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp // Harmonized
-        ),
-        body1 = TextStyle(
-            fontWeight = FontWeight.Normal,
-            fontSize = 14.sp // Harmonized
-        ),
-        body2 = TextStyle(
-            fontWeight = FontWeight.Normal,
-            fontSize = 13.sp // Harmonized
-        ),
-        caption = TextStyle(
-            fontWeight = FontWeight.Normal,
-            fontSize = 12.sp // Harmonized
+    // Custom typography with harmonized font sizes — immutable; remember once
+    val customTypography = remember {
+        Typography(
+            h6 = TextStyle(fontWeight = FontWeight.Medium, fontSize = 18.sp),
+            subtitle1 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp),
+            subtitle2 = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp),
+            body1 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp),
+            body2 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 13.sp),
+            caption = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp)
         )
-    )
+    }
 
     // Load configuration to get theme preference
     val config = remember { ConfigurationManager.loadConfig() }
     var isDarkTheme by remember { mutableStateOf(config.isDarkTheme) }
 
-    // Define light and dark color schemes
-    val lightColorScheme = lightColors(
-        secondary = Color(0xFF00897B) // Darker teal color for better visibility
-    )
+    // Define light and dark color schemes — immutable; remember once
+    val lightColorScheme = remember {
+        lightColors(
+            secondary = Color(0xFF00897B) // Darker teal color for better visibility
+        )
+    }
 
-    val darkColorScheme = darkColors(
-        primary = Color(0xFF90CAF9), // Light blue
-        primaryVariant = Color(0xFF64B5F6), // Lighter blue
-        secondary = Color(0xFF80CBC4), // Light teal
-        background = Color(0xFF121212), // Dark background
-        surface = Color(0xFF1E1E1E), // Dark surface
-        onPrimary = Color(0xFF000000), // Black text on primary
-        onSecondary = Color(0xFF000000), // Black text on secondary
-        onBackground = Color(0xFFFFFFFF), // White text on background
-        onSurface = Color(0xFFFFFFFF) // White text on surface
-    )
+    val darkColorScheme = remember {
+        darkColors(
+            primary = Color(0xFF90CAF9),
+            primaryVariant = Color(0xFF64B5F6),
+            secondary = Color(0xFF80CBC4),
+            background = Color(0xFF121212),
+            surface = Color(0xFF1E1E1E),
+            onPrimary = Color(0xFF000000),
+            onSecondary = Color(0xFF000000),
+            onBackground = Color(0xFFFFFFFF),
+            onSurface = Color(0xFFFFFFFF)
+        )
+    }
 
     // Use the appropriate color scheme based on the theme preference
     val colorScheme = if (isDarkTheme) darkColorScheme else lightColorScheme
@@ -623,7 +618,7 @@ fun App(
                                 }
                             }
                             val effectiveDays = workingDays - excludedCount
-                            val expectedHours = effectiveDays * 7.5
+                            val expectedHours = effectiveDays * WorkHours.configuredDailyHours()
                             val completionPercentage = if (expectedHours > 0) {
                                 (totalHours / expectedHours * 100).coerceAtMost(100.0)
                             } else {
@@ -757,6 +752,8 @@ fun App(
 
                                         // Trigger focus back to Date field for next entry
                                         focusRequestKey++
+                                    } catch (e: CancellationException) {
+                                        throw e
                                     } catch (e: Exception) {
                                         // Handle the exception
                                         handleException(
@@ -879,8 +876,9 @@ fun TimeEntryDetail(
             val hasProject = selectedProject != null
             val hasActivity = selectedActivity != null
             val hasHours = hours.isNotEmpty()
-            val validHours = hours.toFloatOrNull() != null
-            val nonZeroHours = hours.toFloatOrNull() != 0f
+            val normalizedHours = hours.replace(',', '.')
+            val validHours = normalizedHours.toFloatOrNull() != null
+            val nonZeroHours = normalizedHours.toFloatOrNull() != 0f
             val hasIssue = selectedIssue != null
             val hasComments = comments.isNotEmpty()
             val notLoading = !isLoading && !isGlobalLoading
@@ -912,7 +910,7 @@ fun TimeEntryDetail(
                     scope.launch {
                         isSaving = true
                         try {
-                            val parsedHours = hours.toFloatOrNull() ?: 0f
+                            val parsedHours = hours.replace(',', '.').toFloatOrNull() ?: 0f
                             val timeEntryToSave = TimeEntry(
                                 id = timeEntry?.id,
                                 date = date,
@@ -923,8 +921,12 @@ fun TimeEntryDetail(
                                 comments = comments
                             )
                             onSave(timeEntryToSave)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            // onSave handles its own exceptions; this is a defensive
+                            // fallback for unexpected synchronous errors
+                            System.err.println("Warning: Unexpected error during save: ${e.message}")
                         } finally {
                             isSaving = false
                         }
@@ -957,8 +959,10 @@ fun TimeEntryDetail(
             // Get projects that have open issues only
             projects = redmineClient.getProjectsWithOpenIssues()
             // Activities will be loaded when a project is selected
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            println("Error loading data: ${e.message}")
+            System.err.println("Error loading data: ${e.message}")
         } finally {
             isLoading = false
         }
@@ -975,8 +979,10 @@ fun TimeEntryDetail(
 
                 // Load issues for the selected project
                 issues = redmineClient.getIssues(project.id)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                println("Error loading issues or activities: ${e.message}")
+                System.err.println("Error loading issues or activities: ${e.message}")
                 issues = emptyList()
                 activities = emptyList()
             } finally {
@@ -1164,17 +1170,21 @@ fun TimeEntryDetail(
                     OutlinedTextField(
                         value = hours,
                         onValueChange = { input: String ->
-                            if (input.isEmpty() || input.matches(Regex("^\\d*\\.?\\d*$"))) {
-                                val newValue = input.take(4) // Limit to 4 characters (e.g., "7.50")
-                                val floatValue = newValue.toFloatOrNull()
-                                if (floatValue == null || floatValue <= 7.5f) {
-                                    hours = newValue
+                            if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
+                                val normalized = input.replace(',', '.')
+                                val floatValue = normalized.toFloatOrNull()
+                                val maxHours = WorkHours.configuredDailyHours()
+                                if (floatValue == null || floatValue <= maxHours) {
+                                    hours = input
                                 }
                             }
                         },
                         modifier = Modifier.width(200.dp).heightIn(min = 48.dp).then(shortcutHandler),
                         label = { Text(Strings["hours_label"]) },
-                        isError = hours.isNotEmpty() && (hours.toFloatOrNull() == null || hours.toFloat() <= 0f || hours.toFloat() > 7.5f),
+                        isError = hours.isNotEmpty() && run {
+                            val normalized = hours.replace(',', '.')
+                            (normalized.toFloatOrNull() == null || normalized.toFloat() <= 0f || normalized.toFloat() > WorkHours.configuredDailyHours())
+                        },
                         singleLine = true,
                         enabled = !isLoading && !isGlobalLoading,
                         trailingIcon = {
@@ -1195,34 +1205,38 @@ fun TimeEntryDetail(
                     )
 
                     TextButton(
-                        onClick = { hours = "7.5" },
+                        onClick = { hours = Strings["total_hours_format"].format(WorkHours.configuredDailyHours()) },
                         enabled = !isLoading && !isGlobalLoading
                     ) {
                         Text(Strings["full_day"])
                     }
                 }
 
-                if (hours.isNotEmpty() && hours.toFloatOrNull() == null) {
-                    Text(
-                        text = Strings["invalid_number"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                } else if (hours.isNotEmpty() && hours.toFloat() <= 0f) {
-                    Text(
-                        text = Strings["hours_must_be_positive"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                } else if (hours.isNotEmpty() && hours.toFloat() > 7.5f) {
-                    Text(
-                        text = Strings["hours_max_value"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
+                run {
+                    val normalized = hours.replace(',', '.')
+                    if (hours.isNotEmpty() && normalized.toFloatOrNull() == null) {
+                        Text(
+                            text = Strings["invalid_number"],
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    } else if (hours.isNotEmpty() && normalized.toFloat() <= 0f) {
+                        Text(
+                            text = Strings["hours_must_be_positive"],
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    } else if (hours.isNotEmpty() && normalized.toFloat() > WorkHours.configuredDailyHours()) {
+                        val maxHours = WorkHours.configuredDailyHours()
+                        Text(
+                            text = Strings["hours_max_value"].format(maxHours),
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -1267,23 +1281,19 @@ fun TimeEntryDetail(
                         )
                     }
 
-                    issues.isEmpty() && selectedIssue != null -> {
-                        Text(
-                            text = Strings["showing_issue"].format(selectedIssue!!.id),
-                            color = MaterialTheme.colors.secondary,
-                            style = MaterialTheme.typography.caption,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                    }
-
                     issues.isEmpty() -> {
+                        // Snapshot state values once so the branch body sees a consistent view
+                        val currentIssue = selectedIssue
                         val project = selectedProject
+                        val text = when {
+                            currentIssue != null -> Strings["showing_issue"].format(currentIssue.id)
+                            project != null -> Strings["no_issues_for_project"].format(project.name)
+                            else -> Strings["no_issues_available"]
+                        }
                         Text(
-                            text = if (project != null)
-                                Strings["no_issues_for_project"].format(project.name)
-                            else
-                                Strings["no_issues_available"],
-                            color = MaterialTheme.colors.error,
+                            text = text,
+                            color = if (currentIssue != null) MaterialTheme.colors.secondary
+                            else MaterialTheme.colors.error,
                             style = MaterialTheme.typography.caption,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )

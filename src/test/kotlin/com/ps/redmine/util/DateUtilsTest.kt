@@ -1,5 +1,6 @@
 package com.ps.redmine.util
 
+import kotlinx.datetime.LocalDate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -50,5 +51,30 @@ class DateUtilsTest {
         assertTrue(workingDays > 0, "Working days should be positive")
         assertTrue(workingDays <= 31, "Working days should not exceed 31")
         println("[DEBUG_LOG] Current month (${currentMonth.year}-${currentMonth.monthValue}) working days: $workingDays")
+    }
+
+    @Test
+    fun `isoWeekNumber for January 1 belonging to previous year week 53`() {
+        // 2021-01-01 is a Friday in ISO week 53 of 2020
+        assertEquals(53, isoWeekNumber(LocalDate(2021, 1, 1)))
+    }
+
+    @Test
+    fun `isoWeekNumber for late December belonging to next year week 1`() {
+        // 2024-12-30 is a Monday in ISO week 1 of 2025
+        assertEquals(1, isoWeekNumber(LocalDate(2024, 12, 30)))
+    }
+
+    @Test
+    fun `isoWeekNumber for first ISO week of the year`() {
+        // 2024-01-01 is a Monday — ISO week 1 of 2024
+        assertEquals(1, isoWeekNumber(LocalDate(2024, 1, 1)))
+    }
+
+    @Test
+    fun `isoWeekNumber boundary at year split`() {
+        // 2023-01-02 is a Monday in ISO week 1 of 2023; 2023-01-01 (Sunday) is week 52 of 2022
+        assertEquals(52, isoWeekNumber(LocalDate(2023, 1, 1)))
+        assertEquals(1, isoWeekNumber(LocalDate(2023, 1, 2)))
     }
 }

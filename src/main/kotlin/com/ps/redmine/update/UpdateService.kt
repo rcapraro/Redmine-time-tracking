@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Service responsible for checking for application updates from GitHub releases.
@@ -75,8 +76,10 @@ class UpdateService {
             } else {
                 null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            println("Failed to check for updates: ${e.message}")
+            System.err.println("Failed to check for updates: ${e.message}")
             null
         }
     }
@@ -110,7 +113,6 @@ class UpdateService {
      */
     private fun getPlatformAsset(assets: List<GitHubAsset>): GitHubAsset? {
         val osName = System.getProperty("os.name").lowercase()
-        val osArch = System.getProperty("os.arch").lowercase()
 
         return when {
             osName.contains("mac") -> {

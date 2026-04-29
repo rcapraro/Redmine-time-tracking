@@ -72,7 +72,7 @@ fun calculateWeeklyProgress(
             }
             dateCursorK = dateCursorK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
         }
-        val expectedHours = effectiveWorkingDaysInWeek * WorkHours.DAILY_STANDARD_HOURS
+        val expectedHours = effectiveWorkingDaysInWeek * WorkHours.configuredDailyHours()
 
         // Determine if this is a non-worked week within the current month (only non-working days fall inside the month)
         val isNonWorkedWeek = clampedDaysCount > 0 && effectiveWorkingDaysInWeek == 0

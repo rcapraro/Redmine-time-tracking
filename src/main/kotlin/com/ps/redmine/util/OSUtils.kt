@@ -60,17 +60,11 @@ object OSUtils {
      * @return Formatted shortcut string (e.g., "⌘S", "Ctrl+S", "Alt+T")
      */
     fun formatShortcut(key: String, useModifier: Boolean = false, useAlt: Boolean = false): String {
-        val parts = mutableListOf<String>()
-
-        if (useModifier) {
-            parts.add(getModifierKeySymbol())
+        val parts = buildList {
+            if (useModifier) add(getModifierKeySymbol())
+            if (useAlt) add(getAltKeySymbol())
+            add(key)
         }
-
-        if (useAlt) {
-            parts.add(getAltKeySymbol())
-        }
-
-        parts.add(key)
 
         return when (getCurrentOS()) {
             OperatingSystem.MACOS -> parts.joinToString("")

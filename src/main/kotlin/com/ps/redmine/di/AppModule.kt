@@ -10,8 +10,8 @@ val appModule = module {
     // Register the KtorRedmineClient as the implementation
     single<RedmineClientInterface> {
         KtorRedmineClient(
-            uri = getProperty("redmine.uri"),
-            apiKey = getProperty("redmine.apiKey")
+            initialUri = getProperty("redmine.uri"),
+            initialApiKey = getProperty("redmine.apiKey")
         )
     }
 

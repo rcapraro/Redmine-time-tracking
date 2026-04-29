@@ -18,9 +18,11 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.X509Certificate
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import kotlin.coroutines.cancellation.CancellationException
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
 /**
@@ -28,12 +30,27 @@ import com.ps.redmine.model.TimeEntry as AppTimeEntry
  * This is a more Kotlin-idiomatic approach compared to the Java HttpClient used in DirectRedmineClient.
  */
 class KtorRedmineClient(
-    private var uri: String,
-    private var apiKey: String,
+    initialUri: String,
+    initialApiKey: String,
     private val httpClientOverride: HttpClient? = null
 ) : RedmineClientInterface {
 
+    @Volatile
     private var cachedWeeklyHours: Float? = null
+
+    /**
+     * Immutable snapshot of the mutable state that can be swapped atomically
+     * by [updateConfiguration]. Each request reads [state] once, into a local
+     * val, so that uri/apiKey/httpClient are always read as a consistent group.
+     */
+    private data class ClientState(
+        val uri: String,
+        val apiKey: String,
+        val httpClient: HttpClient
+    )
+
+    @Volatile
+    private var state: ClientState
 
     companion object {
         private val json = Json {
@@ -122,6 +139,8 @@ class KtorRedmineClient(
                 val status = e.response.status.value
                 val body = try {
                     e.response.bodyAsText()
+                } catch (ce: CancellationException) {
+                    throw ce
                 } catch (_: Exception) {
                     e.message ?: ""
                 }
@@ -136,25 +155,25 @@ class KtorRedmineClient(
         }
     }
 
-    // Cache for projects
-    private var cachedProjects: Map<Int, Project>? = null
-    private val projectCache = mutableMapOf<Int, Project>()
+    // Caches — concurrent because the API methods are called from multiple coroutines
+    private val projectCache = ConcurrentHashMap<Int, Project>()
 
-    // Cache for activities by project
-    private val projectActivitiesCache = mutableMapOf<Int, MutableMap<Int, Activity>>()
+    // Cache for activities by project (inner map also concurrent — read outside cacheMutex)
+    private val projectActivitiesCache = ConcurrentHashMap<Int, ConcurrentHashMap<Int, Activity>>()
 
     // TTL-based cache for issues by project
     private data class CachedValue<T>(val value: T, val timestampMs: Long)
 
-    private val projectIssuesCache = mutableMapOf<Int, CachedValue<List<Issue>>>()
+    private val projectIssuesCache = ConcurrentHashMap<Int, CachedValue<List<Issue>>>()
 
-    private val issueCache = mutableMapOf<Int, Issue>()
-    private var httpClient: HttpClient? = null
+    private val issueCache = ConcurrentHashMap<Int, Issue>()
 
     // Cache timing
     private val PROJECTS_TTL_MS = 10 * 60 * 1000L // 10 minutes
     private val ISSUES_TTL_MS = 5 * 60 * 1000L // 5 minutes
     private val cacheMutex = kotlinx.coroutines.sync.Mutex()
+
+    @Volatile
     private var projectsFetchedAtMs: Long = 0L
 
     private fun <T> isFresh(cached: CachedValue<T>?, ttlMs: Long, now: Long = System.currentTimeMillis()): Boolean {
@@ -162,14 +181,11 @@ class KtorRedmineClient(
     }
 
     init {
-        if (httpClientOverride != null) {
-            httpClient = httpClientOverride
-        } else {
-            createHttpClient()
-        }
+        val client = httpClientOverride ?: createHttpClient(initialApiKey)
+        state = ClientState(initialUri, initialApiKey, client)
     }
 
-    private fun createHttpClient() {
+    private fun createHttpClient(apiKey: String): HttpClient {
         // Create a trust manager that does not validate certificate chains
         val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
@@ -182,7 +198,7 @@ class KtorRedmineClient(
         sslContext.init(null, trustAllCerts, java.security.SecureRandom())
 
         // Create Ktor HttpClient
-        httpClient = HttpClient(CIO) {
+        return HttpClient(CIO) {
             // Configure timeout
             install(HttpTimeout) {
                 requestTimeoutMillis = 30000
@@ -190,7 +206,8 @@ class KtorRedmineClient(
                 socketTimeoutMillis = 10000
             }
 
-            // Configure default request
+            // Configure default request — apiKey is captured from the parameter so
+            // each client carries its own immutable key
             defaultRequest {
                 header("X-Redmine-API-Key", apiKey)
                 contentType(ContentType.Application.Json)
@@ -212,28 +229,44 @@ class KtorRedmineClient(
     }
 
     override fun close() {
-        httpClient?.close()
-        httpClient = null
+        if (httpClientOverride == null) {
+            try {
+                state.httpClient.close()
+            } catch (_: Exception) {
+                // Ignore close failures
+            }
+        }
     }
 
     override fun updateConfiguration(newUri: String, newApiKey: String) {
-        uri = newUri
-        apiKey = newApiKey
+        // Clear caches first — readers seeing the new state should not see stale data
+        clearCaches()
 
-        // Clear caches
-        cachedProjects = null
+        if (httpClientOverride == null) {
+            // Build a fully-formed new client, then swap atomically. In-flight
+            // requests holding a reference to the old client continue against
+            // the old server until they complete, then the old client is closed.
+            val old = state
+            val newClient = createHttpClient(newApiKey)
+            state = ClientState(newUri, newApiKey, newClient)
+            try {
+                old.httpClient.close()
+            } catch (_: Exception) {
+                // Ignore close failures on the old client
+            }
+        } else {
+            // Test path: keep the override but update uri/apiKey
+            state = state.copy(uri = newUri, apiKey = newApiKey)
+        }
+    }
+
+    private fun clearCaches() {
         projectCache.clear()
         projectActivitiesCache.clear()
         projectIssuesCache.clear()
         issueCache.clear()
         cachedWeeklyHours = null
         projectsFetchedAtMs = 0L
-
-        // Recreate the HTTP client only when not using an injected client (tests)
-        if (httpClientOverride == null) {
-            close()
-            createHttpClient()
-        }
     }
 
     /**
@@ -256,8 +289,11 @@ class KtorRedmineClient(
                 cachedWeeklyHours = weekly
             }
             weekly
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            // Don't propagate failure for this optional information; just return null
+            // Optional information — don't propagate, but log so the failure isn't silent
+            System.err.println("Warning: Failed to load weekly hours from Redmine: ${e.message}")
             null
         }
     }
@@ -266,9 +302,9 @@ class KtorRedmineClient(
      * Helper method to make a GET request to the Redmine API
      */
     private suspend inline fun <reified T> getAndParse(endpoint: String): T = withContext(Dispatchers.IO) {
+        val current = state
         try {
-            val response = httpClient?.get("$uri$endpoint")
-                ?: throw IOException("HTTP client not initialized")
+            val response = current.httpClient.get("${current.uri}$endpoint")
 
             if (!response.status.isSuccess()) {
                 throw createApiException(
@@ -280,6 +316,8 @@ class KtorRedmineClient(
             // Parse the response body using kotlinx.serialization
             val responseText = response.bodyAsText()
             json.decodeFromString<T>(responseText)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             mapAndThrow(e, "Error retrieving data from Redmine")
         }
@@ -290,10 +328,11 @@ class KtorRedmineClient(
      */
     private suspend inline fun <reified R> postAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
+            val current = state
             try {
-                val response = httpClient?.post("$uri$endpoint") {
+                val response = current.httpClient.post("${current.uri}$endpoint") {
                     setBody(body)
-                } ?: throw IOException("HTTP client not initialized")
+                }
 
                 if (!response.status.isSuccess()) {
                     throw createApiException(
@@ -305,6 +344,8 @@ class KtorRedmineClient(
                 // Parse the response body using kotlinx.serialization
                 val responseText = response.bodyAsText()
                 json.decodeFromString<R>(responseText)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 mapAndThrow(e, "Error saving data to Redmine")
             }
@@ -315,10 +356,11 @@ class KtorRedmineClient(
      */
     private suspend inline fun <reified R> putAndParse(endpoint: String, body: String): R =
         withContext(Dispatchers.IO) {
+            val current = state
             try {
-                val response = httpClient?.put("$uri$endpoint") {
+                val response = current.httpClient.put("${current.uri}$endpoint") {
                     setBody(body)
-                } ?: throw IOException("HTTP client not initialized")
+                }
 
                 if (!response.status.isSuccess()) {
                     throw createApiException(
@@ -337,6 +379,8 @@ class KtorRedmineClient(
                 }
 
                 json.decodeFromString<R>(responseText)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 mapAndThrow(e, "Error updating data in Redmine")
             }
@@ -346,9 +390,9 @@ class KtorRedmineClient(
      * Helper method to make a DELETE request to the Redmine API
      */
     private suspend fun delete(endpoint: String): Unit = withContext(Dispatchers.IO) {
+        val current = state
         try {
-            val response = httpClient?.delete("$uri$endpoint")
-                ?: throw IOException("HTTP client not initialized")
+            val response = current.httpClient.delete("${current.uri}$endpoint")
 
             if (!response.status.isSuccess()) {
                 throw createApiException(
@@ -356,9 +400,81 @@ class KtorRedmineClient(
                     responseBody = response.bodyAsText()
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             mapAndThrow(e, "Error deleting data from Redmine")
         }
+    }
+
+    /**
+     * Fetches all pages of projects (with activities included) using pagination
+     * and parallel page fetches.
+     */
+    private suspend fun fetchAllProjectsWithActivities(): List<RedmineProjectWithActivities> {
+        val limit = 100
+
+        val firstPageEndpoint = "/projects.json?include=time_entry_activities&limit=${limit}&offset=0"
+        val firstPage = getAndParse<RedmineProjectsWithActivitiesResponse>(firstPageEndpoint)
+
+        val all = mutableListOf<RedmineProjectWithActivities>()
+        all.addAll(firstPage.projects)
+
+        val totalCount = firstPage.totalCount
+        if (totalCount > limit) {
+            val remainingOffsets = mutableListOf<Int>()
+            var offset = limit
+            while (offset < totalCount) {
+                remainingOffsets.add(offset)
+                offset += limit
+            }
+
+            val remainingResponses = coroutineScope {
+                remainingOffsets.map { pageOffset ->
+                    async {
+                        val endpoint =
+                            "/projects.json?include=time_entry_activities&limit=${limit}&offset=${pageOffset}"
+                        getAndParse<RedmineProjectsWithActivitiesResponse>(endpoint)
+                    }
+                }.awaitAll()
+            }
+
+            remainingResponses.forEach { all.addAll(it.projects) }
+        }
+
+        return all
+    }
+
+    /**
+     * Fetches issues by their IDs in batches, using Redmine's `issue_id=1,2,3` filter.
+     * Returns a map keyed by issue ID. Missing IDs are not present in the result.
+     */
+    private suspend fun fetchIssuesByIds(issueIds: Collection<Int>): Map<Int, Issue> {
+        if (issueIds.isEmpty()) return emptyMap()
+
+        val batchSize = 100
+        val batches = issueIds.toList().chunked(batchSize)
+
+        val responses = coroutineScope {
+            batches.map { batch ->
+                async {
+                    val ids = batch.joinToString(",")
+                    // status_id=* ensures both open and closed issues are returned
+                    val endpoint = "/issues.json?issue_id=${ids}&status_id=*&limit=${batchSize}"
+                    getAndParse<RedmineIssuesResponse>(endpoint)
+                }
+            }.awaitAll()
+        }
+
+        val result = mutableMapOf<Int, Issue>()
+        for (response in responses) {
+            for (apiIssue in response.issues) {
+                if (apiIssue.id > 0 && apiIssue.subject.isNotEmpty()) {
+                    result[apiIssue.id] = Issue(apiIssue.id, apiIssue.subject)
+                }
+            }
+        }
+        return result
     }
 
     /**
@@ -421,27 +537,24 @@ class KtorRedmineClient(
                 // Pre-load activities and projects
                 getProjectsWithActivities()
 
-                // Collect unique issue IDs from all entries
-                val uniqueIssueIds = allTimeEntries
+                // Collect unique issue IDs that aren't already cached
+                val missingIssueIds = allTimeEntries
                     .mapNotNull { it.issue.id.takeIf { id -> id > 0 } }
                     .distinct()
+                    .filter { !issueCache.containsKey(it) }
 
-                // Batch load issues
-                for (issueId in uniqueIssueIds) {
-                    if (!issueCache.containsKey(issueId)) {
-                        try {
-                            val issueEndpoint = "/issues/$issueId.json"
-                            val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
-                            val issue = issueResponse.issue
-
-                            if (issue.id > 0) {
-                                issueCache[issue.id] = Issue(issue.id, issue.subject)
-                            } else {
-                                issueCache[issueId] = Issue(issueId, "Unknown Issue")
-                            }
-                        } catch (_: Exception) {
-                            issueCache[issueId] = Issue(issueId, "Unknown Issue")
-                        }
+                if (missingIssueIds.isNotEmpty()) {
+                    // Batch-fetch them in parallel chunks rather than one GET per issue
+                    val fetched = try {
+                        fetchIssuesByIds(missingIssueIds)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    for (issueId in missingIssueIds) {
+                        val issue = fetched[issueId]
+                        issueCache[issueId] = issue ?: Issue(issueId, "Unknown Issue")
                     }
                 }
 
@@ -456,6 +569,8 @@ class KtorRedmineClient(
                         null
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Rethrow RedmineApiException as it already has a descriptive message
                 if (e is RedmineApiException) {
@@ -473,13 +588,11 @@ class KtorRedmineClient(
 
     override suspend fun createTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
         try {
-            // Convert to API request model with the correct field names for the API
-            val apiRequest = timeEntry.toApiRequest()
-
-            // Create the request payload
-            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
-
-            val requestJson = """{"time_entry": $timeEntryJson}"""
+            // Build the request payload using the typed envelope
+            val requestJson = json.encodeToString(
+                RedmineTimeEntryRequestEnvelope.serializer(),
+                RedmineTimeEntryRequestEnvelope(timeEntry.toApiRequest())
+            )
 
             // Make the API request
             val response = postAndParse<RedmineTimeEntryResponse>("/time_entries.json", requestJson)
@@ -492,6 +605,8 @@ class KtorRedmineClient(
                     val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
                     val issue = issueResponse.issue
                     issueCache[issue.id] = Issue(issue.id, issue.subject)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
                 }
@@ -499,6 +614,8 @@ class KtorRedmineClient(
 
             // Convert and return the time entry
             timeEntryResponse.toDomainModel(issueCache)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {
@@ -518,36 +635,27 @@ class KtorRedmineClient(
         require(timeEntry.id != null) { "Time entry ID cannot be null for update operation" }
 
         try {
-            // Convert to API request model with the correct field names for the API
-            val apiRequest = timeEntry.toApiRequest()
+            // Build the request payload using the typed envelope
+            val requestJson = json.encodeToString(
+                RedmineTimeEntryRequestEnvelope.serializer(),
+                RedmineTimeEntryRequestEnvelope(timeEntry.toApiRequest())
+            )
 
-            // Create the request payload
-            val timeEntryJson = json.encodeToString(RedmineTimeEntryRequest.serializer(), apiRequest)
-
-            val requestJson = """{"time_entry": $timeEntryJson}"""
-
-            // Make the API request
+            // Redmine's PUT /time_entries/{id}.json returns 200 with empty body, so we
+            // can't decode the updated resource from the response. The input timeEntry
+            // is what was sent and accepted, so we return it as-is rather than paying
+            // for a follow-up GET round-trip.
             val endpoint = "/time_entries/${timeEntry.id}.json"
             putAndParse<Unit>(endpoint, requestJson)
 
-            // Get the updated time entry
-            val getResponse = getAndParse<RedmineTimeEntryResponse>(endpoint)
-
-            // Ensure the issue is cached if it has a valid ID
-            val timeEntryResponse = getResponse.timeEntry
-            if (timeEntryResponse.issue.id > 0 && !issueCache.containsKey(timeEntryResponse.issue.id)) {
-                try {
-                    val issueEndpoint = "/issues/${timeEntryResponse.issue.id}.json"
-                    val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
-                    val issue = issueResponse.issue
-                    issueCache[issue.id] = Issue(issue.id, issue.subject)
-                } catch (e: Exception) {
-                    issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
-                }
+            // Make sure the issue is cached for downstream consumers
+            if (timeEntry.issue.id > 0) {
+                issueCache.putIfAbsent(timeEntry.issue.id, timeEntry.issue)
             }
 
-            // Convert and return the time entry
-            timeEntryResponse.toDomainModel(issueCache)
+            timeEntry
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {
@@ -567,6 +675,8 @@ class KtorRedmineClient(
         try {
             // Make the API request
             delete("/time_entries/$timeEntryId.json")
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Rethrow RedmineApiException as it already has a descriptive message
             if (e is RedmineApiException) {
@@ -602,32 +712,31 @@ class KtorRedmineClient(
 
     override suspend fun getProjectsWithActivities(): List<Project> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        cachedProjects?.values?.toList()?.let { cachedList ->
-            if (projectActivitiesCache.isNotEmpty() && (now - projectsFetchedAtMs) < PROJECTS_TTL_MS) {
-                return@withContext cachedList
-            }
+        if (projectCache.isNotEmpty() && projectActivitiesCache.isNotEmpty() &&
+            (now - projectsFetchedAtMs) < PROJECTS_TTL_MS
+        ) {
+            return@withContext projectCache.values.toList()
         }
 
         cacheMutex.lock()
         try {
             // Re-check inside lock to avoid duplicate reloads
             val nowLocked = System.currentTimeMillis()
-            cachedProjects?.values?.toList()?.let { cachedList ->
-                if (projectActivitiesCache.isNotEmpty() && (nowLocked - projectsFetchedAtMs) < PROJECTS_TTL_MS) {
-                    return@withContext cachedList
-                }
+            if (projectCache.isNotEmpty() && projectActivitiesCache.isNotEmpty() &&
+                (nowLocked - projectsFetchedAtMs) < PROJECTS_TTL_MS
+            ) {
+                return@withContext projectCache.values.toList()
             }
 
-            // Get projects with time entry activities included
-            val response =
-                getAndParse<RedmineProjectsWithActivitiesResponse>("/projects.json?include=time_entry_activities&limit=100")
+            // Fetch all pages of projects in parallel
+            val allApiProjects = fetchAllProjectsWithActivities()
 
             // Process all projects and their activities
             projectCache.clear()
             projectActivitiesCache.clear()
             val parsedProjects = mutableListOf<Project>()
 
-            for (projectWithActivities in response.projects) {
+            for (projectWithActivities in allApiProjects) {
                 val id = projectWithActivities.id
                 val name = projectWithActivities.name
                 if (id <= 0 || name.isEmpty()) continue
@@ -638,7 +747,7 @@ class KtorRedmineClient(
 
                 val timeEntryActivities = projectWithActivities.timeEntryActivities
                 if (timeEntryActivities.isNotEmpty()) {
-                    val projectActivities = projectActivitiesCache.getOrPut(id) { mutableMapOf() }
+                    val projectActivities = projectActivitiesCache.getOrPut(id) { ConcurrentHashMap() }
                     for (activityApi in timeEntryActivities) {
                         val activityId = activityApi.id
                         val activityName = activityApi.name
@@ -648,9 +757,10 @@ class KtorRedmineClient(
                 }
             }
 
-            cachedProjects = projectCache.toMap()
             projectsFetchedAtMs = System.currentTimeMillis()
             parsedProjects
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (e is RedmineApiException) throw e
             throw RedmineApiException(
@@ -685,6 +795,8 @@ class KtorRedmineClient(
                                 .filter { it.id > 0 && it.subject.isNotEmpty() }
                                 .map { Issue(it.id, it.subject) }
                             projectIssuesCache[project.id] = CachedValue(issues, System.currentTimeMillis())
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (_: Exception) {
                             projectIssuesCache[project.id] = CachedValue(emptyList(), System.currentTimeMillis())
                         } finally {
@@ -697,6 +809,8 @@ class KtorRedmineClient(
             allProjects.filter { project ->
                 projectIssuesCache[project.id]?.value?.isNotEmpty() == true
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (e is RedmineApiException) throw e
             throw RedmineApiException(
@@ -721,6 +835,8 @@ class KtorRedmineClient(
                 .map { Issue(it.id, it.subject) }
             projectIssuesCache[projectId] = CachedValue(issues, System.currentTimeMillis())
             issues
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             val empty = emptyList<Issue>()
             projectIssuesCache[projectId] = CachedValue(empty, System.currentTimeMillis())

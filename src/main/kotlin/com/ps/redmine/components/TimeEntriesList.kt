@@ -4,6 +4,7 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material.*
@@ -71,8 +72,7 @@ fun TimeEntriesList(
                 }
 
                 // Display entries for this date
-                items(entries.size) { index ->
-                    val entry = entries[index]
+                items(entries, key = { entry -> entry.id ?: entry.hashCode() }) { entry ->
                     TimeEntryItem(
                         timeEntry = entry,
                         isSelected = entry == selectedTimeEntry,
@@ -100,11 +100,10 @@ fun DateHeader(
     totalHours: Float,
     locale: Locale = Locale.getDefault()
 ) {
-    val missingHours =
-        if (totalHours < WorkHours.DAILY_STANDARD_HOURS) WorkHours.DAILY_STANDARD_HOURS - totalHours else 0f
-    val excessHours =
-        if (totalHours > WorkHours.DAILY_STANDARD_HOURS) totalHours - WorkHours.DAILY_STANDARD_HOURS else 0f
-    val isPerfectHours = totalHours == WorkHours.DAILY_STANDARD_HOURS
+    val targetDaily = WorkHours.configuredDailyHours()
+    val missingHours = if (totalHours < targetDaily) targetDaily - totalHours else 0f
+    val excessHours = if (totalHours > targetDaily) totalHours - targetDaily else 0f
+    val isPerfectHours = totalHours == targetDaily
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -145,13 +144,13 @@ fun DateHeader(
             // Display appropriate message based on hours
             when {
                 isPerfectHours -> {
-                    // Display checkbox for perfect hours (7.5)
+                    // Display checkbox for perfect hours
                     Surface(
                         color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = Strings["perfect_hours"],
+                            text = Strings["perfect_hours"].format(targetDaily),
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colors.primary,
                             modifier = Modifier
@@ -168,7 +167,7 @@ fun DateHeader(
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = "⚠️ " + Strings["missing_hours"].format(missingHours),
+                            text = "⚠️ " + Strings["missing_hours"].format(missingHours, targetDaily),
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colors.error,
                             modifier = Modifier
@@ -185,7 +184,7 @@ fun DateHeader(
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = "⚠️ " + Strings["excess_hours"].format(excessHours),
+                            text = "⚠️ " + Strings["excess_hours"].format(excessHours, targetDaily),
                             style = MaterialTheme.typography.caption,
                             color = MaterialTheme.colors.error,
                             modifier = Modifier

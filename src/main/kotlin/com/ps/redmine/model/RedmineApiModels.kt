@@ -57,7 +57,10 @@ data class RedmineProjectsResponse(
 
 @Serializable
 data class RedmineIssuesResponse(
-    val issues: List<RedmineIssue> = emptyList()
+    val issues: List<RedmineIssue> = emptyList(),
+    @SerialName("total_count") val totalCount: Int = 0,
+    val offset: Int = 0,
+    val limit: Int = 25
 )
 
 @Serializable
@@ -74,7 +77,10 @@ data class RedmineProjectWithActivities(
 
 @Serializable
 data class RedmineProjectsWithActivitiesResponse(
-    val projects: List<RedmineProjectWithActivities> = emptyList()
+    val projects: List<RedmineProjectWithActivities> = emptyList(),
+    @SerialName("total_count") val totalCount: Int = 0,
+    val offset: Int = 0,
+    val limit: Int = 25
 )
 
 /**
@@ -125,6 +131,14 @@ data class RedmineTimeEntryRequest(
     @SerialName("project_id") val projectId: Int = -1,
     @SerialName("issue_id") val issueId: Int = -1,
     val comments: String? = null
+)
+
+/**
+ * Wrapper envelope used by Redmine for time-entry create/update payloads.
+ */
+@Serializable
+data class RedmineTimeEntryRequestEnvelope(
+    @SerialName("time_entry") val timeEntry: RedmineTimeEntryRequest
 )
 
 fun TimeEntry.toApiModel(): RedmineTimeEntry {

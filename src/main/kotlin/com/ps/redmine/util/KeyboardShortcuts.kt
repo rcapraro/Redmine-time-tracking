@@ -4,6 +4,8 @@ import androidx.compose.ui.input.key.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.cancellation.CancellationException
 
 interface IKeyEventInfo {
     val key: Key
@@ -30,7 +32,8 @@ enum class KeyShortcut {
 }
 
 object KeyShortcutManager {
-    private val shortcutCallbacks = mutableListOf<(KeyShortcut) -> Unit>()
+    // Concurrent list — registration happens from Compose lifecycle, iteration from AWT key dispatch
+    private val shortcutCallbacks = CopyOnWriteArrayList<(KeyShortcut) -> Unit>()
     private val _keyShortcuts = MutableSharedFlow<KeyShortcut>(replay = 1, extraBufferCapacity = 10)
     val keyShortcuts: SharedFlow<KeyShortcut> = _keyShortcuts.asSharedFlow()
 
@@ -80,8 +83,10 @@ object KeyShortcutManager {
             shortcutCallbacks.forEach { callback ->
                 try {
                     callback(shortcut)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    println("[DEBUG_LOG] Error in shortcut callback: ${e.message}")
+                    System.err.println("Error in shortcut callback: ${e.message}")
                 }
             }
             _keyShortcuts.tryEmit(shortcut)

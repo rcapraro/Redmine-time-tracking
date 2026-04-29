@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.WorkHours
 import java.util.*
 
 // Helper function to get the application version
@@ -21,7 +20,7 @@ private fun getAppVersion(): String {
         val versionClass = Class.forName("com.ps.redmine.Version")
         val versionField = versionClass.getDeclaredField("VERSION")
         versionField.get(null) as String
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         // If the Version class is not available, return a default version
         "dev"
     }
@@ -156,6 +155,35 @@ fun ConfigurationDialog(
                     }
                 }
 
+                // Daily hours selection (6 .. 7.5 by 0.5)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings["hours_per_day"],
+                        style = MaterialTheme.typography.body1
+                    )
+                    var expandedDaily by remember { mutableStateOf(false) }
+                    val options = (8 downTo 0).map { it * 0.5f + 5.5f }.filter { it in 6.0f..7.5f }
+                    Box {
+                        TextButton(onClick = { expandedDaily = true }) {
+                            Text(Strings["hours_format"].format(config.dailyHours))
+                        }
+                        DropdownMenu(expanded = expandedDaily, onDismissRequest = { expandedDaily = false }) {
+                            options.forEach { v ->
+                                DropdownMenuItem(onClick = {
+                                    config = config.copy(dailyHours = v)
+                                    expandedDaily = false
+                                }) {
+                                    Text(Strings["hours_format"].format(v))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Non-working days selection (Mon–Fri), max 4 days
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -199,7 +227,7 @@ fun ConfigurationDialog(
                         }
                     }
                     // Helper showing derived weekly hours
-                    val derivedWeekly = WorkHours.DAILY_STANDARD_HOURS * (5 - config.nonWorkingIsoDays.size)
+                    val derivedWeekly = config.dailyHours * (5 - config.nonWorkingIsoDays.size)
                     Text(
                         text = Strings["working_weekly_hours"].format(derivedWeekly),
                         style = MaterialTheme.typography.caption,
@@ -265,8 +293,6 @@ fun ConfigurationDialog(
                         // Notify parent about all changes
                         onConfigSaved(redmineConfigChanged, languageChanged, themeChanged)
                         onDismiss()
-                    } else {
-                        showError = true
                     }
                 }
             ) {

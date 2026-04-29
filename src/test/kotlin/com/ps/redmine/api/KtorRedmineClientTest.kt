@@ -107,11 +107,6 @@ class KtorRedmineClientTest {
             )
         )
 
-        // Issue details response
-        val issueResponse = com.ps.redmine.model.RedmineIssueResponse(
-            issue = com.ps.redmine.model.RedmineIssue(100, "Issue 100")
-        )
-
         val client = HttpClient(MockEngine) {
             engine {
                 addHandler { req ->
@@ -152,9 +147,16 @@ class KtorRedmineClientTest {
                             )
                         }
 
-                        path.endsWith("/issues/100.json") -> {
+                        // Batch issue fetch by id list
+                        path.endsWith("/issues.json") && params["issue_id"] != null -> {
+                            val ids = params["issue_id"]!!.split(",").mapNotNull { it.toIntOrNull() }
+                            val resp = com.ps.redmine.model.RedmineIssuesResponse(
+                                issues = ids.map { com.ps.redmine.model.RedmineIssue(it, "Issue $it") },
+                                totalCount = ids.size,
+                                limit = 100
+                            )
                             respond(
-                                content = json.encodeToString(issueResponse),
+                                content = json.encodeToString(resp),
                                 status = HttpStatusCode.OK,
                                 headers = io.ktor.http.headersOf(
                                     HttpHeaders.ContentType,

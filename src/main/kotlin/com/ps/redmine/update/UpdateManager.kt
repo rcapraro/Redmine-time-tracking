@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.prefs.Preferences
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Manages the application update process including checking for updates
@@ -65,6 +66,9 @@ class UpdateManager(
                 showUpdateDialog = false
             )
 
+        } catch (e: CancellationException) {
+            _updateState.value = _updateState.value.copy(isChecking = false)
+            throw e
         } catch (e: Exception) {
             _updateState.value = _updateState.value.copy(
                 isChecking = false,

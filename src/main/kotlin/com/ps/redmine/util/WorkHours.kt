@@ -1,12 +1,21 @@
 package com.ps.redmine.util
 
+import com.ps.redmine.config.ConfigurationManager
+
 /**
- * Centralized constants for standard working hours used across the application.
- *
- * Having a single source of truth avoids magic numbers scattered in the codebase
- * and simplifies future changes (e.g., if the standard day length changes).
+ * Centralized hours configuration used across the application.
  */
 object WorkHours {
-    /** Standard number of working hours in a day. */
+    /** Legacy default number of working hours in a day (kept for backward compatibility). */
     const val DAILY_STANDARD_HOURS: Float = 7.5f
+
+    /**
+     * Returns the currently configured daily hours from persisted configuration.
+     * Falls back to the legacy default if unavailable.
+     */
+    fun configuredDailyHours(): Float = try {
+        ConfigurationManager.loadConfig().dailyHours
+    } catch (_: Exception) {
+        DAILY_STANDARD_HOURS
+    }
 }

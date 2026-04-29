@@ -15,7 +15,7 @@ object DateFormatter {
 
     fun formatFull(date: LocalDate, locale: Locale = Locale.getDefault()): String {
         val dayName = LocaleNames.weekdayName(date.dayOfWeek.isoDayNumber, locale, full = true)
-        val monthName = LocaleNames.monthName(date.monthNumber, locale, full = true)
+        val monthName = LocaleNames.monthName(date.month.number, locale, full = true)
         return when (locale.language.lowercase()) {
             "en" -> "$dayName, $monthName ${date.day}, ${date.year}"
             else -> "$dayName ${date.day} $monthName ${date.year}"

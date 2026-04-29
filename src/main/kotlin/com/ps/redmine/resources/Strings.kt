@@ -8,6 +8,7 @@ enum class Language {
 }
 
 object Strings {
+    @Volatile
     private var currentLanguage = Language.FRENCH // Default initialization
 
     fun updateLanguage(language: String) {
@@ -36,7 +37,7 @@ object Strings {
             "error_api_unreachable" to "Impossible de se connecter à Redmine.\nVeuillez vérifier votre connexion internet et les paramètres de configuration (par exemple l'URL de Redmine et votre clé d'API).",
             "show_details" to "Afficher les détails techniques",
             "hide_details" to "Masquer les détails techniques",
-            "hours_max_value" to "Les heures ne peuvent pas dépasser 7.5",
+            "hours_max_value" to "Les heures ne peuvent pas dépasser %.1f",
             "window_title" to "Suivi du temps Redmine",
             "project_label" to "Projet",
             "hours_label" to "Heures",
@@ -107,9 +108,9 @@ object Strings {
             "search" to "Rechercher",
             "no_items" to "Aucun élément disponible",
             "no_search_results" to "Aucun résultat trouvé",
-            "missing_hours" to "Il manque %.1f heures pour atteindre 7.5 heures",
-            "excess_hours" to "Vous avez %.1f heures de plus que 7.5 heures",
-            "perfect_hours" to "Journée complète (7.5 heures) ✓",
+            "missing_hours" to "Il manque %.1f heures pour atteindre %.1f heures",
+            "excess_hours" to "Vous avez %.1f heures de plus que %.1f heures",
+            "perfect_hours" to "Journée complète (%.1f heures) ✓",
             "dark_theme" to "Thème sombre",
             "previous_day" to "Jour précédent",
             "next_day" to "Jour suivant",
@@ -133,6 +134,7 @@ object Strings {
             "update_skip" to "Ignorer",
             "update_no_download_available" to "Aucun téléchargement disponible pour votre plateforme",
             "weekly_hours_label" to "Heures de travail par semaine",
+            "hours_per_day" to "Heures par jour",
             "non_working_day_label" to "Jour non travaillé",
             "non_working_days_label" to "Jours non travaillés",
             "working_weekly_hours" to "Heures de travail hebdomadaires: %.1f",
@@ -160,7 +162,7 @@ object Strings {
             "error_api_unreachable" to "Unable to connect to Redmine.\nPlease check your internet connection and configuration settings (such as the URL of Redmine and your API key).",
             "show_details" to "Show technical details",
             "hide_details" to "Hide technical details",
-            "hours_max_value" to "Hours cannot exceed 7.5",
+            "hours_max_value" to "Hours cannot exceed %.1f",
             "window_title" to "Redmine Time Tracking",
             "project_label" to "Project",
             "hours_label" to "Hours",
@@ -231,9 +233,9 @@ object Strings {
             "search" to "Search",
             "no_items" to "No items available",
             "no_search_results" to "No search results",
-            "missing_hours" to "Missing %.1f hours to reach 7.5 hours",
-            "excess_hours" to "You have %.1f hours more than 7.5 hours",
-            "perfect_hours" to "Full day (7.5 hours) ✓",
+            "missing_hours" to "Missing %.1f hours to reach %.1f hours",
+            "excess_hours" to "You have %.1f hours more than %.1f hours",
+            "perfect_hours" to "Full day (%.1f hours) ✓",
             "dark_theme" to "Dark Theme",
             "previous_day" to "Previous Day",
             "next_day" to "Next Day",
@@ -257,12 +259,15 @@ object Strings {
             "update_skip" to "Skip",
             "update_no_download_available" to "No download available for your platform",
             "weekly_hours_label" to "Working hours per week",
+            "hours_per_day" to "Hours per day",
             "non_working_day_label" to "Non-working day",
             "non_working_days_label" to "Non-working days",
             "working_weekly_hours" to "Weekly working hours: %.1f",
             "monday" to "Monday",
             "tuesday" to "Tuesday",
             "wednesday" to "Wednesday",
+            "thursday" to "Thursday",
+            "friday" to "Friday",
             "weekly_hours_range_error" to "Weekly hours must be between 7.5 and 39"
         )
     )

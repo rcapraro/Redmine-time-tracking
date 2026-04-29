@@ -1,13 +1,11 @@
 package com.ps.redmine.util
 
 import kotlinx.datetime.*
-import kotlin.time.Duration.Companion.milliseconds
 
 val today: LocalDate
     get() = run {
-        // Compute current date in UTC using only Kotlin stdlib + kotlinx-datetime
-        val epochDays = System.currentTimeMillis().milliseconds.inWholeDays.toInt()
-        LocalDate.fromEpochDays(epochDays)
+        val instant = kotlin.time.Instant.fromEpochMilliseconds(java.lang.System.currentTimeMillis())
+        instant.toLocalDateTime(TimeZone.currentSystemDefault()).date
     }
 
 private val WEEKEND_ISO_DAYS: Set<Int> = setOf(6, 7) // Saturday=6, Sunday=7
@@ -89,38 +87,28 @@ fun getWeeksInMonth(year: Int, month: Int): List<WeekInfo> {
     val firstDay = LocalDate(year, month, 1)
     val lastDay = lastDayOfMonth(year, month)
 
-    val weeks = mutableListOf<WeekInfo>()
-    var currentDate = firstDay
+    return buildList {
+        var currentDate = firstDay
+        while (currentDate <= lastDay) {
+            val weekStart = currentDate.minus((currentDate.dayOfWeek.isoDayNumber - 1), DateTimeUnit.DAY)
+            val weekEnd = weekStart.plus(6, DateTimeUnit.DAY)
 
-    while (currentDate <= lastDay) {
-        // Find the start of the week (Monday)
-        val weekStart = currentDate.minus((currentDate.dayOfWeek.isoDayNumber - 1), DateTimeUnit.DAY)
-
-        // Find the end of the week (Sunday)
-        val weekEnd = weekStart.plus(6, DateTimeUnit.DAY)
-
-        // Calculate working days in this week that fall within the month
-        var workingDays = 0
-        var dayInWeek = weekStart
-
-        while (dayInWeek <= weekEnd) {
-            // Only count days that are within the month and are working days (Monday-Friday)
-            if (dayInWeek in firstDay..lastDay && dayInWeek.dayOfWeek.isoDayNumber in 1..5) {
-                workingDays++
+            var workingDays = 0
+            var dayInWeek = weekStart
+            while (dayInWeek <= weekEnd) {
+                if (dayInWeek in firstDay..lastDay && dayInWeek.dayOfWeek.isoDayNumber in 1..5) {
+                    workingDays++
+                }
+                dayInWeek = dayInWeek.plus(1, DateTimeUnit.DAY)
             }
-            dayInWeek = dayInWeek.plus(1, DateTimeUnit.DAY)
-        }
 
-        // Only add weeks that have at least one day in the current month
-        if (weekEnd >= firstDay && weekStart <= lastDay) {
-            weeks.add(WeekInfo(weekStart, weekEnd, workingDays))
-        }
+            if (weekEnd >= firstDay && weekStart <= lastDay) {
+                add(WeekInfo(weekStart, weekEnd, workingDays))
+            }
 
-        // Move to the next week
-        currentDate = weekEnd.plus(1, DateTimeUnit.DAY)
+            currentDate = weekEnd.plus(1, DateTimeUnit.DAY)
+        }
     }
-
-    return weeks
 }
 
 /**
