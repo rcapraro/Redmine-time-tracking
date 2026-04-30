@@ -1,38 +1,47 @@
 package com.ps.redmine.components
 
 import androidx.compose.foundation.VerticalScrollbar
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.ElevationTokens
 
 /**
  * A searchable dropdown component that limits the number of visible items and provides search functionality.
- *
- * @param T The type of items in the dropdown
- * @param items The list of items to display in the dropdown
- * @param selectedItem The currently selected item
- * @param onItemSelected Callback when an item is selected
- * @param itemText Function to extract the display text from an item
- * @param label The label for the dropdown field
- * @param placeholder Optional placeholder text
- * @param isError Whether the field is in an error state
- * @param enabled Whether the dropdown is enabled
- * @param isLoading Whether the dropdown is in a loading state
- * @param noItemsText Text to display when there are no items
- * @param readOnly Whether the field is read-only
  */
 @Composable
 fun <T> SearchableDropdown(
@@ -52,21 +61,15 @@ fun <T> SearchableDropdown(
     var searchText by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
-    // Filter items based on search text
     val filteredItems = remember(items, searchText) {
-        if (searchText.isEmpty()) {
-            items
-        } else {
-            items.filter {
-                itemText(it).contains(searchText, ignoreCase = true)
-            }
-        }
+        if (searchText.isEmpty()) items
+        else items.filter { itemText(it).contains(searchText, ignoreCase = true) }
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)  // Use fixed height instead of intrinsic measurement
+            .heightIn(min = 48.dp)
     ) {
         OutlinedTextField(
             value = selectedItem?.let { itemText(it) } ?: "",
@@ -87,12 +90,15 @@ fun <T> SearchableDropdown(
                     IconButton(
                         onClick = {
                             expanded = true
-                            searchText = ""  // Clear search when opening dropdown
-                            // Focus will be requested in LaunchedEffect
+                            searchText = ""
                         },
                         enabled = enabled && items.isNotEmpty()
                     ) {
-                        Text(if (expanded) Strings["dropdown_up"] else Strings["dropdown_down"])
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = null,
+                            modifier = if (expanded) Modifier.rotate(180f) else Modifier,
+                        )
                     }
                 }
             }
@@ -102,18 +108,18 @@ fun <T> SearchableDropdown(
             expanded = expanded && enabled,
             onDismissRequest = {
                 expanded = false
-                searchText = ""  // Clear search when closing dropdown
+                searchText = ""
             },
             modifier = Modifier
-                .width(400.dp)  // Use fixed width instead of percentage of parent
-                .heightIn(max = 500.dp)  // Add explicit height constraint
+                .width(400.dp)
+                .heightIn(max = 500.dp)
         ) {
             // Search field
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { searchText = it },
                 modifier = Modifier
-                    .width(380.dp)  // Use fixed width instead of fillMaxWidth
+                    .width(380.dp)
                     .padding(6.dp)
                     .heightIn(min = 48.dp)
                     .focusRequester(focusRequester),
@@ -127,31 +133,26 @@ fun <T> SearchableDropdown(
                 }
             )
 
-            // Focus the search field when dropdown opens
-            // This ensures immediate focus when clicking on the dropdown
             LaunchedEffect(expanded) {
                 if (expanded) {
                     focusRequester.requestFocus()
                 }
             }
 
-            // Show filtered items in a scrollable list with max height
             if (filteredItems.isEmpty()) {
                 Box(modifier = Modifier.width(380.dp).padding(8.dp).heightIn(min = 48.dp)) {
                     Text(
                         text = if (searchText.isEmpty()) noItemsText else Strings["no_search_results"],
-                        style = MaterialTheme.typography.body1,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
-                // Add a background to make the scrollable area more visible
                 Surface(
                     modifier = Modifier
                         .width(380.dp)
                         .height(340.dp),
-                    color = MaterialTheme.colors.surface,
-                    elevation = ElevationTokens.Low,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     shape = MaterialTheme.shapes.small
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -162,26 +163,25 @@ fun <T> SearchableDropdown(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(filteredItems) { item ->
+                                val isSelected = item == selectedItem
                                 DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = itemText(item),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    },
                                     onClick = {
                                         onItemSelected(item)
                                         expanded = false
-                                        searchText = ""  // Clear search after selection
+                                        searchText = ""
                                     },
-                                    modifier = Modifier.heightIn(min = 48.dp)
-                                ) {
-                                    Text(
-                                        text = itemText(item),
-                                        color = if (item == selectedItem)
-                                            MaterialTheme.colors.primary
-                                        else
-                                            MaterialTheme.colors.onSurface
-                                    )
-                                }
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                )
                             }
                         }
 
-                        // Add a visible scrollbar
                         VerticalScrollbar(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)

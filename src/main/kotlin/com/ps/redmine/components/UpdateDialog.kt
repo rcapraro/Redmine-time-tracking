@@ -1,16 +1,35 @@
 package com.ps.redmine.components
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -38,7 +57,12 @@ fun UpdateDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                elevation = 8.dp
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             ) {
                 Column(
                     modifier = Modifier.padding(24.dp),
@@ -50,44 +74,43 @@ fun UpdateDialog(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Info,
+                            imageVector = Icons.Outlined.NewReleases,
                             contentDescription = null,
-                            tint = MaterialTheme.colors.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp)
                         )
                         Column {
                             Text(
                                 text = Strings["update_available_title"],
-                                style = MaterialTheme.typography.h6,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.titleLarge,
                             )
                             Text(
                                 text = Strings["update_version_format"].format(updateInfo.version),
-                                style = MaterialTheme.typography.subtitle2,
-                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
 
-                    Divider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // Release notes
                     if (updateInfo.releaseNotes.isNotBlank()) {
                         Column {
                             Text(
                                 text = Strings["update_release_notes"],
-                                style = MaterialTheme.typography.subtitle1,
-                                fontWeight = FontWeight.Medium
+                                style = MaterialTheme.typography.titleMedium,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Card(
+                            Surface(
                                 modifier = Modifier.fillMaxWidth(),
-                                backgroundColor = MaterialTheme.colors.surface,
-                                elevation = 2.dp
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                shape = MaterialTheme.shapes.small,
                             ) {
                                 Text(
                                     text = updateInfo.releaseNotes,
-                                    style = MaterialTheme.typography.body2,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
                                         .padding(12.dp)
                                         .heightIn(max = 200.dp)
@@ -97,11 +120,31 @@ fun UpdateDialog(
                         }
                     }
 
-                    // Links inside content
-                    Column(
+                    // Warning if no download URL
+                    if (updateInfo.downloadUrl == null) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.small,
+                        ) {
+                            Text(
+                                text = Strings["update_no_download_available"],
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
+                    // Footer actions
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        TextButton(onClick = onDismiss) {
+                            Text(Strings["close"])
+                        }
                         if (updateInfo.releasePageUrl != null) {
                             TextButton(onClick = { openUrl(updateInfo.releasePageUrl) }) {
                                 Text(Strings["update_open_release_page"])
@@ -112,36 +155,11 @@ fun UpdateDialog(
                                 Icon(
                                     imageVector = Icons.Default.Download,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(Strings["update_download_for_os"])
                             }
-                        }
-                    }
-
-                    // Bottom action: only Close button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = onDismiss) {
-                            Text(Strings["close"])
-                        }
-                    }
-
-                    // Warning message if no download URL
-                    if (updateInfo.downloadUrl == null) {
-                        Card(
-                            backgroundColor = MaterialTheme.colors.error.copy(alpha = 0.1f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = Strings["update_no_download_available"],
-                                style = MaterialTheme.typography.caption,
-                                color = MaterialTheme.colors.error,
-                                modifier = Modifier.padding(8.dp)
-                            )
                         }
                     }
                 }
@@ -164,7 +182,7 @@ private fun openUrl(url: String) {
 }
 
 /**
- * Small update indicator that can be shown in the main UI.
+ * Small update indicator shown in the top app bar.
  */
 @Composable
 fun UpdateIndicator(
@@ -177,16 +195,21 @@ fun UpdateIndicator(
             onClick = onClick,
             modifier = modifier
         ) {
-            Badge(
-                backgroundColor = MaterialTheme.colors.error
+            BadgedBox(
+                badge = {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    )
+                },
             ) {
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = Strings["update_available_title"],
-                    tint = MaterialTheme.colors.onPrimary,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
     }
 }
+

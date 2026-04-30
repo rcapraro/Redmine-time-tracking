@@ -1,20 +1,61 @@
 package com.ps.redmine.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.*
+import com.ps.redmine.util.DateFormatter
+import com.ps.redmine.util.LocaleNames
+import com.ps.redmine.util.atDay
+import com.ps.redmine.util.lengthOfMonth
+import com.ps.redmine.util.minusMonths
+import com.ps.redmine.util.monthValue
+import com.ps.redmine.util.nextBusinessDay
+import com.ps.redmine.util.plusMonths
+import com.ps.redmine.util.previousBusinessDay
+import com.ps.redmine.util.today
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.isoDayNumber
-import java.util.*
+import java.util.Locale
 
 @Composable
 fun DatePicker(
@@ -36,12 +77,15 @@ fun DatePicker(
             readOnly = true,
             trailingIcon = {
                 IconButton(onClick = { showDialog = true }) {
-                    Text("📅")
+                    Icon(
+                        imageVector = Icons.Filled.CalendarMonth,
+                        contentDescription = Strings["date_label"],
+                    )
                 }
             }
         )
 
-        // Add buttons for previous/next business day
+        // Previous/next business day buttons
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.End,
@@ -49,28 +93,34 @@ fun DatePicker(
         ) {
             Text(
                 text = "-1/+1 " + Strings["day_label"],
-                style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp)
             )
-            // Previous day button
             OutlinedButton(
                 onClick = { onDateSelected(selectedDate.previousBusinessDay()) },
                 modifier = Modifier.height(28.dp).width(40.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                shape = MaterialTheme.shapes.small,
             ) {
-                Text("←", style = MaterialTheme.typography.caption)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = Strings["previous_day"],
+                    modifier = Modifier.size(18.dp),
+                )
             }
-
             Spacer(modifier = Modifier.width(4.dp))
-
-            // Next day button
             OutlinedButton(
                 onClick = { onDateSelected(selectedDate.nextBusinessDay()) },
                 modifier = Modifier.height(28.dp).width(40.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                shape = MaterialTheme.shapes.small,
             ) {
-                Text("→", style = MaterialTheme.typography.caption)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = Strings["next_day"],
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
 
@@ -84,9 +134,7 @@ fun DatePicker(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = {
-                                currentYearMonth = currentYearMonth.minusMonths(1)
-                            },
+                            onClick = { currentYearMonth = currentYearMonth.minusMonths(1) },
                             modifier = Modifier.onKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                                     currentYearMonth = currentYearMonth.minusMonths(1)
@@ -94,9 +142,10 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            // Use remember with locale as key to force recomposition when locale changes
-                            val navPreviousText = remember(locale) { Strings["nav_previous"] }
-                            Text(navPreviousText)
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                contentDescription = Strings["nav_previous"],
+                            )
                         }
                         Text(
                             text = "${
@@ -106,12 +155,10 @@ fun DatePicker(
                                     full = true
                                 )
                             } ${currentYearMonth.year}",
-                            style = MaterialTheme.typography.h6
+                            style = MaterialTheme.typography.titleLarge
                         )
                         IconButton(
-                            onClick = {
-                                currentYearMonth = currentYearMonth.plusMonths(1)
-                            },
+                            onClick = { currentYearMonth = currentYearMonth.plusMonths(1) },
                             modifier = Modifier.onKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
                                     currentYearMonth = currentYearMonth.plusMonths(1)
@@ -119,15 +166,15 @@ fun DatePicker(
                                 } else false
                             }
                         ) {
-                            // Use remember with locale as key to force recomposition when locale changes
-                            val navNextText = remember(locale) { Strings["nav_next"] }
-                            Text(navNextText)
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = Strings["nav_next"],
+                            )
                         }
                     }
                 },
                 text = {
-                    Column(modifier = Modifier.heightIn(min = 200.dp, max = 200.dp)) {
-                        // Days of week header
+                    Column(modifier = Modifier.heightIn(min = 200.dp, max = 220.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).heightIn(min = 24.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly
@@ -135,14 +182,13 @@ fun DatePicker(
                             for (dayOfWeek in DayOfWeek.entries) {
                                 Text(
                                     text = LocaleNames.weekdayName(dayOfWeek.isoDayNumber, locale, full = false),
-                                    style = MaterialTheme.typography.caption,
-                                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(4.dp)
                                 )
                             }
                         }
 
-                        // Calendar grid
                         val firstDayOfMonth = currentYearMonth.atDay(1)
                         val daysInMonth = currentYearMonth.lengthOfMonth()
                         val firstDayOfWeek = firstDayOfMonth.dayOfWeek.isoDayNumber
@@ -155,9 +201,7 @@ fun DatePicker(
                             ) {
                                 for (dayOfWeek in 1..7) {
                                     val day = week * 7 + dayOfWeek - firstDayOfWeek + 1
-                                    Box(
-                                        modifier = Modifier.size(30.dp).padding(2.dp)
-                                    ) {
+                                    Box(modifier = Modifier.size(30.dp).padding(2.dp)) {
                                         if (day in 1..daysInMonth) {
                                             val kotlinDate = currentYearMonth.atDay(day)
                                             val isSelected = kotlinDate == selectedDate
@@ -171,12 +215,12 @@ fun DatePicker(
                                                         showDialog = false
                                                     },
                                                 color = when {
-                                                    isSelected -> MaterialTheme.colors.primary
-                                                    isToday -> MaterialTheme.colors.primary.copy(alpha = 0.1f)
-                                                    else -> MaterialTheme.colors.surface
+                                                    isSelected -> MaterialTheme.colorScheme.primary
+                                                    isToday -> MaterialTheme.colorScheme.tertiaryContainer
+                                                    else -> MaterialTheme.colorScheme.surface
                                                 },
-                                                elevation = if (isSelected) ElevationTokens.High else ElevationTokens.None,
-                                                shape = MaterialTheme.shapes.small
+                                                shape = MaterialTheme.shapes.small,
+                                                tonalElevation = if (isSelected) 3.dp else 0.dp,
                                             ) {
                                                 Box(
                                                     contentAlignment = Alignment.Center,
@@ -184,11 +228,11 @@ fun DatePicker(
                                                 ) {
                                                     Text(
                                                         text = day.toString(),
-                                                        style = MaterialTheme.typography.body2,
+                                                        style = MaterialTheme.typography.bodyMedium,
                                                         color = when {
-                                                            isSelected -> MaterialTheme.colors.onPrimary
-                                                            isToday -> MaterialTheme.colors.primary
-                                                            else -> MaterialTheme.colors.onSurface
+                                                            isSelected -> MaterialTheme.colorScheme.onPrimary
+                                                            isToday -> MaterialTheme.colorScheme.onTertiaryContainer
+                                                            else -> MaterialTheme.colorScheme.onSurface
                                                         }
                                                     )
                                                 }
@@ -200,29 +244,21 @@ fun DatePicker(
                         }
                     }
                 },
-                buttons = {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .heightIn(min = 30.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val todayDate = today
+                            onDateSelected(todayDate)
+                            currentYearMonth = YearMonth(todayDate.year, todayDate.month)
+                            showDialog = false
+                        }
                     ) {
-                        TextButton(
-                            onClick = {
-                                val todayDate = today
-                                onDateSelected(todayDate)
-                                currentYearMonth = YearMonth(todayDate.year, todayDate.month)
-                                showDialog = false
-                            }
-                        ) {
-                            Text(Strings["today"])
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { showDialog = false }) {
-                            Text(Strings["close"])
-                        }
+                        Text(Strings["today"])
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text(Strings["close"])
                     }
                 }
             )

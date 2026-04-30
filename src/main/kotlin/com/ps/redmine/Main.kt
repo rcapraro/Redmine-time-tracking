@@ -1,13 +1,38 @@
 package com.ps.redmine
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,20 +40,25 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.KtorRedmineClient
 import com.ps.redmine.api.RedmineClientInterface
-import com.ps.redmine.components.*
+import com.ps.redmine.components.ConfettiOverlay
+import com.ps.redmine.components.ConfigurationDialog
+import com.ps.redmine.components.DatePicker
+import com.ps.redmine.components.ErrorDialog
+import com.ps.redmine.components.SearchableDropdown
+import com.ps.redmine.components.TimeEntriesList
+import com.ps.redmine.components.TimeEntriesListSkeleton
+import com.ps.redmine.components.UpdateDialog
+import com.ps.redmine.components.UpdateIndicator
+import com.ps.redmine.components.WeeklyProgressBars
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
 import com.ps.redmine.model.Activity
@@ -36,6 +66,7 @@ import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.ui.RedmineTimeTheme
 import com.ps.redmine.update.UpdateManager
 import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
@@ -120,8 +151,8 @@ fun App(
     val updateState by updateManager.updateState.collectAsState()
 
     val scope = rememberCoroutineScope()
-    val scaffoldState = rememberScaffoldState()
-    val notifier = rememberNotifier(scaffoldState.snackbarHostState)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val notifier = rememberNotifier(snackbarHostState)
 
     // Add a state variable to track the current language
     var currentLanguage by remember { mutableStateOf(ConfigurationManager.loadConfig().language) }
@@ -159,6 +190,35 @@ fun App(
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
+
+    // Working-day arithmetic for the current month — lifted so onSave can detect a completion transition.
+    val workingDays = remember(currentMonth) {
+        getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
+    }
+    val excludedCount = remember(currentMonth, nonWorkingIsoDays) {
+        if (nonWorkingIsoDays.isEmpty()) 0 else {
+            val firstK = kotlinx.datetime.LocalDate(currentMonth.year, currentMonth.monthValue, 1)
+            val lastK = kotlinx.datetime.LocalDate(
+                currentMonth.year,
+                currentMonth.monthValue,
+                lengthOfMonth(currentMonth.year, currentMonth.monthValue)
+            )
+            var count = 0
+            var dK = firstK
+            while (dK <= lastK) {
+                val iso = dK.dayOfWeek.isoDayNumber
+                if (iso in 1..5 && nonWorkingIsoDays.contains(iso)) count++
+                dK = dK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
+            }
+            count
+        }
+    }
+    val effectiveDays = workingDays - excludedCount
+    val expectedHours = effectiveDays * WorkHours.configuredDailyHours()
+    val isCompleted = expectedHours > 0 && totalHours >= expectedHours
+
+    // Confetti trigger key — incrementing fires a fresh burst.
+    var confettiTrigger by remember { mutableStateOf(0) }
 
     // Selected calendar date used to initialize the date field when creating a new entry
     var selectedDate by remember { mutableStateOf(com.ps.redmine.util.today) }
@@ -307,50 +367,11 @@ fun App(
         }
     }
 
-    // Custom typography with harmonized font sizes — immutable; remember once
-    val customTypography = remember {
-        Typography(
-            h6 = TextStyle(fontWeight = FontWeight.Medium, fontSize = 18.sp),
-            subtitle1 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp),
-            subtitle2 = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp),
-            body1 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp),
-            body2 = TextStyle(fontWeight = FontWeight.Normal, fontSize = 13.sp),
-            caption = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp)
-        )
-    }
-
     // Load configuration to get theme preference
     val config = remember { ConfigurationManager.loadConfig() }
     var isDarkTheme by remember { mutableStateOf(config.isDarkTheme) }
 
-    // Define light and dark color schemes — immutable; remember once
-    val lightColorScheme = remember {
-        lightColors(
-            secondary = Color(0xFF00897B) // Darker teal color for better visibility
-        )
-    }
-
-    val darkColorScheme = remember {
-        darkColors(
-            primary = Color(0xFF90CAF9),
-            primaryVariant = Color(0xFF64B5F6),
-            secondary = Color(0xFF80CBC4),
-            background = Color(0xFF121212),
-            surface = Color(0xFF1E1E1E),
-            onPrimary = Color(0xFF000000),
-            onSecondary = Color(0xFF000000),
-            onBackground = Color(0xFFFFFFFF),
-            onSurface = Color(0xFFFFFFFF)
-        )
-    }
-
-    // Use the appropriate color scheme based on the theme preference
-    val colorScheme = if (isDarkTheme) darkColorScheme else lightColorScheme
-
-    MaterialTheme(
-        typography = customTypography,
-        colors = colorScheme
-    ) {
+    RedmineTimeTheme(darkTheme = isDarkTheme) {
         if (showConfigDialog) {
             ConfigurationDialog(
                 redmineClient = redmineClient,
@@ -399,44 +420,52 @@ fun App(
         }
 
         Scaffold(
-            scaffoldState = scaffoldState,
             snackbarHost = {
                 SnackbarHost(
-                    hostState = scaffoldState.snackbarHostState,
+                    hostState = snackbarHostState,
                     modifier = Modifier.padding(8.dp)
                 ) { data -> TypedSnackbar(data) }
             },
-            topBar = {
-                // Use key parameter to force recomposition when language changes
-                key(currentLanguage) {
-                    TopAppBar(
-                        title = { Text(Strings["window_title"]) },
-                        actions = {
-                            // Update indicator
-                            UpdateIndicator(
-                                hasUpdate = updateState.availableUpdate != null,
-                                onClick = {
-                                    if (updateState.availableUpdate != null) {
-                                        // Show update dialog directly
-                                        updateManager.showUpdateDialog()
-                                    }
-                                }
-                            )
-
-                            IconButton(onClick = { showConfigDialog = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = Strings["settings"]
-                                )
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier.fillMaxSize().padding(innerPadding)
+            ) {
+                // Floating action row: replaces the redundant top bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UpdateIndicator(
+                        hasUpdate = updateState.availableUpdate != null,
+                        onClick = {
+                            if (updateState.availableUpdate != null) {
+                                updateManager.showUpdateDialog()
                             }
                         }
                     )
+                    // TEMPORARY: test button for the month-completed confetti — remove when validated.
+                    IconButton(onClick = { confettiTrigger++ }) {
+                        Icon(
+                            imageVector = Icons.Default.Celebration,
+                            contentDescription = "Test confetti",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { showConfigDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = Strings["settings"],
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-            },
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(4.dp)
-            ) {
+
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp).padding(bottom = 4.dp)
+                ) {
                 // Weekly progress bars on the far left
                 // Use key parameter to force recomposition when language or non-working days change
                 key(currentLanguage, nonWorkingIsoDays) {
@@ -454,9 +483,8 @@ fun App(
                 // Left panel - Time entries list (wrapped in card)
                 Surface(
                     modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp).focusProperties { canFocus = false },
-                    elevation = ElevationTokens.Medium,
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colors.surface
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
                     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
                         // Month navigation and total hours
@@ -478,21 +506,32 @@ fun App(
                                         },
                                         modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
-                                        // Use key parameter to force recomposition when language changes
-                                        key(currentLanguage) {
-                                            Text(Strings["nav_previous"])
-                                        }
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                            contentDescription = Strings["nav_previous"],
+                                        )
                                     }
-                                    Text(
-                                        text = "${
-                                            LocaleNames.monthName(
-                                                currentMonth.monthValue,
-                                                currentLocale,
-                                                full = true
-                                            )
-                                        } ${currentMonth.year}",
-                                        style = MaterialTheme.typography.h6
-                                    )
+                                    AnimatedContent(
+                                        targetState = currentMonth,
+                                        transitionSpec = {
+                                            val forward = targetState > initialState
+                                            val direction = if (forward) 1 else -1
+                                            (slideInHorizontally(tween(280)) { it * direction } + fadeIn(tween(280))) togetherWith
+                                                    (slideOutHorizontally(tween(280)) { -it * direction } + fadeOut(tween(280)))
+                                        },
+                                        label = "monthLabel",
+                                    ) { month ->
+                                        Text(
+                                            text = "${
+                                                LocaleNames.monthName(
+                                                    month.monthValue,
+                                                    currentLocale,
+                                                    full = true
+                                                )
+                                            } ${month.year}",
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                    }
                                     IconButton(
                                         onClick = {
                                             if (!isLoading && !isGlobalLoading) {
@@ -502,10 +541,10 @@ fun App(
                                         },
                                         modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
-                                        // Use key parameter to force recomposition when language changes
-                                        key(currentLanguage) {
-                                            Text(Strings["nav_next"])
-                                        }
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                            contentDescription = Strings["nav_next"],
+                                        )
                                     }
                                 }
                                 Row(
@@ -532,8 +571,8 @@ fun App(
                                 key(currentLanguage) {
                                     Text(
                                         text = Strings["nav_help"],
-                                        style = MaterialTheme.typography.caption,
-                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(vertical = 4.dp)
                                     )
                                 }
@@ -546,46 +585,21 @@ fun App(
                             ) {
                                 Text(
                                     text = Strings["total_hours"],
-                                    style = MaterialTheme.typography.subtitle1
+                                    style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
                                     text = Strings["total_hours_format"].format(totalHours),
-                                    style = MaterialTheme.typography.h6,
-                                    color = MaterialTheme.colors.primary
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
                             // Monthly progress indicator
-                            val workingDays = remember(currentMonth) {
-                                getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
-                            }
-                            val excludedCount = remember(currentMonth, nonWorkingIsoDays) {
-                                if (nonWorkingIsoDays.isEmpty()) 0 else {
-                                    val firstK =
-                                        kotlinx.datetime.LocalDate(currentMonth.year, currentMonth.monthValue, 1)
-                                    val lastK = kotlinx.datetime.LocalDate(
-                                        currentMonth.year,
-                                        currentMonth.monthValue,
-                                        lengthOfMonth(currentMonth.year, currentMonth.monthValue)
-                                    )
-                                    var count = 0
-                                    var dK = firstK
-                                    while (dK <= lastK) {
-                                        val iso = dK.dayOfWeek.isoDayNumber
-                                        if (iso in 1..5 && nonWorkingIsoDays.contains(iso)) count++
-                                        dK = dK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
-                                    }
-                                    count
-                                }
-                            }
-                            val effectiveDays = workingDays - excludedCount
-                            val expectedHours = effectiveDays * WorkHours.configuredDailyHours()
                             val completionPercentage = if (expectedHours > 0) {
                                 (totalHours / expectedHours * 100).coerceAtMost(100.0)
                             } else {
                                 0.0
                             }
-                            val isCompleted = totalHours >= expectedHours
 
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -597,7 +611,7 @@ fun App(
                                 ) {
                                     Text(
                                         text = Strings["monthly_progress"],
-                                        style = MaterialTheme.typography.subtitle2
+                                        style = MaterialTheme.typography.labelLarge
                                     )
                                     Text(
                                         text = if (isCompleted) {
@@ -605,16 +619,17 @@ fun App(
                                         } else {
                                             Strings["completion_percentage"].format(completionPercentage)
                                         },
-                                        style = MaterialTheme.typography.body2,
-                                        color = if (isCompleted) MaterialTheme.colors.secondary else MaterialTheme.colors.onSurface
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
 
                                 LinearProgressIndicator(
-                                    progress = (completionPercentage / 100).toFloat(),
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                    color = if (isCompleted) MaterialTheme.colors.secondary else MaterialTheme.colors.primary,
-                                    backgroundColor = MaterialTheme.colors.onSurface.copy(alpha = 0.12f)
+                                    progress = { (completionPercentage / 100).toFloat() },
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(6.dp),
+                                    color = if (isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    drawStopIndicator = {},
                                 )
 
                                 Row(
@@ -623,8 +638,8 @@ fun App(
                                 ) {
                                     Text(
                                         text = "${Strings["working_days"]} $effectiveDays",
-                                        style = MaterialTheme.typography.caption,
-                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = "${Strings["expected_hours"]} ${
@@ -632,8 +647,8 @@ fun App(
                                                 expectedHours
                                             )
                                         }",
-                                        style = MaterialTheme.typography.caption,
-                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
 
@@ -641,33 +656,32 @@ fun App(
                                     val remainingHours = expectedHours - totalHours
                                     Text(
                                         text = Strings["hours_remaining"].format(remainingHours),
-                                        style = MaterialTheme.typography.caption,
-                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(top = 2.dp)
                                     )
                                 }
                             }
                         }
 
-                        if (isLoading && !isGlobalLoading && deletingEntryId == null) {
-                            // Only show the time entries list loading indicator when not showing the global loading indicator
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        } else {
-                            // Use key parameter to force recomposition when language changes
-                            key(currentLanguage) {
-                                TimeEntriesList(
-                                    timeEntries = timeEntries,
-                                    selectedTimeEntry = selectedTimeEntry,
-                                    onTimeEntrySelected = { selectedTimeEntry = it },
-                                    onDelete = { entry -> deleteTimeEntry(entry) },
-                                    deletingEntryId = deletingEntryId,
-                                    locale = currentLocale
-                                )
+                        Crossfade(
+                            targetState = isLoading && !isGlobalLoading && deletingEntryId == null,
+                            animationSpec = tween(220),
+                            label = "loadingCrossfade",
+                        ) { showLoading ->
+                            if (showLoading) {
+                                TimeEntriesListSkeleton(modifier = Modifier.fillMaxSize())
+                            } else {
+                                key(currentLanguage) {
+                                    TimeEntriesList(
+                                        timeEntries = timeEntries,
+                                        selectedTimeEntry = selectedTimeEntry,
+                                        onTimeEntrySelected = { selectedTimeEntry = it },
+                                        onDelete = { entry -> deleteTimeEntry(entry) },
+                                        deletingEntryId = deletingEntryId,
+                                        locale = currentLocale
+                                    )
+                                }
                             }
                         }
                     }
@@ -678,9 +692,8 @@ fun App(
                 // Right panel - Time entry details (wrapped in card)
                 Surface(
                     modifier = Modifier.weight(1.3f).fillMaxHeight().padding(4.dp),
-                    elevation = ElevationTokens.Medium,
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colors.surface
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
                     // Use key parameter to force recomposition when language changes
                     key(currentLanguage) {
@@ -698,6 +711,7 @@ fun App(
                                         } else {
                                             redmineClient.updateTimeEntry(updatedEntry)
                                         }
+                                        val previousTotal = totalHours
                                         // Refresh the list
                                         timeEntries = redmineClient.getTimeEntriesForMonth(
                                             currentMonth.year,
@@ -710,6 +724,12 @@ fun App(
                                         else
                                             Strings["entry_updated"]
                                         notifier.success(message)
+
+                                        // Fire confetti when this save flips the month from incomplete to complete
+                                        val newTotal = timeEntries.sumOf { it.hours.toDouble() }
+                                        if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                                            confettiTrigger++
+                                        }
 
                                         // Trigger focus back to Date field for next entry
                                         focusRequestKey++
@@ -741,33 +761,53 @@ fun App(
                     }
                 }
             }
+            }
 
             // Show loading overlay when reloading after configuration changes
             if (isGlobalLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize().semantics { contentDescription = "Global Loading Indicator" },
-                    contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .semantics { contentDescription = "Global Loading Indicator" },
+                    color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.45f),
                 ) {
-                    Surface(
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colors.background.copy(alpha = 0.7f)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        Surface(
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 4.dp,
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(60.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = Strings["loading"],
-                                style = MaterialTheme.typography.subtitle1
-                            )
+                            Column(
+                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    strokeWidth = 4.dp,
+                                )
+                                Text(
+                                    text = Strings["loading"],
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            // Festive overlay when the month is fully filled in.
+            key(currentLanguage) {
+                ConfettiOverlay(
+                    triggerKey = confettiTrigger,
+                    title = Strings["month_completed_celebration_title"],
+                    subtitle = Strings["month_completed_celebration_subtitle"],
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
         }
 
@@ -1060,7 +1100,7 @@ fun TimeEntryDetail(
             ) {
                 Text(
                     text = if (timeEntry == null) Strings["add_time_entry"] else Strings["edit_time_entry"],
-                    style = MaterialTheme.typography.h6
+                    style = MaterialTheme.typography.titleLarge
                 )
                 Button(
                     onClick = { handleCancel() },
@@ -1114,8 +1154,8 @@ fun TimeEntryDetail(
                 if (!isLoading && projects.isEmpty()) {
                     Text(
                         text = Strings["no_projects"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
@@ -1156,11 +1196,9 @@ fun TimeEntryDetail(
                                     onClick = { hours = "" },
                                     enabled = !isLoading && !isGlobalLoading
                                 ) {
-                                    Text(
-                                        text = Strings["clear_button"],
-                                        modifier = Modifier.semantics {
-                                            contentDescription = Strings["clear_button_description"]
-                                        }
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = Strings["clear_button_description"],
                                     )
                                 }
                             }
@@ -1180,23 +1218,23 @@ fun TimeEntryDetail(
                     if (hours.isNotEmpty() && normalized.toFloatOrNull() == null) {
                         Text(
                             text = Strings["invalid_number"],
-                            color = MaterialTheme.colors.error,
-                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     } else if (hours.isNotEmpty() && normalized.toFloat() <= 0f) {
                         Text(
                             text = Strings["hours_must_be_positive"],
-                            color = MaterialTheme.colors.error,
-                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     } else if (hours.isNotEmpty() && normalized.toFloat() > WorkHours.configuredDailyHours()) {
                         val maxHours = WorkHours.configuredDailyHours()
                         Text(
                             text = Strings["hours_max_value"].format(maxHours),
-                            color = MaterialTheme.colors.error,
-                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     }
@@ -1229,8 +1267,8 @@ fun TimeEntryDetail(
                                 Strings["loading_issues_for_project"].format(project.name)
                             else
                                 Strings["loading_issues"],
-                            color = MaterialTheme.colors.secondary,
-                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     }
@@ -1238,8 +1276,8 @@ fun TimeEntryDetail(
                     selectedProject == null -> {
                         Text(
                             text = Strings["select_project_first"],
-                            color = MaterialTheme.colors.secondary,
-                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     }
@@ -1255,9 +1293,9 @@ fun TimeEntryDetail(
                         }
                         Text(
                             text = text,
-                            color = if (currentIssue != null) MaterialTheme.colors.secondary
-                            else MaterialTheme.colors.error,
-                            style = MaterialTheme.typography.caption,
+                            color = if (currentIssue != null) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
                     }
@@ -1284,8 +1322,8 @@ fun TimeEntryDetail(
                 if (!isLoading && activities.isEmpty()) {
                     Text(
                         text = Strings["no_activities"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
@@ -1313,11 +1351,9 @@ fun TimeEntryDetail(
                                 onClick = { comments = "" },
                                 enabled = !isLoading && !isGlobalLoading
                             ) {
-                                Text(
-                                    text = Strings["clear_button"],
-                                    modifier = Modifier.semantics {
-                                        contentDescription = Strings["clear_button_description"]
-                                    }
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = Strings["clear_button_description"],
                                 )
                             }
                         }
@@ -1327,8 +1363,8 @@ fun TimeEntryDetail(
                 if (!isLoading && comments.isEmpty()) {
                     Text(
                         text = Strings["comments_required"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                     )
                 }
@@ -1338,10 +1374,8 @@ fun TimeEntryDetail(
                 ) {
                     Text(
                         text = Strings["char_count"].format(comments.length),
-                        style = MaterialTheme.typography.caption,
-                        color = if (comments.length > 240) MaterialTheme.colors.error else MaterialTheme.colors.onSurface.copy(
-                            alpha = 0.6f
-                        )
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (comments.length > 240) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1356,8 +1390,8 @@ fun TimeEntryDetail(
                 // Keyboard shortcuts help
                 Text(
                     text = Strings["keyboard_shortcuts"],
-                    style = MaterialTheme.typography.caption,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Button(

@@ -70,8 +70,8 @@ object Strings {
             "new_entry" to "Nouvelle saisie",
             "previous" to "Précédent",
             "next" to "Suivant",
-            "nav_previous" to "← Précédent",
-            "nav_next" to "Suivant →",
+            "nav_previous" to "Précédent",
+            "nav_next" to "Suivant",
             "nav_help" to "Alt+← Précédent | Alt+→ Suivant",
             "total_hours" to "Total des heures :",
             "error_loading_entries" to "Erreur lors du chargement des saisies de temps : %s",
@@ -147,7 +147,16 @@ object Strings {
             "error_loading_projects" to "Impossible de charger les projets",
             "error_loading_issues_activities" to "Impossible de charger les tickets/activités",
             "error_saving_config" to "Échec de l'enregistrement de la configuration",
-            "update_check_failed" to "Échec de la vérification de mise à jour"
+            "update_check_failed" to "Échec de la vérification de mise à jour",
+            "confirm_delete_title" to "Supprimer cette saisie ?",
+            "confirm_delete_message" to "Cette action est définitive. La saisie sera retirée de Redmine.",
+            "confirm_delete_yes" to "Supprimer",
+            "confirm_delete_no" to "Annuler",
+            "empty_entries_title" to "Aucune saisie de temps",
+            "empty_entries_subtitle" to "Ajoutez votre première saisie depuis le panneau de droite.",
+            "loading_entries" to "Chargement des saisies…",
+            "month_completed_celebration_title" to "Bravo !",
+            "month_completed_celebration_subtitle" to "Le mois est entièrement saisi."
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -199,8 +208,8 @@ object Strings {
             "new_entry" to "New entry",
             "previous" to "Previous",
             "next" to "Next",
-            "nav_previous" to "← Previous",
-            "nav_next" to "Next →",
+            "nav_previous" to "Previous",
+            "nav_next" to "Next",
             "nav_help" to "Alt+← Previous | Alt+→ Next",
             "total_hours" to "Total Hours:",
             "error_loading_entries" to "Error loading time entries: %s",
@@ -276,7 +285,16 @@ object Strings {
             "error_loading_projects" to "Failed to load projects",
             "error_loading_issues_activities" to "Failed to load issues/activities",
             "error_saving_config" to "Failed to save configuration",
-            "update_check_failed" to "Update check failed"
+            "update_check_failed" to "Update check failed",
+            "confirm_delete_title" to "Delete this entry?",
+            "confirm_delete_message" to "This action is permanent. The entry will be removed from Redmine.",
+            "confirm_delete_yes" to "Delete",
+            "confirm_delete_no" to "Cancel",
+            "empty_entries_title" to "No time entries",
+            "empty_entries_subtitle" to "Add your first entry from the panel on the right.",
+            "loading_entries" to "Loading entries…",
+            "month_completed_celebration_title" to "Well done!",
+            "month_completed_celebration_subtitle" to "The whole month is logged."
         )
     )
 

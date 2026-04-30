@@ -1,21 +1,34 @@
 package com.ps.redmine.util
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.ui.WarningAccentDark
+import com.ps.redmine.ui.WarningAccentLight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -25,7 +38,7 @@ enum class NotificationKind { Success, Error, Warning, Info }
 /**
  * Centralizes user-facing notifications shown via the Material [SnackbarHostState].
  *
- * - Encodes the [NotificationKind] in [SnackbarData.actionLabel] so [TypedSnackbar] can style it.
+ * - Encodes the [NotificationKind] in [SnackbarData.visuals.actionLabel] so [TypedSnackbar] can style it.
  * - Cancels any in-flight snackbar when a new one arrives (no queue, no stacking).
  * - Drops a duplicate of the most recent message if it arrives within the dedup window.
  */
@@ -72,23 +85,26 @@ fun rememberNotifier(hostState: SnackbarHostState): Notifier {
 
 /**
  * Renders a [Snackbar] styled according to the [NotificationKind] encoded in
- * [SnackbarData.actionLabel] by [Notifier]. Falls back to [NotificationKind.Info] if absent or unknown.
+ * [SnackbarData.visuals.actionLabel] by [Notifier]. Falls back to [NotificationKind.Info] if absent or unknown.
  */
 @Composable
 fun TypedSnackbar(data: SnackbarData) {
-    val kind = runCatching { NotificationKind.valueOf(data.actionLabel ?: "") }
+    val kind = runCatching { NotificationKind.valueOf(data.visuals.actionLabel ?: "") }
         .getOrDefault(NotificationKind.Info)
+    val isDark = isSystemInDarkTheme()
+    val warningBg = if (isDark) WarningAccentDark else WarningAccentLight
+    val warningFg = if (isDark) Color.Black else Color.White
     val background = when (kind) {
-        NotificationKind.Success -> MaterialTheme.colors.primary
-        NotificationKind.Error -> MaterialTheme.colors.error
-        NotificationKind.Warning -> Color(0xFFF9A825)
-        NotificationKind.Info -> MaterialTheme.colors.surface
+        NotificationKind.Success -> MaterialTheme.colorScheme.primary
+        NotificationKind.Error -> MaterialTheme.colorScheme.error
+        NotificationKind.Warning -> warningBg
+        NotificationKind.Info -> MaterialTheme.colorScheme.inverseSurface
     }
     val foreground = when (kind) {
-        NotificationKind.Success -> MaterialTheme.colors.onPrimary
-        NotificationKind.Error -> MaterialTheme.colors.onError
-        NotificationKind.Warning -> Color.Black
-        NotificationKind.Info -> MaterialTheme.colors.onSurface
+        NotificationKind.Success -> MaterialTheme.colorScheme.onPrimary
+        NotificationKind.Error -> MaterialTheme.colorScheme.onError
+        NotificationKind.Warning -> warningFg
+        NotificationKind.Info -> MaterialTheme.colorScheme.inverseOnSurface
     }
     val icon = when (kind) {
         NotificationKind.Success -> Icons.Filled.CheckCircle
@@ -98,10 +114,10 @@ fun TypedSnackbar(data: SnackbarData) {
     }
 
     Snackbar(
-        modifier = Modifier.alpha(0.95f),
-        backgroundColor = background,
+        containerColor = background,
         contentColor = foreground,
-        elevation = ElevationTokens.High,
+        actionContentColor = foreground,
+        dismissActionContentColor = foreground,
         action = {
             IconButton(
                 onClick = { data.dismiss() },
@@ -125,8 +141,8 @@ fun TypedSnackbar(data: SnackbarData) {
                 tint = foreground
             )
             Text(
-                text = data.message,
-                style = MaterialTheme.typography.body2,
+                text = data.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
                 color = foreground
             )
         }

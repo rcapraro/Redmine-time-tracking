@@ -1,8 +1,37 @@
 package com.ps.redmine.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -11,17 +40,15 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
-import java.util.*
+import java.util.Locale
 
 // Helper function to get the application version
 private fun getAppVersion(): String {
     return try {
-        // Try to load the Version class dynamically
         val versionClass = Class.forName("com.ps.redmine.Version")
         val versionField = versionClass.getDeclaredField("VERSION")
         versionField.get(null) as String
     } catch (_: Exception) {
-        // If the Version class is not available, return a default version
         "dev"
     }
 }
@@ -54,30 +81,24 @@ fun ConfigurationDialog(
                     singleLine = true
                 )
 
-
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
+                    OutlinedTextField(
+                        value = config.apiKey,
+                        onValueChange = { config = config.copy(apiKey = it) },
+                        label = { Text(Strings["api_key"]) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = config.apiKey,
-                            onValueChange = { config = config.copy(apiKey = it) },
-                            label = { Text(Strings["api_key"]) },
-                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                            singleLine = true,
-                            visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation()
-                        )
-                        TextButton(
-                            onClick = { apiKeyVisible = !apiKeyVisible },
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text(if (apiKeyVisible) Strings["hide_api_key"] else Strings["show_api_key"])
+                        singleLine = true,
+                        visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                                Icon(
+                                    imageVector = if (apiKeyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (apiKeyVisible) Strings["hide_api_key"] else Strings["show_api_key"],
+                                )
+                            }
                         }
-                    }
+                    )
 
-                    // API Key help link
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp),
                         horizontalArrangement = Arrangement.Start,
@@ -85,12 +106,12 @@ fun ConfigurationDialog(
                     ) {
                         TextButton(
                             onClick = { showApiKeyHelp = true },
-                            modifier = Modifier.padding(0.dp)
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                         ) {
                             Text(
                                 text = Strings["api_key_help"],
-                                style = MaterialTheme.typography.caption,
-                                color = MaterialTheme.colors.primary
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -98,13 +119,13 @@ fun ConfigurationDialog(
 
                 // Theme switch
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = Strings["dark_theme"],
-                        style = MaterialTheme.typography.body1
+                        style = MaterialTheme.typography.bodyMedium
                     )
                     Switch(
                         checked = config.isDarkTheme,
@@ -114,13 +135,13 @@ fun ConfigurationDialog(
 
                 // Language selection
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = Strings["language"],
-                        style = MaterialTheme.typography.body1
+                        style = MaterialTheme.typography.bodyMedium
                     )
 
                     var expanded by remember { mutableStateOf(false) }
@@ -131,26 +152,21 @@ fun ConfigurationDialog(
                     )
 
                     Box {
-                        TextButton(
-                            onClick = { expanded = true },
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
+                        TextButton(onClick = { expanded = true }) {
                             Text(languageLabels[config.language] ?: config.language)
                         }
-
                         DropdownMenu(
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
                             languages.forEach { language ->
                                 DropdownMenuItem(
+                                    text = { Text(languageLabels[language] ?: language) },
                                     onClick = {
                                         config = config.copy(language = language)
                                         expanded = false
                                     }
-                                ) {
-                                    Text(languageLabels[language] ?: language)
-                                }
+                                )
                             }
                         }
                     }
@@ -158,13 +174,13 @@ fun ConfigurationDialog(
 
                 // Daily hours selection (6 .. 7.5 by 0.5)
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = Strings["hours_per_day"],
-                        style = MaterialTheme.typography.body1
+                        style = MaterialTheme.typography.bodyMedium
                     )
                     var expandedDaily by remember { mutableStateOf(false) }
                     val options = (8 downTo 0).map { it * 0.5f + 5.5f }.filter { it in 6.0f..7.5f }
@@ -174,12 +190,13 @@ fun ConfigurationDialog(
                         }
                         DropdownMenu(expanded = expandedDaily, onDismissRequest = { expandedDaily = false }) {
                             options.forEach { v ->
-                                DropdownMenuItem(onClick = {
-                                    config = config.copy(dailyHours = v)
-                                    expandedDaily = false
-                                }) {
-                                    Text(Strings["hours_format"].format(v))
-                                }
+                                DropdownMenuItem(
+                                    text = { Text(Strings["hours_format"].format(v)) },
+                                    onClick = {
+                                        config = config.copy(dailyHours = v)
+                                        expandedDaily = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -187,12 +204,12 @@ fun ConfigurationDialog(
 
                 // Non-working days selection (Mon–Fri), max 4 days
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         text = Strings["non_working_days_label"],
-                        style = MaterialTheme.typography.body1
+                        style = MaterialTheme.typography.bodyMedium
                     )
                     val dayOptions = listOf(
                         1 to Strings["monday"],
@@ -227,25 +244,23 @@ fun ConfigurationDialog(
                             )
                         }
                     }
-                    // Helper showing derived weekly hours
                     val derivedWeekly = config.dailyHours * (5 - config.nonWorkingIsoDays.size)
                     Text(
                         text = Strings["working_weekly_hours"].format(derivedWeekly),
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
                 if (showError) {
                     Text(
                         text = Strings["configuration_error"],
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
 
-                // Display version at the bottom
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -253,8 +268,8 @@ fun ConfigurationDialog(
                 ) {
                     Text(
                         text = "${Strings["version"]}: ${getAppVersion()}",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -263,7 +278,6 @@ fun ConfigurationDialog(
             Button(
                 onClick = {
                     if (config.redmineUri.isNotBlank() && config.apiKey.isNotBlank()) {
-                        // Check what has changed
                         val oldConfig = ConfigurationManager.loadConfig()
                         val languageChanged = oldConfig.language != config.language
                         val themeChanged = oldConfig.isDarkTheme != config.isDarkTheme
@@ -271,33 +285,26 @@ fun ConfigurationDialog(
                                 oldConfig.apiKey != config.apiKey
 
                         try {
-                            // Save to persistent storage
                             ConfigurationManager.saveConfig(config)
-
-                            // Update RedmineClient if Redmine configuration changed
                             if (redmineConfigChanged) {
                                 redmineClient.updateConfiguration(config.redmineUri, config.apiKey)
                             }
-
-                            // Update language if changed
                             if (languageChanged) {
-                                // Update Strings with the new language
                                 Strings.updateLanguage(config.language)
-
-                                // Update locale
                                 val locale = when (config.language.lowercase()) {
                                     "en" -> Locale.ENGLISH
                                     else -> Locale.FRENCH
                                 }
                                 Locale.setDefault(locale)
                             }
-
-                            // Notify parent about all changes
                             onConfigSaved(redmineConfigChanged, languageChanged, themeChanged)
                             onDismiss()
                         } catch (e: Exception) {
+                            showError = true
                             onError(e.message ?: Strings["error_saving_config"])
                         }
+                    } else {
+                        showError = true
                     }
                 }
             ) {
@@ -311,7 +318,6 @@ fun ConfigurationDialog(
         }
     )
 
-    // API Key help dialog
     if (showApiKeyHelp) {
         AlertDialog(
             onDismissRequest = { showApiKeyHelp = false },
@@ -319,7 +325,7 @@ fun ConfigurationDialog(
             text = {
                 Text(
                     text = Strings["api_key_help_content"],
-                    style = MaterialTheme.typography.body1
+                    style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
@@ -330,7 +336,6 @@ fun ConfigurationDialog(
         )
     }
 }
-
 
 @Composable
 private fun DayChip(
@@ -344,13 +349,16 @@ private fun DayChip(
         enabled = enabled,
         shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.outlinedButtonColors(
-            backgroundColor = if (selected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface,
-            contentColor = if (selected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
         ),
-        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colors.primary)
-        else ButtonDefaults.outlinedBorder,
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+        border = if (selected) {
+            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Text(label)
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }

@@ -1,28 +1,55 @@
 package com.ps.redmine.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
-import com.ps.redmine.util.ElevationTokens
 import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.LocalDate
-import java.util.*
+import java.util.Locale
 
 @Composable
 fun TimeEntriesList(
@@ -33,58 +60,56 @@ fun TimeEntriesList(
     deletingEntryId: Int? = null,
     locale: Locale = Locale.getDefault()
 ) {
-    // Group entries by date and sort dates in descending order
+    var pendingDelete by remember { mutableStateOf<TimeEntry?>(null) }
+
     val entriesByDate = remember(timeEntries) {
         timeEntries.groupBy { it.date }
             .toSortedMap(compareByDescending { it })
     }
 
-    // Calculate total hours per day and check if < 7.5
     val dailyTotals = remember(entriesByDate) {
         entriesByDate.mapValues { (_, entries) ->
             entries.sumOf { it.hours.toDouble() }.toFloat()
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()  // Allow the box to fill the available height
-    ) {
+    if (timeEntries.isEmpty()) {
+        EmptyEntriesPlaceholder(modifier = Modifier.fillMaxSize())
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         val listState = rememberLazyListState()
 
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
+            modifier = Modifier.fillMaxWidth().fillMaxHeight()
         ) {
             entriesByDate.forEach { (date, entries) ->
-                // Display date header with total hours
-                item {
+                item(key = "header-$date") {
                     DateHeader(
                         date = date,
                         totalHours = dailyTotals[date] ?: 0f,
-                        locale = locale
+                        locale = locale,
+                        modifier = Modifier.animateItem()
                     )
                 }
 
-                // Display entries for this date
                 items(entries, key = { entry -> entry.id ?: entry.hashCode() }) { entry ->
                     TimeEntryItem(
                         timeEntry = entry,
                         isSelected = entry == selectedTimeEntry,
                         onClick = { onTimeEntrySelected(entry) },
-                        onDelete = { onDelete(entry) },
-                        isLoading = entry.id == deletingEntryId
+                        onDelete = { pendingDelete = entry },
+                        isLoading = entry.id == deletingEntryId,
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
         }
 
-        // Add a visible scrollbar
         VerticalScrollbar(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -92,29 +117,76 @@ fun TimeEntriesList(
             adapter = rememberScrollbarAdapter(listState)
         )
     }
+
+    pendingDelete?.let { entry ->
+        ConfirmDialog(
+            title = Strings["confirm_delete_title"],
+            message = Strings["confirm_delete_message"],
+            confirmLabel = Strings["confirm_delete_yes"],
+            dismissLabel = Strings["confirm_delete_no"],
+            destructive = true,
+            onConfirm = {
+                pendingDelete = null
+                onDelete(entry)
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun EmptyEntriesPlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(24.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.EventBusy,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(56.dp)
+            )
+            Text(
+                text = Strings["empty_entries_title"],
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = Strings["empty_entries_subtitle"],
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
 fun DateHeader(
     date: LocalDate,
     totalHours: Float,
-    locale: Locale = Locale.getDefault()
+    locale: Locale = Locale.getDefault(),
+    modifier: Modifier = Modifier,
 ) {
     val targetDaily = WorkHours.configuredDailyHours()
     val missingHours = if (totalHours < targetDaily) targetDaily - totalHours else 0f
     val excessHours = if (totalHours > targetDaily) totalHours - targetDaily else 0f
     val isPerfectHours = totalHours == targetDaily
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colors.surface,
-        elevation = ElevationTokens.Medium,
-        shape = MaterialTheme.shapes.small
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = MaterialTheme.shapes.medium,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            // Date and total hours
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -122,18 +194,18 @@ fun DateHeader(
             ) {
                 Text(
                     text = DateFormatter.formatShort(date, locale),
-                    style = MaterialTheme.typography.h6,
-                    color = MaterialTheme.colors.primary
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 Surface(
-                    color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
-                    shape = MaterialTheme.shapes.small
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.small,
                 ) {
                     Text(
                         text = Strings["hours_format"].format(totalHours),
-                        style = MaterialTheme.typography.subtitle1,
-                        color = MaterialTheme.colors.primary,
+                        style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -141,59 +213,60 @@ fun DateHeader(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Display appropriate message based on hours
             when {
-                isPerfectHours -> {
-                    // Display checkbox for perfect hours
-                    Surface(
-                        color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        Text(
-                            text = Strings["perfect_hours"].format(targetDaily),
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                isPerfectHours -> StatusRow(
+                    icon = Icons.Outlined.CheckCircle,
+                    text = Strings["perfect_hours"].format(targetDaily),
+                    container = MaterialTheme.colorScheme.secondaryContainer,
+                    onContainer = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
 
-                missingHours > 0 -> {
-                    // Display warning for missing hours
-                    Surface(
-                        color = MaterialTheme.colors.error.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        Text(
-                            text = "⚠️ " + Strings["missing_hours"].format(missingHours, targetDaily),
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.error,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                missingHours > 0 -> StatusRow(
+                    icon = Icons.Outlined.WarningAmber,
+                    text = Strings["missing_hours"].format(missingHours, targetDaily),
+                    container = MaterialTheme.colorScheme.errorContainer,
+                    onContainer = MaterialTheme.colorScheme.onErrorContainer,
+                )
 
-                excessHours > 0 -> {
-                    // Display warning for excess hours
-                    Surface(
-                        color = MaterialTheme.colors.error.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.small
-                    ) {
-                        Text(
-                            text = "⚠️ " + Strings["excess_hours"].format(excessHours, targetDaily),
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.error,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                excessHours > 0 -> StatusRow(
+                    icon = Icons.Outlined.WarningAmber,
+                    text = Strings["excess_hours"].format(excessHours, targetDaily),
+                    container = MaterialTheme.colorScheme.errorContainer,
+                    onContainer = MaterialTheme.colorScheme.onErrorContainer,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun StatusRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    container: Color,
+    onContainer: Color,
+) {
+    Surface(
+        color = container,
+        contentColor = onContainer,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = onContainer,
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -204,95 +277,87 @@ fun TimeEntryItem(
     isSelected: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainer,
+        animationSpec = tween(200),
+        label = "itemContainer",
+    )
+    val tonalElevation by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 0.dp,
+        animationSpec = tween(200),
+        label = "itemElevation",
+    )
+
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 3.dp)
             .clickable(enabled = !isLoading) { onClick() }
             .alpha(if (isLoading) 0.6f else 1f),
-        elevation = if (isSelected) ElevationTokens.High else ElevationTokens.Low,
-        color = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.1f) else MaterialTheme.colors.surface,
-        shape = MaterialTheme.shapes.small
+        color = containerColor,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurface,
+        tonalElevation = tonalElevation,
+        shape = MaterialTheme.shapes.medium,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Bullet point to indicate this entry is under a day
-            Text(
-                text = "•",
-                style = MaterialTheme.typography.h6,
-                color = MaterialTheme.colors.primary,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // First row: Hours, Project
+            Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Hours with more prominence
                     Surface(
-                        color = MaterialTheme.colors.primary.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.small
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = MaterialTheme.shapes.small,
                     ) {
                         Text(
                             text = Strings["hours_format"].format(timeEntry.hours),
-                            style = MaterialTheme.typography.subtitle2,
-                            color = MaterialTheme.colors.primary,
+                            style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-
-                    // Project name
                     Text(
                         text = timeEntry.project.name,
-                        style = MaterialTheme.typography.body1,
-                        modifier = Modifier.padding(start = 8.dp)
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Second row: Activity, Issue, Comments
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Activity with more prominence
                     Surface(
-                        color = MaterialTheme.colors.secondary.copy(alpha = 0.1f),
-                        shape = MaterialTheme.shapes.small
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = MaterialTheme.shapes.small,
                     ) {
                         Text(
                             text = timeEntry.activity.name,
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.secondary,
+                            style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-
-                    // Issue
                     Text(
                         text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.secondary
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-
                 }
             }
 
-            // Delete button
             IconButton(
                 onClick = { if (!isLoading) onDelete() },
                 modifier = Modifier
@@ -301,14 +366,15 @@ fun TimeEntryItem(
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colors.error
+                        modifier = Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        strokeWidth = 2.dp,
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = Strings["delete_time_entry"],
-                        tint = MaterialTheme.colors.error
+                        tint = MaterialTheme.colorScheme.error
                     )
                 }
             }

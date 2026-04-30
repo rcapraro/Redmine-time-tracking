@@ -25,7 +25,7 @@ repositories {
 dependencies {
     // Compose Desktop
     implementation(compose.desktop.currentOs)
-    implementation(compose.material)
+    implementation(compose.material3)
     implementation(compose.materialIconsExtended)
     implementation(compose.components.resources)
 
@@ -72,7 +72,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
         freeCompilerArgs.addAll(
             listOf(
                 "-opt-in=kotlin.time.ExperimentalTime",
-                "-opt-in=androidx.compose.material.ExperimentalMaterialApi",
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
                 "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
                 // Note: StrongSkipping is enabled by default in Compose 1.8.2
             )
