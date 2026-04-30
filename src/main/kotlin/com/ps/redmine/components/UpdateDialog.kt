@@ -1,29 +1,12 @@
 package com.ps.redmine.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.NewReleases
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,12 +30,15 @@ fun UpdateDialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(
                 dismissOnBackPress = true,
-                dismissOnClickOutside = true
+                dismissOnClickOutside = true,
+                // Opt out of the platform default so we can size the dialog wide enough
+                // for the footer's "Download for this OS" button to stay on one line.
+                usePlatformDefaultWidth = false,
             )
         ) {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(680.dp)
                     .padding(16.dp),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
@@ -96,7 +82,7 @@ fun UpdateDialog(
                         Column {
                             Text(
                                 text = Strings["update_release_notes"],
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleLarge,
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(
@@ -155,7 +141,11 @@ fun UpdateDialog(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(Strings["update_download_for_os"])
+                                Text(
+                                    text = Strings["update_download_for_os"],
+                                    softWrap = false,
+                                    maxLines = 1,
+                                )
                             }
                         }
                     }

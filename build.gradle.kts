@@ -35,6 +35,9 @@ dependencies {
     // We're using kotlinx.serialization directly without Ktor's content negotiation
     implementation(libs.kotlinx.serialization.json)
 
+    // SLF4J provider — Ktor logs through SLF4J; without a provider it prints "No SLF4J providers were found" at startup.
+    runtimeOnly(libs.slf4j.simple)
+
     // Kotlin Coroutines
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.swing)

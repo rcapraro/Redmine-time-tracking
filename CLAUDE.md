@@ -2,7 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Kotlin 2.2 + Compose for Desktop (JVM — not Android), JDK 21. For architecture, domain rules, and conventions specific to this codebase, invoke the **redmine-time** skill.
+Kotlin 2.2 + Compose for Desktop (JVM — not Android), JDK 21. For architecture, domain rules, and conventions specific
+to this codebase, invoke the **redmine-time** skill.
 
 ## Build / test / run
 

@@ -3,14 +3,11 @@ package com.ps.redmine.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,21 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
-import com.ps.redmine.util.WeekInfo
-import com.ps.redmine.util.WorkHours
-import com.ps.redmine.util.atDay
-import com.ps.redmine.util.countWorkingDays
-import com.ps.redmine.util.getWeeksInMonth
-import com.ps.redmine.util.isoWeekNumber
-import com.ps.redmine.util.lengthOfMonth
-import com.ps.redmine.util.monthValue
-import com.ps.redmine.util.today
+import com.ps.redmine.util.*
 import kotlinx.datetime.YearMonth
 
 /**
@@ -115,30 +104,85 @@ fun WeeklyProgressBars(
         weeklyProgress.forEach { progress ->
             val isCurrentWeek =
                 isCurrentMonth && today >= progress.weekInfo.startDate && today <= progress.weekInfo.endDate
-            WeekProgressBar(
-                progress = progress,
-                isCurrentWeek = isCurrentWeek,
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(enabled = onWeekClick != null) { onWeekClick?.invoke(progress.weekInfo) }
-            )
+            TooltipArea(
+                tooltip = { WeekTooltip(progress, isCurrentWeek) },
+                modifier = Modifier.weight(1f),
+                delayMillis = 500
+            ) {
+                WeekProgressBar(
+                    progress = progress,
+                    isCurrentWeek = isCurrentWeek,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(enabled = onWeekClick != null) { onWeekClick?.invoke(progress.weekInfo) }
+                )
+            }
         }
     }
 }
 
-/**
- * Individual vertical progress bar for a single week.
- */
+/** Tooltip card shown when hovering a week bar. Explains the bar + selection/non-worked markers. */
+@Composable
+private fun WeekTooltip(progress: WeeklyProgress, isCurrentWeek: Boolean) {
+    val isoWeek = isoWeekNumber(progress.weekInfo.startDate)
+    val startDate = DateFormatter.formatShort(progress.weekInfo.startDate)
+    val endDate = DateFormatter.formatShort(progress.weekInfo.endDate)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = MaterialTheme.shapes.small,
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Text(
+                text = Strings["week_tooltip_dates"].format(isoWeek, startDate, endDate),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = Strings["week_tooltip_hours"].format(progress.actualHours, progress.expectedHours),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (isCurrentWeek) {
+                Text(
+                    text = Strings["week_tooltip_current"],
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (progress.isNonWorkedWeek) {
+                Text(
+                    text = Strings["week_tooltip_non_worked"],
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Individual vertical progress bar for a single week. */
 @Composable
 private fun WeekProgressBar(
     progress: WeeklyProgress,
     isCurrentWeek: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val fillColor = MaterialTheme.colorScheme.secondary
+    // In-progress weeks get primary (Violet); complete weeks switch to secondary (Emerald)
+    // so a glance at the bar column tells which weeks are done vs still owed.
+    val isComplete = progress.progressPercentage >= 100f
+    val fillColor = if (isComplete) MaterialTheme.colorScheme.secondary
+    else MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
-    val currentWeekStrokeColor = MaterialTheme.colorScheme.outline
-    val nonWorkedMarkerColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // High-contrast neutral (near-black in light theme, near-white in dark) — guarantees
+    // the current-week marker stays visible over any fill (Violet primary, Emerald
+    // secondary, gray background) and reads as "selected" through being the only bar with
+    // a border, not through hue. The non-worked-week cross uses the same token so both
+    // status markers share a consistent emphasis level.
+    val currentWeekStrokeColor = MaterialTheme.colorScheme.onSurface
+    val nonWorkedMarkerColor = MaterialTheme.colorScheme.onSurface
 
     val isoWeekNumber = isoWeekNumber(progress.weekInfo.startDate)
 
@@ -154,7 +198,7 @@ private fun WeekProgressBar(
     ) {
         Text(
             text = Strings["week_label"].format(isoWeekNumber),
-            fontSize = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 2.dp)
@@ -177,16 +221,6 @@ private fun WeekProgressBar(
                 cornerRadius = cornerRadius
             )
 
-            if (isCurrentWeek) {
-                drawRoundRect(
-                    color = currentWeekStrokeColor,
-                    topLeft = Offset(0f, 0f),
-                    size = Size(barWidth, barHeight),
-                    cornerRadius = cornerRadius,
-                    style = Stroke(width = 2.dp.toPx())
-                )
-            }
-
             if (animatedPercent > 0) {
                 val progressHeight = (barHeight * (animatedPercent / 100f)).coerceAtMost(barHeight)
 
@@ -198,26 +232,39 @@ private fun WeekProgressBar(
                 )
 
                 if (progress.isNonWorkedWeek) {
-                    val stroke = 1.5f
+                    val stroke = 2.dp.toPx()
+                    val inset = 3.dp.toPx()
                     drawLine(
                         color = nonWorkedMarkerColor,
-                        start = Offset(0f, 0f),
-                        end = Offset(barWidth, barHeight),
-                        strokeWidth = stroke
+                        start = Offset(inset, inset),
+                        end = Offset(barWidth - inset, barHeight - inset),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round
                     )
                     drawLine(
                         color = nonWorkedMarkerColor,
-                        start = Offset(barWidth, 0f),
-                        end = Offset(0f, barHeight),
-                        strokeWidth = stroke
+                        start = Offset(barWidth - inset, inset),
+                        end = Offset(inset, barHeight - inset),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round
                     )
                 }
+            }
+
+            if (isCurrentWeek) {
+                drawRoundRect(
+                    color = currentWeekStrokeColor,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = cornerRadius,
+                    style = Stroke(width = 2.5.dp.toPx())
+                )
             }
         }
 
         Text(
             text = "${progress.progressPercentage.toInt()}%" + if (progress.isNonWorkedWeek) "•" else "",
-            fontSize = 9.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 1.dp)

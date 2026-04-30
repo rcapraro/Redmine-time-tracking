@@ -9,6 +9,7 @@ mockk = "1.14.6"
 junit = "6.0.1"
 ktor = "3.3.2"
 kotlinx-serialization = "1.9.0"
+slf4j = "2.0.17"
 version-catalog-update = "1.0.1"
 
 [libraries]
@@ -27,6 +28,7 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

@@ -1,20 +1,10 @@
 package com.ps.redmine
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -24,51 +14,27 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.ps.redmine.api.KtorRedmineClient
 import com.ps.redmine.api.RedmineClientInterface
-import com.ps.redmine.components.ConfettiOverlay
-import com.ps.redmine.components.ConfigurationDialog
-import com.ps.redmine.components.DatePicker
-import com.ps.redmine.components.ErrorDialog
-import com.ps.redmine.components.SearchableDropdown
-import com.ps.redmine.components.TimeEntriesList
-import com.ps.redmine.components.TimeEntriesListSkeleton
-import com.ps.redmine.components.UpdateDialog
-import com.ps.redmine.components.WeeklyProgressBars
+import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
 import com.ps.redmine.model.Activity
@@ -88,7 +54,7 @@ import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
-import java.util.Locale
+import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -453,321 +419,327 @@ fun App(
                         locale = currentLocale,
                         languageKey = currentLanguage,
                     )
-                    ActionPill(
-                        hasUpdate = updateState.availableUpdate != null,
-                        onUpdateClick = {
-                            if (updateState.availableUpdate != null) {
-                                updateManager.showUpdateDialog()
-                            }
-                        },
-                        onSettingsClick = { showConfigDialog = true },
-                    )
+                    key(currentLanguage) {
+                        ActionPill(
+                            hasUpdate = updateState.availableUpdate != null,
+                            onUpdateClick = {
+                                if (updateState.availableUpdate != null) {
+                                    updateManager.showUpdateDialog()
+                                }
+                            },
+                            onSettingsClick = { showConfigDialog = true },
+                        )
+                    }
                 }
 
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp).padding(bottom = 4.dp)
                 ) {
-                // Weekly progress bars on the far left
-                // Use key parameter to force recomposition when language or non-working days change
-                key(currentLanguage, nonWorkingIsoDays) {
-                    WeeklyProgressBars(
-                        timeEntries = timeEntries,
-                        currentMonth = currentMonth,
-                        excludedIsoDays = nonWorkingIsoDays,
-                        modifier = Modifier.padding(2.dp).focusProperties { canFocus = false },
-                        onWeekClick = { weekInfo ->
-                            selectedDate = weekInfo.startDate
-                        }
-                    )
-                }
-
-                // Left panel - Time entries list (wrapped in card)
-                Surface(
-                    modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp).focusProperties { canFocus = false },
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-                        // Month navigation and total hours
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            if (!isLoading && !isGlobalLoading) {
-                                                currentMonth = currentMonth.minusMonths(1)
-                                                selectedTimeEntry = null
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                            contentDescription = Strings["nav_previous"],
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                    AnimatedContent(
-                                        targetState = currentMonth,
-                                        transitionSpec = {
-                                            val forward = targetState > initialState
-                                            val direction = if (forward) 1 else -1
-                                            (slideInHorizontally(tween(280)) { it * direction } + fadeIn(tween(280))) togetherWith
-                                                    (slideOutHorizontally(tween(280)) { -it * direction } + fadeOut(tween(280)))
-                                        },
-                                        label = "monthLabel",
-                                    ) { month ->
-                                        Text(
-                                            text = "${
-                                                LocaleNames.monthName(
-                                                    month.monthValue,
-                                                    currentLocale,
-                                                    full = true
-                                                )
-                                            } ${month.year}",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            if (!isLoading && !isGlobalLoading) {
-                                                currentMonth = currentMonth.plusMonths(1)
-                                                selectedTimeEntry = null
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                            contentDescription = Strings["nav_next"],
-                                            modifier = Modifier.size(20.dp),
-                                        )
-                                    }
-                                }
-                                // Use key parameter to force recomposition when language changes
-                                key(currentLanguage) {
-                                    TextButton(
-                                        onClick = {
-                                            if (!isLoading && !isGlobalLoading) {
-                                                currentMonth = YearMonth.now()
-                                                selectedTimeEntry = null
-                                            }
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                        modifier = Modifier
-                                            .heightIn(min = 24.dp)
-                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
-                                    ) {
-                                        Text(
-                                            text = Strings["today_shortcut"],
-                                            style = MaterialTheme.typography.labelLarge,
-                                        )
-                                    }
-                                }
-                                // Use key parameter to force recomposition when language changes
-                                key(currentLanguage) {
-                                    Text(
-                                        text = Strings["nav_help"],
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
-                                    )
-                                }
+                    // Weekly progress bars on the far left
+                    // Use key parameter to force recomposition when language or non-working days change
+                    key(currentLanguage, nonWorkingIsoDays) {
+                        WeeklyProgressBars(
+                            timeEntries = timeEntries,
+                            currentMonth = currentMonth,
+                            excludedIsoDays = nonWorkingIsoDays,
+                            modifier = Modifier.padding(2.dp).focusProperties { canFocus = false },
+                            onWeekClick = { weekInfo ->
+                                selectedDate = weekInfo.startDate
                             }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = Strings["total_hours"],
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = Strings["total_hours_format"].format(totalHours),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            // Monthly progress indicator
-                            val completionPercentage = if (expectedHours > 0) {
-                                (totalHours / expectedHours * 100).coerceAtMost(100.0)
-                            } else {
-                                0.0
-                            }
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = Strings["monthly_progress"],
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Text(
-                                        text = if (isCompleted) {
-                                            Strings["month_completed"]
-                                        } else {
-                                            Strings["completion_percentage"].format(completionPercentage)
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                LinearProgressIndicator(
-                                    progress = { (completionPercentage / 100).toFloat() },
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(6.dp),
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    drawStopIndicator = {},
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "${Strings["working_days"]} $effectiveDays",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "${Strings["expected_hours"]} ${
-                                            Strings["total_hours_format"].format(
-                                                expectedHours
-                                            )
-                                        }",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                if (!isCompleted && expectedHours > totalHours) {
-                                    val remainingHours = expectedHours - totalHours
-                                    Text(
-                                        text = Strings["hours_remaining"].format(remainingHours),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Crossfade(
-                            targetState = isLoading && !isGlobalLoading && deletingEntryId == null,
-                            animationSpec = tween(220),
-                            label = "loadingCrossfade",
-                        ) { showLoading ->
-                            if (showLoading) {
-                                TimeEntriesListSkeleton(modifier = Modifier.fillMaxSize())
-                            } else {
-                                key(currentLanguage) {
-                                    TimeEntriesList(
-                                        timeEntries = timeEntries,
-                                        selectedTimeEntry = selectedTimeEntry,
-                                        onTimeEntrySelected = { selectedTimeEntry = it },
-                                        onDelete = { entry -> deleteTimeEntry(entry) },
-                                        deletingEntryId = deletingEntryId,
-                                        locale = currentLocale
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Right panel - Time entry details (wrapped in card)
-                Surface(
-                    modifier = Modifier.weight(1.3f).fillMaxHeight().padding(4.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                ) {
-                    // Use key parameter to force recomposition when language changes
-                    key(currentLanguage) {
-                        // Manage focus reset to Date field after save/cancel
-                        var focusRequestKey by remember { mutableStateOf(0) }
-
-                        TimeEntryDetail(
-                            timeEntry = selectedTimeEntry,
-                            redmineClient = redmineClient,
-                            onSave = { updatedEntry ->
-                                scope.launch {
-                                    try {
-                                        if (updatedEntry.id == null) {
-                                            redmineClient.createTimeEntry(updatedEntry)
-                                        } else {
-                                            redmineClient.updateTimeEntry(updatedEntry)
-                                        }
-                                        val previousTotal = totalHours
-                                        // Refresh the list
-                                        timeEntries = redmineClient.getTimeEntriesForMonth(
-                                            currentMonth.year,
-                                            currentMonth.monthValue
-                                        )
-                                        selectedTimeEntry = null
-
-                                        val message = if (updatedEntry.id == null)
-                                            Strings["entry_created"]
-                                        else
-                                            Strings["entry_updated"]
-                                        notifier.success(message)
-
-                                        // Fire confetti when this save flips the month from incomplete to complete
-                                        val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                                        if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
-                                            confettiTrigger++
-                                        }
-
-                                        // Trigger focus back to Date field for next entry
-                                        focusRequestKey++
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        handleException(
-                                            e,
-                                            notifier,
-                                            { errorDialogMessage = it },
-                                            { errorDialogDetails = it },
-                                            { showErrorDialog = it }
-                                        )
-                                    }
-                                }
-                            },
-                            onCancel = {
-                                selectedTimeEntry = null
-                                // Trigger focus back to Date field when cancelling entry
-                                focusRequestKey++
-                            },
-                            locale = currentLocale,
-                            configVersion = configVersion,
-                            isGlobalLoading = isGlobalLoading,
-                            focusRequestKey = focusRequestKey,
-                            initialDate = selectedDate,
-                            onError = { notifier.error(it) }
                         )
                     }
+
+                    // Left panel - Time entries list (wrapped in card)
+                    Surface(
+                        modifier = Modifier.weight(1.5f).fillMaxHeight().padding(4.dp)
+                            .focusProperties { canFocus = false },
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+                            // Month navigation and total hours
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(
+                                            onClick = {
+                                                if (!isLoading && !isGlobalLoading) {
+                                                    currentMonth = currentMonth.minusMonths(1)
+                                                    selectedTimeEntry = null
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                                contentDescription = Strings["nav_previous"],
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                        AnimatedContent(
+                                            targetState = currentMonth,
+                                            transitionSpec = {
+                                                val forward = targetState > initialState
+                                                val direction = if (forward) 1 else -1
+                                                (slideInHorizontally(tween(280)) { it * direction } + fadeIn(tween(280))) togetherWith
+                                                        (slideOutHorizontally(tween(280)) { -it * direction } + fadeOut(
+                                                            tween(280)
+                                                        ))
+                                            },
+                                            label = "monthLabel",
+                                        ) { month ->
+                                            Text(
+                                                text = "${
+                                                    LocaleNames.monthName(
+                                                        month.monthValue,
+                                                        currentLocale,
+                                                        full = true
+                                                    )
+                                                } ${month.year}",
+                                                style = MaterialTheme.typography.titleLarge
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                if (!isLoading && !isGlobalLoading) {
+                                                    currentMonth = currentMonth.plusMonths(1)
+                                                    selectedTimeEntry = null
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                                contentDescription = Strings["nav_next"],
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                    }
+                                    // Use key parameter to force recomposition when language changes
+                                    key(currentLanguage) {
+                                        TextButton(
+                                            onClick = {
+                                                if (!isLoading && !isGlobalLoading) {
+                                                    currentMonth = YearMonth.now()
+                                                    selectedTimeEntry = null
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            modifier = Modifier
+                                                .heightIn(min = 24.dp)
+                                                .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                        ) {
+                                            Text(
+                                                text = Strings["today_shortcut"],
+                                                style = MaterialTheme.typography.labelLarge,
+                                            )
+                                        }
+                                    }
+                                    // Use key parameter to force recomposition when language changes
+                                    key(currentLanguage) {
+                                        Text(
+                                            text = Strings["nav_help"],
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = Strings["total_hours"],
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = Strings["total_hours_format"].format(totalHours),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                // Monthly progress indicator
+                                val completionPercentage = if (expectedHours > 0) {
+                                    (totalHours / expectedHours * 100).coerceAtMost(100.0)
+                                } else {
+                                    0.0
+                                }
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = Strings["monthly_progress"],
+                                            style = MaterialTheme.typography.labelLarge
+                                        )
+                                        Text(
+                                            text = if (isCompleted) {
+                                                Strings["month_completed"]
+                                            } else {
+                                                Strings["completion_percentage"].format(completionPercentage)
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    LinearProgressIndicator(
+                                        progress = { (completionPercentage / 100).toFloat() },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(6.dp),
+                                        color = if (isCompleted) MaterialTheme.colorScheme.secondary
+                                        else MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        drawStopIndicator = {},
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "${Strings["working_days"]} $effectiveDays",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${Strings["expected_hours"]} ${
+                                                Strings["total_hours_format"].format(
+                                                    expectedHours
+                                                )
+                                            }",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    if (!isCompleted && expectedHours > totalHours) {
+                                        val remainingHours = expectedHours - totalHours
+                                        Text(
+                                            text = Strings["hours_remaining"].format(remainingHours),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Crossfade(
+                                targetState = isLoading && !isGlobalLoading && deletingEntryId == null,
+                                animationSpec = tween(220),
+                                label = "loadingCrossfade",
+                            ) { showLoading ->
+                                if (showLoading) {
+                                    TimeEntriesListSkeleton(modifier = Modifier.fillMaxSize())
+                                } else {
+                                    key(currentLanguage) {
+                                        TimeEntriesList(
+                                            timeEntries = timeEntries,
+                                            selectedTimeEntry = selectedTimeEntry,
+                                            onTimeEntrySelected = { selectedTimeEntry = it },
+                                            onDelete = { entry -> deleteTimeEntry(entry) },
+                                            deletingEntryId = deletingEntryId,
+                                            locale = currentLocale
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Right panel - Time entry details (wrapped in card)
+                    Surface(
+                        modifier = Modifier.weight(1.3f).fillMaxHeight().padding(4.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        // Use key parameter to force recomposition when language changes
+                        key(currentLanguage) {
+                            // Manage focus reset to Date field after save/cancel
+                            var focusRequestKey by remember { mutableStateOf(0) }
+
+                            TimeEntryDetail(
+                                timeEntry = selectedTimeEntry,
+                                redmineClient = redmineClient,
+                                onSave = { updatedEntry ->
+                                    scope.launch {
+                                        try {
+                                            if (updatedEntry.id == null) {
+                                                redmineClient.createTimeEntry(updatedEntry)
+                                            } else {
+                                                redmineClient.updateTimeEntry(updatedEntry)
+                                            }
+                                            val previousTotal = totalHours
+                                            // Refresh the list
+                                            timeEntries = redmineClient.getTimeEntriesForMonth(
+                                                currentMonth.year,
+                                                currentMonth.monthValue
+                                            )
+                                            selectedTimeEntry = null
+
+                                            val message = if (updatedEntry.id == null)
+                                                Strings["entry_created"]
+                                            else
+                                                Strings["entry_updated"]
+                                            notifier.success(message)
+
+                                            // Fire confetti when this save flips the month from incomplete to complete
+                                            val newTotal = timeEntries.sumOf { it.hours.toDouble() }
+                                            if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                                                confettiTrigger++
+                                            }
+
+                                            // Trigger focus back to Date field for next entry
+                                            focusRequestKey++
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            handleException(
+                                                e,
+                                                notifier,
+                                                { errorDialogMessage = it },
+                                                { errorDialogDetails = it },
+                                                { showErrorDialog = it }
+                                            )
+                                        }
+                                    }
+                                },
+                                onCancel = {
+                                    selectedTimeEntry = null
+                                    // Trigger focus back to Date field when cancelling entry
+                                    focusRequestKey++
+                                },
+                                locale = currentLocale,
+                                configVersion = configVersion,
+                                isGlobalLoading = isGlobalLoading,
+                                focusRequestKey = focusRequestKey,
+                                initialDate = selectedDate,
+                                onError = { notifier.error(it) }
+                            )
+                        }
+                    }
                 }
-            }
             }
 
             // Show loading overlay when reloading after configuration changes
@@ -799,7 +771,7 @@ fun App(
                                 )
                                 Text(
                                     text = Strings["loading"],
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleLarge,
                                 )
                             }
                         }
@@ -1482,7 +1454,7 @@ private fun StatusPill(
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1553,7 +1525,7 @@ private fun ActionPill(
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1561,40 +1533,70 @@ private fun ActionPill(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (hasUpdate) {
-                IconButton(
+                ActionChip(
+                    icon = Icons.Default.Download,
+                    text = Strings["update"],
+                    contentDescription = Strings["update_available_title"],
                     onClick = onUpdateClick,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    BadgedBox(
-                        badge = {
-                            Badge(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            )
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = Strings["update_available_title"],
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
+                    badged = true,
+                )
                 StatusDivider()
             }
-            IconButton(
+            ActionChip(
+                icon = Icons.Default.Settings,
+                text = Strings["settings"],
+                contentDescription = Strings["settings"],
                 onClick = onSettingsClick,
-                modifier = Modifier.size(32.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionChip(
+    icon: ImageVector,
+    text: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    badged: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (badged) {
+            BadgedBox(
+                badge = {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    )
+                },
             ) {
                 Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = Strings["settings"],
+                    imageVector = icon,
+                    contentDescription = contentDescription,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
             }
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
         }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -1630,7 +1632,7 @@ private fun UserAvatar(name: String) {
     ) {
         Text(
             text = initials,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onPrimaryContainer,
         )
     }

@@ -110,6 +110,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download Windows MSI artifact
         uses: actions/download-artifact@v4
         with:
@@ -141,6 +146,58 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate changelog
+        id: changelog
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" == *-* ]]; then
+            PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v "^${TAG}$" | head -n 1)
+          else
+            PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v -- '-' | grep -v "^${TAG}$" | head -n 1)
+          fi
+
+          echo "Previous tag: ${PREV_TAG:-<none>}"
+          echo "Current tag:  $TAG"
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="$TAG"
+          else
+            RANGE="${PREV_TAG}..${TAG}"
+          fi
+
+          fmt='- %s (%h)'
+
+          {
+            FEATS=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E --grep='^feat(\(|:|!)')
+            FIXES=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E --grep='^fix(\(|:|!)')
+            PERFS=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E --grep='^perf(\(|:|!)')
+            REFACTORS=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E --grep='^refactor(\(|:|!)')
+            DOCS=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E --grep='^docs(\(|:|!)')
+            OTHERS=$(git log "$RANGE" --no-merges --pretty=format:"$fmt" -E \
+              --grep='^(feat|fix|perf|refactor|docs|chore|ci|build|test|style)(\(|:|!)' --invert-grep)
+
+            if [ -n "$FEATS" ];     then printf '### Features\n%s\n\n'      "$FEATS"; fi
+            if [ -n "$FIXES" ];     then printf '### Bug Fixes\n%s\n\n'     "$FIXES"; fi
+            if [ -n "$PERFS" ];     then printf '### Performance\n%s\n\n'   "$PERFS"; fi
+            if [ -n "$REFACTORS" ]; then printf '### Refactoring\n%s\n\n'   "$REFACTORS"; fi
+            if [ -n "$DOCS" ];      then printf '### Documentation\n%s\n\n' "$DOCS"; fi
+            if [ -n "$OTHERS" ];    then printf '### Other Changes\n%s\n\n' "$OTHERS"; fi
+
+            if [ -z "$FEATS$FIXES$PERFS$REFACTORS$DOCS$OTHERS" ]; then
+              printf '_No notable changes._\n\n'
+            fi
+
+            if [ -n "$PREV_TAG" ]; then
+              printf '**Full Changelog**: https://github.com/%s/compare/%s...%s\n' \
+                "${{ github.repository }}" "$PREV_TAG" "$TAG"
+            fi
+          } > CHANGELOG_BODY.md
+
+          echo "----- generated body -----"
+          cat CHANGELOG_BODY.md
+          echo "--------------------------"
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -148,6 +205,7 @@ jobs:
           name: RedmineTime ${{ github.ref_name }}
           draft: false
           prerelease: ${{ steps.prerelease_flag.outputs.prerelease }}
+          body_path: CHANGELOG_BODY.md
           files: |
             artifacts/windows-installer/*.msi
             artifacts/windows-portable/*.zip

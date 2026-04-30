@@ -16,7 +16,6 @@ object ConfigurationManager {
     private const val KEY_REDMINE_URI = "redmine.uri"
     private const val KEY_API_KEY = "redmine.apiKey"
     private const val KEY_DARK_THEME = "redmine.darkTheme"
-    private const val KEY_THEME_FLAVOR_LEGACY = "redmine.themeFlavor"
     private const val KEY_LANGUAGE = "redmine.language"
     private const val KEY_NON_WORKING_ISO_DAYS = "redmine.nonWorkingIsoDays"
     private const val KEY_DAILY_HOURS = "redmine.dailyHours"
@@ -38,14 +37,10 @@ object ConfigurationManager {
 
     /**
      * Resolves the dark/light preference. Order of precedence:
-     * stored darkTheme pref → stored themeFlavor pref (legacy intermediate) → REDMINE_DARK_THEME env → false.
-     * `themeFlavor=latte` maps to false, anything else to true.
+     * stored darkTheme pref → REDMINE_DARK_THEME env → false.
      */
     private fun resolveIsDarkTheme(): Boolean {
         preferences.get(KEY_DARK_THEME, null)?.let { return it.toBoolean() }
-        preferences.get(KEY_THEME_FLAVOR_LEGACY, null)?.let {
-            return it.lowercase() != "latte"
-        }
         System.getenv("REDMINE_DARK_THEME")?.let { return it.toBoolean() }
         return false
     }
@@ -73,8 +68,6 @@ object ConfigurationManager {
         preferences.put(KEY_REDMINE_URI, config.redmineUri)
         preferences.put(KEY_API_KEY, config.apiKey)
         preferences.putBoolean(KEY_DARK_THEME, config.isDarkTheme)
-        // Drop the short-lived themeFlavor pref once the user saves under the boolean model.
-        preferences.remove(KEY_THEME_FLAVOR_LEGACY)
         preferences.put(KEY_LANGUAGE, config.language)
         // Store as CSV of ints (Mon..Fri -> 1..5), enforce maximum of MAX_NON_WORKING_DAYS persisted selections
         val limited = config.nonWorkingIsoDays.sorted().take(MAX_NON_WORKING_DAYS)

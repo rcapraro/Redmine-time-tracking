@@ -3,15 +3,10 @@ package com.ps.redmine.ui
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.ps.redmine_time.generated.resources.Res
-import com.ps.redmine_time.generated.resources.inter_bold
-import com.ps.redmine_time.generated.resources.inter_medium
-import com.ps.redmine_time.generated.resources.inter_regular
-import com.ps.redmine_time.generated.resources.inter_semibold
+import com.ps.redmine_time.generated.resources.*
 import org.jetbrains.compose.resources.Font
 
 @Composable
@@ -23,16 +18,46 @@ fun rememberInterFontFamily(): FontFamily = FontFamily(
 )
 
 /**
- * Compact, dense desktop type scale built on Inter.
+ * Inter type scale — only **three sizes** are used in the general UI (18 / 14 / 12 sp).
+ * A fourth, 10 sp, is reserved exclusively for the weekly progress-bar labels on the left
+ * (their 16 dp wide bars cannot fit anything bigger). Nothing else in the app should land
+ * at 10 sp, and there should be no raw `fontSize = X.sp` overrides anywhere else.
  *
- * Tracks the M3 baseline structure but tunes sizes/line-heights/tracking
- * for a desktop window (smaller targets, denser layouts) and improves
- * readability on body text.
+ *   18 sp / SemiBold  → titleLarge, titleMedium, titleSmall  (titles, dialog headers)
+ *   14 sp / Normal    → bodyLarge, bodyMedium                (body text, list items, dropdowns)
+ *   12 sp             → labelLarge (Medium), labelMedium (Medium), bodySmall (Normal)
+ *                       (badges, buttons, status pills, captions, helpers, errors)
+ *   10 sp / Medium    → labelSmall                           (weekly-bar labels ONLY)
  */
 @Composable
 fun appTypography(): Typography {
     val inter = rememberInterFontFamily()
     val base = Typography()
+
+    val title = TextStyle(
+        fontFamily = inter, fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp, lineHeight = 24.sp, letterSpacing = (-0.1).sp,
+    )
+    val body = TextStyle(
+        fontFamily = inter, fontWeight = FontWeight.Normal,
+        fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.15.sp,
+    )
+    val label = TextStyle(
+        fontFamily = inter, fontWeight = FontWeight.Medium,
+        fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.1.sp,
+    )
+    val caption = TextStyle(
+        fontFamily = inter, fontWeight = FontWeight.Normal,
+        fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.2.sp,
+    )
+    // 10 sp — used **only** by WeeklyProgressBars labels (16 dp bars cannot fit larger
+    // text). Routing access to it through `labelSmall` keeps the rule "no raw fontSize
+    // overrides" intact while carving out one explicit exception.
+    val weeklyBar = TextStyle(
+        fontFamily = inter, fontWeight = FontWeight.Medium,
+        fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.4.sp,
+    )
+
     return base.copy(
         displayLarge = base.displayLarge.with(inter),
         displayMedium = base.displayMedium.with(inter),
@@ -40,42 +65,15 @@ fun appTypography(): Typography {
         headlineLarge = base.headlineLarge.with(inter),
         headlineMedium = base.headlineMedium.with(inter),
         headlineSmall = base.headlineSmall.with(inter),
-        titleLarge = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.SemiBold,
-            fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.1).sp,
-        ),
-        titleMedium = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.SemiBold,
-            fontSize = 16.sp, lineHeight = 22.sp, letterSpacing = 0.1.sp,
-        ),
-        titleSmall = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Medium,
-            fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp,
-        ),
-        bodyLarge = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Normal,
-            fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = 0.15.sp,
-        ),
-        bodyMedium = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Normal,
-            fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.15.sp,
-        ),
-        bodySmall = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Normal,
-            fontSize = 12.sp, lineHeight = 17.sp, letterSpacing = 0.2.sp,
-        ),
-        labelLarge = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Medium,
-            fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.1.sp,
-        ),
-        labelMedium = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Medium,
-            fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp,
-        ),
-        labelSmall = TextStyle(
-            fontFamily = inter, fontWeight = FontWeight.Medium,
-            fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp,
-        ),
+        titleLarge = title,
+        titleMedium = title,
+        titleSmall = title,
+        bodyLarge = body,
+        bodyMedium = body,
+        bodySmall = caption,
+        labelLarge = label,
+        labelMedium = label,
+        labelSmall = weeklyBar,
     )
 }
 

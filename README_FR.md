@@ -86,7 +86,8 @@ sauvegardée) :
 
 - `REDMINE_URL`: L'URL de votre serveur Redmine
 - `REDMINE_API_KEY`: Votre clé d'API Redmine
-- `REDMINE_DARK_THEME`: Définir à "true" pour activer le thème sombre (Catppuccin Macchiato), sinon le thème clair (Catppuccin Latte) est utilisé. Défaut : "false".
+- `REDMINE_DARK_THEME`: Définir à "true" pour activer le thème sombre, sinon le thème clair est utilisé. Défaut : "
+  false".
 
 Note : Les paramètres de langue ne peuvent être modifiés que via le panneau de configuration.
 

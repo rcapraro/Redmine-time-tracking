@@ -5,158 +5,166 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Catppuccin-flavored Material 3 color schemes — softer, more pastel than the previous
- * GitHub Primer palette. Two flavors are exposed:
- * - Light = **Latte**   (https://github.com/catppuccin/catppuccin#-palette)
- * - Dark  = **Macchiato**
+ * Modern Material 3 color schemes.
  *
- * Mapping convention (uniform across both flavors):
- * - primary   → blue   (brand accent)
- * - secondary → green  (used for progress fills)
- * - tertiary  → mauve
- * - error     → red
+ * **Palette** — Violet as the primary brand accent, Emerald for success/secondary, Pink for
+ * the tertiary accent, and Red for error. The four roles are intentionally distinct hues so
+ * UI elements that map onto different roles (selected items / status rows / today's date /
+ * errors) are immediately distinguishable. The 600-tier saturation level lands modern and
+ * vibrant without crossing into neon.
  *
- * For dark surfaces the M3 elevation ladder maps onto Catppuccin's surface tokens
- * (crust < mantle < base < surface0 < surface1 < surface2). For light, base is the
- * brightest tone and we descend through mantle / crust / surface0 / surface1.
+ * **Surfaces (Light)** — A subtle cool-tinted off-white body lets pure-white panels pop as
+ * clean cards. The `surfaceContainer` (entry rows) uses a faint cool gray to zebra against
+ * white panels, and `surfaceContainerHigh` (day headers, pills, dialog containers) carries a
+ * pale Violet wash so brand color shows up at the section-banner level. Inset surfaces nest
+ * with the deeper `primaryContainer`-family Violet. Net effect: bright, calm, branded.
+ *
+ * **Surfaces (Dark)** — A deep cool body in the same Violet family, with the elevation
+ * ladder rising through cool charcoals; `surfaceContainerHigh` keeps the Violet cast so the
+ * day banner reads as a tinted band on the dark panels.
  */
 
 val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF1E66F5),
-    onPrimary = Color(0xFFEFF1F5),
-    primaryContainer = Color(0xFFCFE0FF),
-    onPrimaryContainer = Color(0xFF002B69),
-    inversePrimary = Color(0xFF7287FD),
+    primary = Color(0xFF7C3AED),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFDDD6FE),
+    onPrimaryContainer = Color(0xFF2E1065),
+    inversePrimary = Color(0xFFC4B5FD),
 
-    secondary = Color(0xFF40A02B),
-    onSecondary = Color(0xFFEFF1F5),
-    secondaryContainer = Color(0xFFCFEACB),
-    onSecondaryContainer = Color(0xFF0D3F00),
+    secondary = Color(0xFF059669),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFA7F3D0),
+    onSecondaryContainer = Color(0xFF052E16),
 
-    tertiary = Color(0xFF8839EF),
-    onTertiary = Color(0xFFEFF1F5),
-    tertiaryContainer = Color(0xFFE6D6FF),
-    onTertiaryContainer = Color(0xFF2C0F62),
+    tertiary = Color(0xFFDB2777),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFBCFE8),
+    onTertiaryContainer = Color(0xFF500724),
 
-    error = Color(0xFFD20F39),
-    onError = Color(0xFFEFF1F5),
-    errorContainer = Color(0xFFFFD9DD),
-    onErrorContainer = Color(0xFF410014),
+    error = Color(0xFFDC2626),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFECACA),
+    onErrorContainer = Color(0xFF7F1D1D),
 
-    background = Color(0xFFEFF1F5),
-    onBackground = Color(0xFF4C4F69),
+    // Cool-tinted off-white body — the slight Violet undertone keeps the canvas reading
+    // as warm-modern rather than cold gray.
+    background = Color(0xFFF8F7FB),
+    onBackground = Color(0xFF1B1923),
 
-    surface = Color(0xFFEFF1F5),
-    onSurface = Color(0xFF4C4F69),
-    surfaceVariant = Color(0xFFCCD0DA),
-    onSurfaceVariant = Color(0xFF5C5F77),
-    surfaceTint = Color(0xFF1E66F5),
+    surface = Color(0xFFF8F7FB),
+    onSurface = Color(0xFF1B1923),
+    surfaceVariant = Color(0xFFE5E2EC),
+    onSurfaceVariant = Color(0xFF49474F),
+    surfaceTint = Color(0xFF7C3AED),
 
-    inverseSurface = Color(0xFF4C4F69),
-    inverseOnSurface = Color(0xFFEFF1F5),
+    inverseSurface = Color(0xFF2F2C36),
+    inverseOnSurface = Color(0xFFF5F4FA),
 
-    outline = Color(0xFF8C8FA1),
-    outlineVariant = Color(0xFFBCC0CC),
+    outline = Color(0xFF8C8995),
+    outlineVariant = Color(0xFFCBC9D3),
     scrim = Color(0xFF000000),
 
-    surfaceDim = Color(0xFFCCD0DA),
-    surfaceBright = Color(0xFFEFF1F5),
+    surfaceDim = Color(0xFFDAD7E0),
+    surfaceBright = Color(0xFFFFFFFF),
+    // Inverted, branded surface ladder:
+    //   body cool off-white  →  panels white  →  entry rows pale gray
+    //   →  day-header / pills / dialog containers pale Violet
+    //   →  inset boxes deeper Violet
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFE6E9EF),
-    surfaceContainer = Color(0xFFDCE0E8),
-    surfaceContainerHigh = Color(0xFFCCD0DA),
-    surfaceContainerHighest = Color(0xFFBCC0CC),
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFF1F0F6),
+    surfaceContainerHigh = Color(0xFFF5F3FF),
+    surfaceContainerHighest = Color(0xFFEDE9FE),
 )
 
 val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF8AADF4),
-    onPrimary = Color(0xFF24273A),
-    primaryContainer = Color(0xFF34528C),
-    onPrimaryContainer = Color(0xFFD3DEFA),
-    inversePrimary = Color(0xFFB7BDF8),
+    primary = Color(0xFFC4B5FD),
+    onPrimary = Color(0xFF2E1065),
+    primaryContainer = Color(0xFF5B21B6),
+    onPrimaryContainer = Color(0xFFEDE9FE),
+    inversePrimary = Color(0xFF7C3AED),
 
-    secondary = Color(0xFFA6DA95),
-    onSecondary = Color(0xFF24273A),
-    secondaryContainer = Color(0xFF345733),
-    onSecondaryContainer = Color(0xFFDCEFD2),
+    secondary = Color(0xFF34D399),
+    onSecondary = Color(0xFF052E16),
+    secondaryContainer = Color(0xFF065F46),
+    onSecondaryContainer = Color(0xFFD1FAE5),
 
-    tertiary = Color(0xFFC6A0F6),
-    onTertiary = Color(0xFF24273A),
-    tertiaryContainer = Color(0xFF513977),
-    onTertiaryContainer = Color(0xFFEED9FB),
+    tertiary = Color(0xFFF472B6),
+    onTertiary = Color(0xFF500724),
+    tertiaryContainer = Color(0xFF9D174D),
+    onTertiaryContainer = Color(0xFFFCE7F3),
 
-    error = Color(0xFFED8796),
-    onError = Color(0xFF24273A),
-    errorContainer = Color(0xFF6F2935),
-    onErrorContainer = Color(0xFFFFD9DF),
+    error = Color(0xFFFCA5A5),
+    onError = Color(0xFF7F1D1D),
+    errorContainer = Color(0xFF991B1B),
+    onErrorContainer = Color(0xFFFEE2E2),
 
-    background = Color(0xFF24273A),
-    onBackground = Color(0xFFCAD3F5),
+    background = Color(0xFF16151E),
+    onBackground = Color(0xFFE5E4EC),
 
-    surface = Color(0xFF24273A),
-    onSurface = Color(0xFFCAD3F5),
-    surfaceVariant = Color(0xFF363A4F),
-    onSurfaceVariant = Color(0xFFB8C0E0),
-    surfaceTint = Color(0xFF8AADF4),
+    surface = Color(0xFF16151E),
+    onSurface = Color(0xFFE5E4EC),
+    surfaceVariant = Color(0xFF2C2A36),
+    onSurfaceVariant = Color(0xFFC8C6D0),
+    surfaceTint = Color(0xFFC4B5FD),
 
-    inverseSurface = Color(0xFFCAD3F5),
-    inverseOnSurface = Color(0xFF24273A),
+    inverseSurface = Color(0xFFE5E4EC),
+    inverseOnSurface = Color(0xFF16151E),
 
-    outline = Color(0xFF8087A2),
-    outlineVariant = Color(0xFF494D64),
+    outline = Color(0xFF6F6D7B),
+    outlineVariant = Color(0xFF43414F),
     scrim = Color(0xFF000000),
 
-    surfaceDim = Color(0xFF1E2030),
-    surfaceBright = Color(0xFF5B6078),
-    surfaceContainerLowest = Color(0xFF181926),
-    surfaceContainerLow = Color(0xFF1E2030),
-    surfaceContainer = Color(0xFF363A4F),
-    surfaceContainerHigh = Color(0xFF494D64),
-    surfaceContainerHighest = Color(0xFF5B6078),
+    surfaceDim = Color(0xFF16151E),
+    surfaceBright = Color(0xFF363441),
+    // Mirror of the light ladder (body deepest, day-header tinted Violet):
+    surfaceContainerLowest = Color(0xFF111016),
+    surfaceContainerLow = Color(0xFF201E29),
+    surfaceContainer = Color(0xFF26242F),
+    surfaceContainerHigh = Color(0xFF2C283C),
+    surfaceContainerHighest = Color(0xFF36304C),
 )
 
-/** Catppuccin yellow — used for warning snackbars (M3 has no semantic warning role). */
-val WarningAccentLight = Color(0xFFDF8E1D)
-val WarningAccentDark = Color(0xFFEED49F)
+/** Amber — used for warning snackbars (M3 has no semantic warning role). */
+val WarningAccentLight = Color(0xFFD97706)
+val WarningAccentDark = Color(0xFFFCD34D)
 
-/** Foreground paired with the warning accent above (legible on each yellow). */
+/** Foreground paired with the warning accent above (legible on each amber). */
 val WarningOnAccentLight = Color(0xFFFFFFFF)
-val WarningOnAccentDark = Color(0xFF24273A)
+val WarningOnAccentDark = Color(0xFF422006)
 
 /**
- * "Cool celebration" Catppuccin accent palette for the confetti overlay — purples, blues,
- * pink, and a peach/rosewater warm note. Deliberately omits red/yellow/green, which carry
- * error/warning/in-progress semantics elsewhere in the app and clash with a celebratory feel.
- *
- * Latte values from https://catppuccin.com/palette ; Macchiato likewise.
+ * Diverse confetti palette — violets, purples, pink, peach. Deliberately omits red/yellow/
+ * green, which carry error/warning/in-progress semantics elsewhere in the app and clash
+ * with a celebratory feel.
  */
 val ConfettiPaletteLight = listOf(
-    Color(0xFF1E66F5), // Blue
-    Color(0xFF209FB5), // Sapphire
-    Color(0xFF04A5E5), // Sky
-    Color(0xFF7287FD), // Lavender
-    Color(0xFF8839EF), // Mauve
-    Color(0xFFEA76CB), // Pink
-    Color(0xFFFE640B), // Peach
-    Color(0xFFDC8A78), // Rosewater
+    Color(0xFF7C3AED), // Violet-600
+    Color(0xFF8B5CF6), // Violet-500
+    Color(0xFFA78BFA), // Violet-400
+    Color(0xFF6366F1), // Indigo-500
+    Color(0xFFA855F7), // Purple-500
+    Color(0xFFDB2777), // Pink
+    Color(0xFFF97316), // Orange
+    Color(0xFFFB923C), // Orange-light
 )
 val ConfettiPaletteDark = listOf(
-    Color(0xFF8AADF4), // Blue
-    Color(0xFF7DC4E4), // Sapphire
-    Color(0xFF91D7E3), // Sky
-    Color(0xFFB7BDF8), // Lavender
-    Color(0xFFC6A0F6), // Mauve
-    Color(0xFFF5BDE6), // Pink
-    Color(0xFFF5A97F), // Peach
-    Color(0xFFF4DBD6), // Rosewater
+    Color(0xFFC4B5FD), // Violet-300
+    Color(0xFFA78BFA), // Violet-400
+    Color(0xFFDDD6FE), // Violet-200
+    Color(0xFFA5B4FC), // Indigo-300
+    Color(0xFFD8B4FE), // Purple-300
+    Color(0xFFF472B6), // Pink-light
+    Color(0xFFFB923C), // Orange-light
+    Color(0xFFFDBA74), // Orange-pale
 )
 
 /**
- * Scrollbar thumb colors — Catppuccin overlay tones with explicit alpha so the bar is
- * actually visible on both surfaces (Compose Desktop's default style is black-on-anything
- * at 12% alpha, which disappears on dark backgrounds).
+ * Scrollbar thumb colors — neutral grays with explicit alpha so the bar is actually
+ * visible on both surfaces (Compose Desktop's default style is black-on-anything at 12%
+ * alpha, which disappears on dark backgrounds).
  */
-val ScrollbarThumbLight = Color(0xFF6C6F85).copy(alpha = 0.45f)         // Latte subtext0
-val ScrollbarThumbHoverLight = Color(0xFF6C6F85).copy(alpha = 0.75f)
-val ScrollbarThumbDark = Color(0xFFA5ADCB).copy(alpha = 0.45f)          // Macchiato subtext0
-val ScrollbarThumbHoverDark = Color(0xFFA5ADCB).copy(alpha = 0.80f)
+val ScrollbarThumbLight = Color(0xFF6F6D7B).copy(alpha = 0.40f)
+val ScrollbarThumbHoverLight = Color(0xFF6F6D7B).copy(alpha = 0.70f)
+val ScrollbarThumbDark = Color(0xFFA6A4AC).copy(alpha = 0.40f)
+val ScrollbarThumbHoverDark = Color(0xFFA6A4AC).copy(alpha = 0.75f)
