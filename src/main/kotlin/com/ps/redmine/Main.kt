@@ -12,13 +12,21 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -32,10 +40,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -56,7 +68,6 @@ import com.ps.redmine.components.SearchableDropdown
 import com.ps.redmine.components.TimeEntriesList
 import com.ps.redmine.components.TimeEntriesListSkeleton
 import com.ps.redmine.components.UpdateDialog
-import com.ps.redmine.components.UpdateIndicator
 import com.ps.redmine.components.WeeklyProgressBars
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
@@ -71,6 +82,7 @@ import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
 import com.ps.redmine_time.generated.resources.app_icon
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
@@ -175,6 +187,23 @@ fun App(
     LaunchedEffect(Unit) {
         updateManager.startPeriodicUpdateChecks()
         updateManager.checkForUpdates()
+    }
+
+    // Display name of the authenticated Redmine user, resolved from the API key.
+    // Reloaded when the configuration changes (configVersion bumps).
+    var userDisplayName by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(configVersion) {
+        userDisplayName = redmineClient.getCurrentUser()?.displayName
+    }
+
+    // Wall-clock state ticking once per second so the date/time/week shown in the
+    // top bar stay current without the user having to refresh anything.
+    var clockNow by remember { mutableStateOf(nowLocalDateTime()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            clockNow = nowLocalDateTime()
+        }
     }
 
     // Non-working days (Mon–Fri) from configuration
@@ -410,29 +439,29 @@ fun App(
             Column(
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
-                // Floating action row: replaces the redundant top bar
+                // Top bar — user identity + live clock on the left, update/settings on the right.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    UpdateIndicator(
+                    StatusPill(
+                        userDisplayName = userDisplayName,
+                        clockNow = clockNow,
+                        locale = currentLocale,
+                        languageKey = currentLanguage,
+                    )
+                    ActionPill(
                         hasUpdate = updateState.availableUpdate != null,
-                        onClick = {
+                        onUpdateClick = {
                             if (updateState.availableUpdate != null) {
                                 updateManager.showUpdateDialog()
                             }
-                        }
+                        },
+                        onSettingsClick = { showConfigDialog = true },
                     )
-                    IconButton(onClick = { showConfigDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = Strings["settings"],
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
 
                 Row(
@@ -458,7 +487,7 @@ fun App(
                     shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
-                    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
                         // Month navigation and total hours
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Column(
@@ -1441,5 +1470,177 @@ fun main() {
         ) {
             App(redmineClient)
         }
+    }
+}
+
+@Composable
+private fun StatusPill(
+    userDisplayName: String?,
+    clockNow: LocalDateTime,
+    locale: Locale,
+    languageKey: String,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            userDisplayName?.let { name ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    UserAvatar(name)
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                StatusDivider()
+            }
+            key(languageKey) {
+                InfoChip(
+                    icon = Icons.Outlined.CalendarToday,
+                    text = "${
+                        LocaleNames.weekdayName(
+                            clockNow.date.dayOfWeek.isoDayNumber,
+                            locale,
+                            full = false
+                        )
+                    } ${clockNow.date.day} ${
+                        LocaleNames.monthName(
+                            clockNow.date.month.number,
+                            locale,
+                            full = false
+                        )
+                    }",
+                )
+            }
+            StatusDivider()
+            InfoChip(
+                icon = Icons.Outlined.Schedule,
+                text = "%02d:%02d".format(clockNow.hour, clockNow.minute),
+            )
+            StatusDivider()
+            key(languageKey) {
+                InfoChip(
+                    icon = Icons.Outlined.DateRange,
+                    text = Strings["week_label"].format(isoWeekNumber(clockNow.date)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusDivider() {
+    VerticalDivider(
+        modifier = Modifier.height(18.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+@Composable
+private fun ActionPill(
+    hasUpdate: Boolean,
+    onUpdateClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (hasUpdate) {
+                IconButton(
+                    onClick = onUpdateClick,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    BadgedBox(
+                        badge = {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            )
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = Strings["update_available_title"],
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                StatusDivider()
+            }
+            IconButton(
+                onClick = onSettingsClick,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = Strings["settings"],
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoChip(icon: ImageVector, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun UserAvatar(name: String) {
+    val initials = remember(name) { computeInitials(name) }
+    Box(
+        modifier = Modifier
+            .size(26.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = initials,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
+private fun computeInitials(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    return when {
+        parts.isEmpty() -> "?"
+        parts.size == 1 -> parts[0].take(2).uppercase()
+        else -> "${parts.first().first()}${parts.last().first()}".uppercase()
     }
 }

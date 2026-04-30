@@ -26,3 +26,16 @@ data class Issue(
     val id: Int,
     val subject: String
 )
+
+data class User(
+    val id: Int,
+    val firstName: String,
+    val lastName: String,
+    val login: String,
+) {
+    val displayName: String
+        get() = listOf(firstName, lastName)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .ifBlank { login }
+}

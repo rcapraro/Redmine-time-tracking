@@ -3,6 +3,7 @@ package com.ps.redmine.api
 import com.ps.redmine.model.Activity
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
+import com.ps.redmine.model.User
 import java.io.Closeable
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
 
@@ -21,6 +22,12 @@ interface RedmineClientInterface : Closeable {
      * Returns null if not available.
      */
     suspend fun getUserWeeklyHours(): Float?
+
+    /**
+     * Gets the currently authenticated user (resolved from the configured API key
+     * via Redmine's `/my/account.json`). Returns null if the call fails.
+     */
+    suspend fun getCurrentUser(): User?
 
     /**
      * Gets time entries for a specific month.

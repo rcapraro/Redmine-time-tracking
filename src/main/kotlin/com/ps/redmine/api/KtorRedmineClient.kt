@@ -35,7 +35,7 @@ class KtorRedmineClient(
 ) : RedmineClientInterface {
 
     @Volatile
-    private var cachedWeeklyHours: Float? = null
+    private var cachedAccount: RedmineAccountResponse? = null
 
     /**
      * Immutable snapshot of the mutable state that can be swapped atomically
@@ -264,7 +264,7 @@ class KtorRedmineClient(
         projectActivitiesCache.clear()
         projectIssuesCache.clear()
         issueCache.clear()
-        cachedWeeklyHours = null
+        cachedAccount = null
         projectsFetchedAtMs = 0L
     }
 
@@ -277,24 +277,36 @@ class KtorRedmineClient(
         message: String = "Redmine API error: $statusCode - $responseBody"
     ) : Exception(message)
 
-    override suspend fun getUserWeeklyHours(): Float? {
-        // Return cached value if available
-        cachedWeeklyHours?.let { return it }
-        return try {
-            val account = getAndParse<RedmineAccountResponse>("/my/account.json")
-            val value = account.user.customFields.firstOrNull { it.id == 27 }?.value
-            val weekly = value?.toFloatOrNull()
-            if (weekly != null && weekly > 0f) {
-                cachedWeeklyHours = weekly
-            }
-            weekly
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Optional information — don't propagate, but log so the failure isn't silent
-            System.err.println("Warning: Failed to load weekly hours from Redmine: ${e.message}")
-            null
-        }
+    /**
+     * Loads `/my/account.json` once per configuration and caches the response.
+     * Both [getUserWeeklyHours] and [getCurrentUser] derive their values from this.
+     */
+    private suspend fun fetchAccount(): RedmineAccountResponse {
+        cachedAccount?.let { return it }
+        val account = getAndParse<RedmineAccountResponse>("/my/account.json")
+        cachedAccount = account
+        return account
+    }
+
+    override suspend fun getUserWeeklyHours(): Float? = try {
+        val value = fetchAccount().user.customFields.firstOrNull { it.id == 27 }?.value
+        value?.toFloatOrNull()?.takeIf { it > 0f }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Optional information — don't propagate, but log so the failure isn't silent
+        System.err.println("Warning: Failed to load weekly hours from Redmine: ${e.message}")
+        null
+    }
+
+    override suspend fun getCurrentUser(): User? = try {
+        val u = fetchAccount().user
+        User(id = u.id, firstName = u.firstname, lastName = u.lastname, login = u.login)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        System.err.println("Warning: Failed to load current user from Redmine: ${e.message}")
+        null
     }
 
     /**

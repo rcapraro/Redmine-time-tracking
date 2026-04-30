@@ -83,8 +83,8 @@ fun TimeEntriesList(
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 6.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth().fillMaxHeight()
         ) {
             entriesByDate.forEach { (date, entries) ->
@@ -186,7 +186,7 @@ fun DateHeader(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         shape = MaterialTheme.shapes.medium,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -295,7 +295,7 @@ fun TimeEntryItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 3.dp)
+            .padding(start = 6.dp)
             .clickable(enabled = !isLoading) { onClick() }
             .alpha(if (isLoading) 0.6f else 1f),
         color = containerColor,
@@ -305,7 +305,8 @@ fun TimeEntryItem(
         shape = MaterialTheme.shapes.medium,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth()
+                .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -361,12 +362,13 @@ fun TimeEntryItem(
             IconButton(
                 onClick = { if (!isLoading) onDelete() },
                 modifier = Modifier
-                    .padding(start = 8.dp)
+                    .size(36.dp)
+                    .padding(start = 4.dp)
                     .alpha(if (isLoading) 0.6f else 1f)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                         color = MaterialTheme.colorScheme.error,
                         strokeWidth = 2.dp,
                     )
@@ -374,7 +376,8 @@ fun TimeEntryItem(
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = Strings["delete_time_entry"],
-                        tint = MaterialTheme.colorScheme.error
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }

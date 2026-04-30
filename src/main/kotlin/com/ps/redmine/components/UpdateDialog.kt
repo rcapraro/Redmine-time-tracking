@@ -15,14 +15,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.NewReleases
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -180,36 +177,3 @@ private fun openUrl(url: String) {
         // Ignore failures silently; user can copy link from release page
     }
 }
-
-/**
- * Small update indicator shown in the top app bar.
- */
-@Composable
-fun UpdateIndicator(
-    hasUpdate: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (hasUpdate) {
-        IconButton(
-            onClick = onClick,
-            modifier = modifier
-        ) {
-            BadgedBox(
-                badge = {
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    )
-                },
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = Strings["update_available_title"],
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
-}
-

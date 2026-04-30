@@ -3,10 +3,15 @@ package com.ps.redmine.util
 import kotlinx.datetime.*
 
 val today: LocalDate
-    get() = run {
-        val instant = kotlin.time.Instant.fromEpochMilliseconds(java.lang.System.currentTimeMillis())
-        instant.toLocalDateTime(TimeZone.currentSystemDefault()).date
-    }
+    get() = nowLocalDateTime().date
+
+/**
+ * Current wall-clock LocalDateTime in the system default time zone.
+ */
+fun nowLocalDateTime(): LocalDateTime {
+    val instant = kotlin.time.Instant.fromEpochMilliseconds(java.lang.System.currentTimeMillis())
+    return instant.toLocalDateTime(TimeZone.currentSystemDefault())
+}
 
 private val WEEKEND_ISO_DAYS: Set<Int> = setOf(6, 7) // Saturday=6, Sunday=7
 
