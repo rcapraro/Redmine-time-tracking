@@ -30,7 +30,8 @@ private fun getAppVersion(): String {
 fun ConfigurationDialog(
     redmineClient: RedmineClientInterface,
     onDismiss: () -> Unit,
-    onConfigSaved: (redmineConfigChanged: Boolean, languageChanged: Boolean, themeChanged: Boolean) -> Unit
+    onConfigSaved: (redmineConfigChanged: Boolean, languageChanged: Boolean, themeChanged: Boolean) -> Unit,
+    onError: (String) -> Unit = {}
 ) {
     var config by remember { mutableStateOf(ConfigurationManager.loadConfig()) }
     var showError by remember { mutableStateOf(false) }
@@ -269,30 +270,34 @@ fun ConfigurationDialog(
                         val redmineConfigChanged = oldConfig.redmineUri != config.redmineUri ||
                                 oldConfig.apiKey != config.apiKey
 
-                        // Save to persistent storage
-                        ConfigurationManager.saveConfig(config)
+                        try {
+                            // Save to persistent storage
+                            ConfigurationManager.saveConfig(config)
 
-                        // Update RedmineClient if Redmine configuration changed
-                        if (redmineConfigChanged) {
-                            redmineClient.updateConfiguration(config.redmineUri, config.apiKey)
-                        }
-
-                        // Update language if changed
-                        if (languageChanged) {
-                            // Update Strings with the new language
-                            Strings.updateLanguage(config.language)
-
-                            // Update locale
-                            val locale = when (config.language.lowercase()) {
-                                "en" -> Locale.ENGLISH
-                                else -> Locale.FRENCH
+                            // Update RedmineClient if Redmine configuration changed
+                            if (redmineConfigChanged) {
+                                redmineClient.updateConfiguration(config.redmineUri, config.apiKey)
                             }
-                            Locale.setDefault(locale)
-                        }
 
-                        // Notify parent about all changes
-                        onConfigSaved(redmineConfigChanged, languageChanged, themeChanged)
-                        onDismiss()
+                            // Update language if changed
+                            if (languageChanged) {
+                                // Update Strings with the new language
+                                Strings.updateLanguage(config.language)
+
+                                // Update locale
+                                val locale = when (config.language.lowercase()) {
+                                    "en" -> Locale.ENGLISH
+                                    else -> Locale.FRENCH
+                                }
+                                Locale.setDefault(locale)
+                            }
+
+                            // Notify parent about all changes
+                            onConfigSaved(redmineConfigChanged, languageChanged, themeChanged)
+                            onDismiss()
+                        } catch (e: Exception) {
+                            onError(e.message ?: Strings["error_saving_config"])
+                        }
                     }
                 }
             ) {

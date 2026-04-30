@@ -143,7 +143,11 @@ object Strings {
             "wednesday" to "Mercredi",
             "thursday" to "Jeudi",
             "friday" to "Vendredi",
-            "weekly_hours_range_error" to "Les heures hebdomadaires doivent être entre 7,5 et 39"
+            "weekly_hours_range_error" to "Les heures hebdomadaires doivent être entre 7,5 et 39",
+            "error_loading_projects" to "Impossible de charger les projets",
+            "error_loading_issues_activities" to "Impossible de charger les tickets/activités",
+            "error_saving_config" to "Échec de l'enregistrement de la configuration",
+            "update_check_failed" to "Échec de la vérification de mise à jour"
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -268,7 +272,11 @@ object Strings {
             "wednesday" to "Wednesday",
             "thursday" to "Thursday",
             "friday" to "Friday",
-            "weekly_hours_range_error" to "Weekly hours must be between 7.5 and 39"
+            "weekly_hours_range_error" to "Weekly hours must be between 7.5 and 39",
+            "error_loading_projects" to "Failed to load projects",
+            "error_loading_issues_activities" to "Failed to load issues/activities",
+            "error_saving_config" to "Failed to save configuration",
+            "update_check_failed" to "Update check failed"
         )
     )
 

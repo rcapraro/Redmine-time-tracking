@@ -7,7 +7,6 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,12 +42,12 @@ import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
 import com.ps.redmine_time.generated.resources.app_icon
 import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 import java.util.*
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Validates that a string is a valid hours input (digits, optional . or , decimal, max 1 fractional digit).
@@ -71,40 +70,30 @@ fun isConnectionError(e: Exception): Boolean {
 }
 
 /**
- * Handles an exception by showing an error dialog with appropriate message.
- *
- * @param e The exception to handle
- * @param errorDialogMessage Reference to the error dialog message state
- * @param errorDialogDetails Reference to the error dialog details state
- * @param showErrorDialog Reference to the show error dialog state
+ * Routes an exception to the appropriate UI surface:
+ * - 422 validation errors → toast (short, inline-actionable).
+ * - Connection / unknown errors → modal ErrorDialog with stacktrace.
  */
 fun handleException(
     e: Exception,
+    notifier: Notifier,
     errorDialogMessage: (String) -> Unit,
     errorDialogDetails: (String) -> Unit,
     showErrorDialog: (Boolean) -> Unit
 ) {
-    // Check if it's a connection error
-    val isConnectionError = isConnectionError(e)
-
-    // Check if it's a Redmine API error with status 422 (Unprocessable Entity)
-    val isValidationError = e is KtorRedmineClient.RedmineApiException &&
-            e.statusCode == 422
-
-    // Set appropriate error message
-    val userMessage = when {
-        isConnectionError -> Strings["error_api_unreachable"]
-        isValidationError -> e.message!!
-        else -> Strings["error_dialog_message"]
+    val isValidationError = e is KtorRedmineClient.RedmineApiException && e.statusCode == 422
+    if (isValidationError) {
+        notifier.error(e.message ?: Strings["error_dialog_message"])
+        return
     }
 
+    val userMessage = if (isConnectionError(e)) {
+        Strings["error_api_unreachable"]
+    } else {
+        Strings["error_dialog_message"]
+    }
     errorDialogMessage(userMessage)
-
-    // Store technical details
-    val technicalDetails = "${e.javaClass.simpleName}: ${e.message}\n${e.stackTraceToString()}"
-    errorDialogDetails(technicalDetails)
-
-    // Show error dialog
+    errorDialogDetails("${e.javaClass.simpleName}: ${e.message}\n${e.stackTraceToString()}")
     showErrorDialog(true)
 }
 
@@ -119,7 +108,6 @@ fun App(
     var isLoading by remember { mutableStateOf(false) } // For data loading
     var isGlobalLoading by remember { mutableStateOf(false) } // For global loading (config changes)
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
     var showConfigDialog by remember { mutableStateOf(false) }
     var configVersion by remember { mutableStateOf(0) }
 
@@ -133,6 +121,7 @@ fun App(
 
     val scope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
+    val notifier = rememberNotifier(scaffoldState.snackbarHostState)
 
     // Add a state variable to track the current language
     var currentLanguage by remember { mutableStateOf(ConfigurationManager.loadConfig().language) }
@@ -227,9 +216,9 @@ fun App(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Handle the exception
                 handleException(
                     e,
+                    notifier,
                     { errorDialogMessage = it },
                     { errorDialogDetails = it },
                     { showErrorDialog = it }
@@ -253,13 +242,13 @@ fun App(
                 deletingEntryId = id
                 try {
                     redmineClient.deleteTimeEntry(id)
-                    scaffoldState.snackbarHostState.showSnackbar(Strings["time_entry_deleted"])
+                    notifier.success(Strings["time_entry_deleted"])
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    // Handle the exception
                     handleException(
                         e,
+                        notifier,
                         { errorDialogMessage = it },
                         { errorDialogDetails = it },
                         { showErrorDialog = it }
@@ -310,13 +299,11 @@ fun App(
         }
     }
 
-    LaunchedEffect(errorMessage) {
-        errorMessage?.let {
-            scaffoldState.snackbarHostState.showSnackbar(
-                message = it,
-                actionLabel = Strings["dismiss"],
-                duration = SnackbarDuration.Long
-            )
+    // Surface update-check failures once per error-transition (avoids spamming on periodic checks).
+    LaunchedEffect(updateState.error) {
+        updateState.error?.let {
+            notifier.warning(Strings["update_check_failed"])
+            updateManager.clearError()
         }
     }
 
@@ -374,7 +361,7 @@ fun App(
                         isGlobalLoading = true
                     }
                     scope.launch {
-                        scaffoldState.snackbarHostState.showSnackbar(Strings["configuration_saved"])
+                        notifier.success(Strings["configuration_saved"])
                         // Reload configuration to get updated preferences
                         val newConfig = ConfigurationManager.loadConfig()
                         isDarkTheme = newConfig.isDarkTheme
@@ -396,7 +383,8 @@ fun App(
                             isGlobalLoading = false
                         }
                     }
-                }
+                },
+                onError = { notifier.error(Strings["error_saving_config"]) }
             )
         }
 
@@ -416,34 +404,7 @@ fun App(
                 SnackbarHost(
                     hostState = scaffoldState.snackbarHostState,
                     modifier = Modifier.padding(8.dp)
-                ) { data ->
-                    Snackbar(
-                        modifier = Modifier.alpha(0.90f),
-                        action = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                data.actionLabel?.let { label ->
-                                    TextButton(onClick = { data.dismiss() }) {
-                                        Text(label)
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { data.dismiss() },
-                                    modifier = Modifier.semantics { contentDescription = Strings["close"] }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                        }
-                    ) {
-                        Text(
-                            data.message,
-                            style = MaterialTheme.typography.body2
-                        )
-                    }
-                }
+                ) { data -> TypedSnackbar(data) }
             },
             topBar = {
                 // Use key parameter to force recomposition when language changes
@@ -748,16 +709,16 @@ fun App(
                                             Strings["entry_created"]
                                         else
                                             Strings["entry_updated"]
-                                        scaffoldState.snackbarHostState.showSnackbar(message)
+                                        notifier.success(message)
 
                                         // Trigger focus back to Date field for next entry
                                         focusRequestKey++
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Exception) {
-                                        // Handle the exception
                                         handleException(
                                             e,
+                                            notifier,
                                             { errorDialogMessage = it },
                                             { errorDialogDetails = it },
                                             { showErrorDialog = it }
@@ -774,7 +735,8 @@ fun App(
                             configVersion = configVersion,
                             isGlobalLoading = isGlobalLoading,
                             focusRequestKey = focusRequestKey,
-                            initialDate = selectedDate
+                            initialDate = selectedDate,
+                            onError = { notifier.error(it) }
                         )
                     }
                 }
@@ -832,7 +794,8 @@ fun TimeEntryDetail(
     configVersion: Int = 0,
     isGlobalLoading: Boolean = false,
     focusRequestKey: Int = 0,
-    initialDate: kotlinx.datetime.LocalDate
+    initialDate: kotlinx.datetime.LocalDate,
+    onError: (String) -> Unit = {}
 ) {
     var date by remember(timeEntry, initialDate) {
         mutableStateOf(
@@ -962,7 +925,7 @@ fun TimeEntryDetail(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            System.err.println("Error loading data: ${e.message}")
+            onError(Strings["error_loading_projects"])
         } finally {
             isLoading = false
         }
@@ -982,7 +945,7 @@ fun TimeEntryDetail(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                System.err.println("Error loading issues or activities: ${e.message}")
+                onError(Strings["error_loading_issues_activities"])
                 issues = emptyList()
                 activities = emptyList()
             } finally {
