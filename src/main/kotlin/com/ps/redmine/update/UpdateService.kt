@@ -19,16 +19,7 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 class UpdateService {
     private val httpClient = HttpClient(CIO) {
-        engine {
-            requestTimeout = 60_000
-            // Enable HTTP/2 and connection pooling for better performance
-            pipelining = true
-            // Use custom dispatcher for better thread management
-            dispatcher = kotlinx.coroutines.Dispatchers.IO
-        }
-        // Enable following redirects automatically
         followRedirects = true
-        // Set reasonable timeouts for the entire request
         install(HttpTimeout) {
             requestTimeoutMillis = 60_000
             connectTimeoutMillis = 30_000
@@ -87,25 +78,35 @@ class UpdateService {
 
     /**
      * Compares two version strings to determine if the second is newer.
-     * Supports semantic versioning (e.g., "1.2.3").
+     * Supports semantic versioning with optional pre-release suffix (e.g. "1.2.3", "2.0.0-beta").
+     * Per semver, a version with a pre-release suffix is older than the same core without one,
+     * so a user on "2.0.0-beta" will be offered "2.0.0" stable.
      */
     private fun isNewerVersion(current: String, latest: String): Boolean {
-        val currentParts = current.split(".").map { it.toIntOrNull() ?: 0 }
-        val latestParts = latest.split(".").map { it.toIntOrNull() ?: 0 }
+        val currentCore = current.substringBefore('-')
+        val currentPre = current.substringAfter('-', missingDelimiterValue = "")
+        val latestCore = latest.substringBefore('-')
+        val latestPre = latest.substringAfter('-', missingDelimiterValue = "")
+
+        val currentParts = currentCore.split(".").map { it.toIntOrNull() ?: 0 }
+        val latestParts = latestCore.split(".").map { it.toIntOrNull() ?: 0 }
 
         val maxLength = maxOf(currentParts.size, latestParts.size)
-
         for (i in 0 until maxLength) {
             val currentPart = currentParts.getOrNull(i) ?: 0
             val latestPart = latestParts.getOrNull(i) ?: 0
-
             when {
                 latestPart > currentPart -> return true
                 latestPart < currentPart -> return false
             }
         }
 
-        return false
+        return when {
+            currentPre.isNotEmpty() && latestPre.isEmpty() -> true
+            currentPre.isEmpty() && latestPre.isNotEmpty() -> false
+            currentPre.isEmpty() && latestPre.isEmpty() -> false
+            else -> latestPre > currentPre
+        }
     }
 
     /**

@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import com.ps.redmine.ui.ConfettiPaletteDark
+import com.ps.redmine.ui.ConfettiPaletteLight
+import com.ps.redmine.ui.LocalIsDarkTheme
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -57,15 +60,9 @@ fun ConfettiOverlay(
     title: String? = null,
     subtitle: String? = null,
     durationMs: Int = 3200,
-    particleCount: Int = 110,
+    particleCount: Int = 160,
 ) {
-    val palette = listOf(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.tertiary,
-        MaterialTheme.colorScheme.secondary,
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.tertiaryContainer,
-    )
+    val palette = if (LocalIsDarkTheme.current) ConfettiPaletteDark else ConfettiPaletteLight
 
     var canvasSize by remember { mutableStateOf(Size.Zero) }
     var particles by remember { mutableStateOf<List<ConfettiParticle>>(emptyList()) }

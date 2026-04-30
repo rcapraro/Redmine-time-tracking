@@ -37,28 +37,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.ps.redmine.Version
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.resources.Strings
 import java.util.Locale
-
-// Helper function to get the application version
-private fun getAppVersion(): String {
-    return try {
-        val versionClass = Class.forName("com.ps.redmine.Version")
-        val versionField = versionClass.getDeclaredField("VERSION")
-        versionField.get(null) as String
-    } catch (_: Exception) {
-        "dev"
-    }
-}
 
 @Composable
 fun ConfigurationDialog(
     redmineClient: RedmineClientInterface,
     onDismiss: () -> Unit,
     onConfigSaved: (redmineConfigChanged: Boolean, languageChanged: Boolean, themeChanged: Boolean) -> Unit,
-    onError: (String) -> Unit = {}
+    onError: (String) -> Unit
 ) {
     var config by remember { mutableStateOf(ConfigurationManager.loadConfig()) }
     var showError by remember { mutableStateOf(false) }
@@ -117,7 +107,7 @@ fun ConfigurationDialog(
                     }
                 }
 
-                // Theme switch
+                // Theme switch (Catppuccin Latte ↔ Macchiato)
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -183,7 +173,7 @@ fun ConfigurationDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     var expandedDaily by remember { mutableStateOf(false) }
-                    val options = (8 downTo 0).map { it * 0.5f + 5.5f }.filter { it in 6.0f..7.5f }
+                    val options = listOf(7.5f, 7.0f, 6.5f, 6.0f)
                     Box {
                         TextButton(onClick = { expandedDaily = true }) {
                             Text(Strings["hours_format"].format(config.dailyHours))
@@ -226,7 +216,7 @@ fun ConfigurationDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         dayOptions.forEach { (iso, label) ->
-                            val selected = remember(config.nonWorkingIsoDays) { config.nonWorkingIsoDays.contains(iso) }
+                            val selected = config.nonWorkingIsoDays.contains(iso)
                             val enabled = selected || !limitReached
                             DayChip(
                                 label = label,
@@ -267,7 +257,7 @@ fun ConfigurationDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${Strings["version"]}: ${getAppVersion()}",
+                        text = "${Strings["version"]}: ${Version.VERSION}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

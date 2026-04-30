@@ -1,6 +1,5 @@
 package com.ps.redmine.util
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
@@ -22,13 +21,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.ui.LocalIsDarkTheme
 import com.ps.redmine.ui.WarningAccentDark
 import com.ps.redmine.ui.WarningAccentLight
+import com.ps.redmine.ui.WarningOnAccentDark
+import com.ps.redmine.ui.WarningOnAccentLight
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -91,9 +92,9 @@ fun rememberNotifier(hostState: SnackbarHostState): Notifier {
 fun TypedSnackbar(data: SnackbarData) {
     val kind = runCatching { NotificationKind.valueOf(data.visuals.actionLabel ?: "") }
         .getOrDefault(NotificationKind.Info)
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val warningBg = if (isDark) WarningAccentDark else WarningAccentLight
-    val warningFg = if (isDark) Color.Black else Color.White
+    val warningFg = if (isDark) WarningOnAccentDark else WarningOnAccentLight
     val background = when (kind) {
         NotificationKind.Success -> MaterialTheme.colorScheme.primary
         NotificationKind.Error -> MaterialTheme.colorScheme.error

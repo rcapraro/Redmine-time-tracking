@@ -8,7 +8,7 @@ data class Config(
     val isDarkTheme: Boolean = false,
     val language: String = "fr", // Default to French
     val nonWorkingIsoDays: Set<Int> = emptySet(), // Allowed: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri
-    val dailyHours: Float = 7.5f // Configurable daily hours (4.0 .. 7.5, step 0.5)
+    val dailyHours: Float = 7.5f // Configurable daily hours (6.0 .. 7.5, step 0.5)
 )
 
 object ConfigurationManager {
@@ -16,11 +16,12 @@ object ConfigurationManager {
     private const val KEY_REDMINE_URI = "redmine.uri"
     private const val KEY_API_KEY = "redmine.apiKey"
     private const val KEY_DARK_THEME = "redmine.darkTheme"
+    private const val KEY_THEME_FLAVOR_LEGACY = "redmine.themeFlavor"
     private const val KEY_LANGUAGE = "redmine.language"
     private const val KEY_NON_WORKING_ISO_DAYS = "redmine.nonWorkingIsoDays"
     private const val KEY_DAILY_HOURS = "redmine.dailyHours"
 
-    private const val DAILY_HOURS_MIN = 4.0f
+    private const val DAILY_HOURS_MIN = 6.0f
     private const val DAILY_HOURS_MAX = 7.5f
     private const val MAX_NON_WORKING_DAYS = 4
 
@@ -35,13 +36,27 @@ object ConfigurationManager {
     private fun parseNonWorkingDays(csv: String): Set<Int> =
         csv.split(',').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..5 }.toSet()
 
+    /**
+     * Resolves the dark/light preference. Order of precedence:
+     * stored darkTheme pref → stored themeFlavor pref (legacy intermediate) → REDMINE_DARK_THEME env → false.
+     * `themeFlavor=latte` maps to false, anything else to true.
+     */
+    private fun resolveIsDarkTheme(): Boolean {
+        preferences.get(KEY_DARK_THEME, null)?.let { return it.toBoolean() }
+        preferences.get(KEY_THEME_FLAVOR_LEGACY, null)?.let {
+            return it.lowercase() != "latte"
+        }
+        System.getenv("REDMINE_DARK_THEME")?.let { return it.toBoolean() }
+        return false
+    }
+
     fun loadConfig(): Config = Config(
         redmineUri = preferences.get(
             KEY_REDMINE_URI,
             System.getenv("REDMINE_URL") ?: "https://redmine.local/"
         ),
         apiKey = preferences.get(KEY_API_KEY, System.getenv("REDMINE_API_KEY") ?: ""),
-        isDarkTheme = preferences.getBoolean(KEY_DARK_THEME, false),
+        isDarkTheme = resolveIsDarkTheme(),
         language = preferences.get(KEY_LANGUAGE, "fr"), // Default to French if not set
         nonWorkingIsoDays = parseNonWorkingDays(preferences.get(KEY_NON_WORKING_ISO_DAYS, "")),
         dailyHours = normalizeDailyHours(
@@ -58,9 +73,11 @@ object ConfigurationManager {
         preferences.put(KEY_REDMINE_URI, config.redmineUri)
         preferences.put(KEY_API_KEY, config.apiKey)
         preferences.putBoolean(KEY_DARK_THEME, config.isDarkTheme)
+        // Drop the short-lived themeFlavor pref once the user saves under the boolean model.
+        preferences.remove(KEY_THEME_FLAVOR_LEGACY)
         preferences.put(KEY_LANGUAGE, config.language)
         // Store as CSV of ints (Mon..Fri -> 1..5), enforce maximum of MAX_NON_WORKING_DAYS persisted selections
-        val limited = config.nonWorkingIsoDays.filter { it in 1..5 }.sorted().take(MAX_NON_WORKING_DAYS)
+        val limited = config.nonWorkingIsoDays.sorted().take(MAX_NON_WORKING_DAYS)
         preferences.put(KEY_NON_WORKING_ISO_DAYS, limited.joinToString(","))
         preferences.put(KEY_DAILY_HOURS, normalizeDailyHours(config.dailyHours).toString())
         return try {

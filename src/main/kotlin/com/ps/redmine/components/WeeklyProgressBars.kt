@@ -29,15 +29,13 @@ import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.WeekInfo
 import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.atDay
+import com.ps.redmine.util.countWorkingDays
 import com.ps.redmine.util.getWeeksInMonth
 import com.ps.redmine.util.isoWeekNumber
 import com.ps.redmine.util.lengthOfMonth
 import com.ps.redmine.util.monthValue
 import com.ps.redmine.util.today
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.YearMonth
-import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.plus
 
 /**
  * Data class representing weekly progress information.
@@ -71,20 +69,10 @@ fun calculateWeeklyProgress(
         val rangeStartK = if (weekInfo.startDate < firstDayOfMonthK) firstDayOfMonthK else weekInfo.startDate
         val rangeEndK = if (weekInfo.endDate > lastDayOfMonthK) lastDayOfMonthK else weekInfo.endDate
 
-        var effectiveWorkingDaysInWeek = 0
-        var dateCursorK = rangeStartK
-        var clampedDaysCount = 0
-        while (dateCursorK <= rangeEndK) {
-            clampedDaysCount++
-            val iso = dateCursorK.dayOfWeek.isoDayNumber
-            if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) {
-                effectiveWorkingDaysInWeek++
-            }
-            dateCursorK = dateCursorK.plus(1, DateTimeUnit.DAY)
-        }
+        val effectiveWorkingDaysInWeek = countWorkingDays(rangeStartK, rangeEndK, excludedIsoDays)
         val expectedHours = effectiveWorkingDaysInWeek * WorkHours.configuredDailyHours()
 
-        val isNonWorkedWeek = clampedDaysCount > 0 && effectiveWorkingDaysInWeek == 0
+        val isNonWorkedWeek = rangeStartK <= rangeEndK && effectiveWorkingDaysInWeek == 0
 
         val progressPercentage = if (expectedHours > 0) {
             (actualHours / expectedHours * 100).coerceAtMost(100f)
@@ -147,10 +135,8 @@ private fun WeekProgressBar(
     isCurrentWeek: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val fillColor = MaterialTheme.colorScheme.secondary
     val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
-    val isCompleted = progress.actualHours >= progress.expectedHours
     val currentWeekStrokeColor = MaterialTheme.colorScheme.outline
     val nonWorkedMarkerColor = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -203,10 +189,9 @@ private fun WeekProgressBar(
 
             if (animatedPercent > 0) {
                 val progressHeight = (barHeight * (animatedPercent / 100f)).coerceAtMost(barHeight)
-                val progressColor = if (isCompleted) secondaryColor else primaryColor
 
                 drawRoundRect(
-                    color = progressColor,
+                    color = fillColor,
                     topLeft = Offset(0f, barHeight - progressHeight),
                     size = Size(barWidth, progressHeight),
                     cornerRadius = cornerRadius

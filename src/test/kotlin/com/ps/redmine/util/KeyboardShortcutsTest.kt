@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -95,6 +96,33 @@ class KeyboardShortcutsTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `isSaveShortcut accepts Cmd+S`() {
+        assertTrue(TestKeyEvent(Key.S, isMetaPressed = true).isSaveShortcut())
+    }
+
+    @Test
+    fun `isSaveShortcut accepts Ctrl+S`() {
+        assertTrue(TestKeyEvent(Key.S, isCtrlPressed = true).isSaveShortcut())
+    }
+
+    @Test
+    fun `isSaveShortcut rejects S without modifier`() {
+        assertFalse(TestKeyEvent(Key.S).isSaveShortcut())
+    }
+
+    @Test
+    fun `isSaveShortcut rejects KeyUp`() {
+        assertFalse(
+            TestKeyEvent(Key.S, isCtrlPressed = true, type = KeyEventType.KeyUp).isSaveShortcut()
+        )
+    }
+
+    @Test
+    fun `isSaveShortcut rejects other keys`() {
+        assertFalse(TestKeyEvent(Key.A, isCtrlPressed = true).isSaveShortcut())
     }
 
     @Test

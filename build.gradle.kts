@@ -130,19 +130,21 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             packageName = "RedmineTime"
             val appVersionStr = project.findProperty("appVersion")?.toString() ?: "1.0.0"
-            packageVersion = appVersionStr
+            // jpackage requires a strict X.Y.Z numeric version — strip any pre-release suffix (e.g. "-beta").
+            val installerVersion = appVersionStr.substringBefore('-')
+            packageVersion = installerVersion
 
             macOS {
                 iconFile.set(project.file("src/main/resources/app_icon.icns"))
-                packageVersion = appVersionStr
-                dmgPackageVersion = appVersionStr
+                packageVersion = installerVersion
+                dmgPackageVersion = installerVersion
             }
 
             windows {
                 iconFile.set(project.file("src/main/resources/app_icon.ico"))
-                packageVersion = appVersionStr
-                msiPackageVersion = appVersionStr
-                exePackageVersion = appVersionStr
+                packageVersion = installerVersion
+                msiPackageVersion = installerVersion
+                exePackageVersion = installerVersion
                 menuGroup = "RedmineTime"
                 shortcut = true
                 dirChooser = true
@@ -152,8 +154,8 @@ compose.desktop {
 
             linux {
                 iconFile.set(project.file("src/main/resources/app_icon.png"))
-                packageVersion = appVersionStr
-                debPackageVersion = appVersionStr
+                packageVersion = installerVersion
+                debPackageVersion = installerVersion
             }
         }
     }

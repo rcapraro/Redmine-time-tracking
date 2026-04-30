@@ -83,7 +83,7 @@ Alternatively, you can use environment variables (they take precedence over save
 
 - `REDMINE_URL`: The URL of your Redmine server
 - `REDMINE_API_KEY`: Your Redmine API key
-- `REDMINE_DARK_THEME`: Set to "true" to enable dark theme (default: "false")
+- `REDMINE_DARK_THEME`: Set to "true" to enable the dark theme (Catppuccin Macchiato); otherwise the light theme (Catppuccin Latte) is used. Default: "false".
 
 Note: Language settings can only be changed through the configuration panel.
 

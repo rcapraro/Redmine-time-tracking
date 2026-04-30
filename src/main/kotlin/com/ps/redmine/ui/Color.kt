@@ -5,107 +5,158 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Material 3 color schemes generated from a vivid royal-blue seed (#2956D9) with a
- * violet tertiary accent — same structure as the Material Theme Builder output, but
- * tuned for more saturation and energy than the baseline blue.
+ * Catppuccin-flavored Material 3 color schemes — softer, more pastel than the previous
+ * GitHub Primer palette. Two flavors are exposed:
+ * - Light = **Latte**   (https://github.com/catppuccin/catppuccin#-palette)
+ * - Dark  = **Macchiato**
+ *
+ * Mapping convention (uniform across both flavors):
+ * - primary   → blue   (brand accent)
+ * - secondary → green  (used for progress fills)
+ * - tertiary  → mauve
+ * - error     → red
+ *
+ * For dark surfaces the M3 elevation ladder maps onto Catppuccin's surface tokens
+ * (crust < mantle < base < surface0 < surface1 < surface2). For light, base is the
+ * brightest tone and we descend through mantle / crust / surface0 / surface1.
  */
 
 val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF2956D9),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDCE3FF),
-    onPrimaryContainer = Color(0xFF001457),
-    inversePrimary = Color(0xFFB6C4FF),
+    primary = Color(0xFF1E66F5),
+    onPrimary = Color(0xFFEFF1F5),
+    primaryContainer = Color(0xFFCFE0FF),
+    onPrimaryContainer = Color(0xFF002B69),
+    inversePrimary = Color(0xFF7287FD),
 
-    secondary = Color(0xFF5A5D72),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFDFE1F9),
-    onSecondaryContainer = Color(0xFF171A2C),
+    secondary = Color(0xFF40A02B),
+    onSecondary = Color(0xFFEFF1F5),
+    secondaryContainer = Color(0xFFCFEACB),
+    onSecondaryContainer = Color(0xFF0D3F00),
 
-    tertiary = Color(0xFF7B4FFF),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFECDDFF),
-    onTertiaryContainer = Color(0xFF260054),
+    tertiary = Color(0xFF8839EF),
+    onTertiary = Color(0xFFEFF1F5),
+    tertiaryContainer = Color(0xFFE6D6FF),
+    onTertiaryContainer = Color(0xFF2C0F62),
 
-    error = Color(0xFFBA1A1A),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
+    error = Color(0xFFD20F39),
+    onError = Color(0xFFEFF1F5),
+    errorContainer = Color(0xFFFFD9DD),
+    onErrorContainer = Color(0xFF410014),
 
-    background = Color(0xFFFBFBFF),
-    onBackground = Color(0xFF1B1B21),
+    background = Color(0xFFEFF1F5),
+    onBackground = Color(0xFF4C4F69),
 
-    surface = Color(0xFFFBFBFF),
-    onSurface = Color(0xFF1B1B21),
-    surfaceVariant = Color(0xFFE2E1EC),
-    onSurfaceVariant = Color(0xFF45464F),
-    surfaceTint = Color(0xFF2956D9),
+    surface = Color(0xFFEFF1F5),
+    onSurface = Color(0xFF4C4F69),
+    surfaceVariant = Color(0xFFCCD0DA),
+    onSurfaceVariant = Color(0xFF5C5F77),
+    surfaceTint = Color(0xFF1E66F5),
 
-    inverseSurface = Color(0xFF303034),
-    inverseOnSurface = Color(0xFFF2F0F4),
+    inverseSurface = Color(0xFF4C4F69),
+    inverseOnSurface = Color(0xFFEFF1F5),
 
-    outline = Color(0xFF767680),
-    outlineVariant = Color(0xFFC7C5D0),
+    outline = Color(0xFF8C8FA1),
+    outlineVariant = Color(0xFFBCC0CC),
     scrim = Color(0xFF000000),
 
-    surfaceDim = Color(0xFFDBD9DD),
-    surfaceBright = Color(0xFFFBFBFF),
+    surfaceDim = Color(0xFFCCD0DA),
+    surfaceBright = Color(0xFFEFF1F5),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF5F3F7),
-    surfaceContainer = Color(0xFFEFEDF1),
-    surfaceContainerHigh = Color(0xFFE9E7EB),
-    surfaceContainerHighest = Color(0xFFE3E1E5),
+    surfaceContainerLow = Color(0xFFE6E9EF),
+    surfaceContainer = Color(0xFFDCE0E8),
+    surfaceContainerHigh = Color(0xFFCCD0DA),
+    surfaceContainerHighest = Color(0xFFBCC0CC),
 )
 
 val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFFB6C4FF),
-    onPrimary = Color(0xFF00298E),
-    primaryContainer = Color(0xFF023ABE),
-    onPrimaryContainer = Color(0xFFDCE3FF),
-    inversePrimary = Color(0xFF2956D9),
+    primary = Color(0xFF8AADF4),
+    onPrimary = Color(0xFF24273A),
+    primaryContainer = Color(0xFF34528C),
+    onPrimaryContainer = Color(0xFFD3DEFA),
+    inversePrimary = Color(0xFFB7BDF8),
 
-    secondary = Color(0xFFC3C5DD),
-    onSecondary = Color(0xFF2C2F42),
-    secondaryContainer = Color(0xFF424659),
-    onSecondaryContainer = Color(0xFFDFE1F9),
+    secondary = Color(0xFFA6DA95),
+    onSecondary = Color(0xFF24273A),
+    secondaryContainer = Color(0xFF345733),
+    onSecondaryContainer = Color(0xFFDCEFD2),
 
-    tertiary = Color(0xFFD2BCFF),
-    onTertiary = Color(0xFF3F0E84),
-    tertiaryContainer = Color(0xFF582DC2),
-    onTertiaryContainer = Color(0xFFECDDFF),
+    tertiary = Color(0xFFC6A0F6),
+    onTertiary = Color(0xFF24273A),
+    tertiaryContainer = Color(0xFF513977),
+    onTertiaryContainer = Color(0xFFEED9FB),
 
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
+    error = Color(0xFFED8796),
+    onError = Color(0xFF24273A),
+    errorContainer = Color(0xFF6F2935),
+    onErrorContainer = Color(0xFFFFD9DF),
 
-    background = Color(0xFF131318),
-    onBackground = Color(0xFFE4E1E6),
+    background = Color(0xFF24273A),
+    onBackground = Color(0xFFCAD3F5),
 
-    surface = Color(0xFF131318),
-    onSurface = Color(0xFFE4E1E6),
-    surfaceVariant = Color(0xFF45464F),
-    onSurfaceVariant = Color(0xFFC7C5D0),
-    surfaceTint = Color(0xFFB6C4FF),
+    surface = Color(0xFF24273A),
+    onSurface = Color(0xFFCAD3F5),
+    surfaceVariant = Color(0xFF363A4F),
+    onSurfaceVariant = Color(0xFFB8C0E0),
+    surfaceTint = Color(0xFF8AADF4),
 
-    inverseSurface = Color(0xFFE4E1E6),
-    inverseOnSurface = Color(0xFF303034),
+    inverseSurface = Color(0xFFCAD3F5),
+    inverseOnSurface = Color(0xFF24273A),
 
-    outline = Color(0xFF91909A),
-    outlineVariant = Color(0xFF45464F),
+    outline = Color(0xFF8087A2),
+    outlineVariant = Color(0xFF494D64),
     scrim = Color(0xFF000000),
 
-    surfaceDim = Color(0xFF131318),
-    surfaceBright = Color(0xFF39383D),
-    surfaceContainerLowest = Color(0xFF0D0E13),
-    surfaceContainerLow = Color(0xFF1B1B20),
-    surfaceContainer = Color(0xFF1F1F25),
-    surfaceContainerHigh = Color(0xFF2A292F),
-    surfaceContainerHighest = Color(0xFF35343A),
+    surfaceDim = Color(0xFF1E2030),
+    surfaceBright = Color(0xFF5B6078),
+    surfaceContainerLowest = Color(0xFF181926),
+    surfaceContainerLow = Color(0xFF1E2030),
+    surfaceContainer = Color(0xFF363A4F),
+    surfaceContainerHigh = Color(0xFF494D64),
+    surfaceContainerHighest = Color(0xFF5B6078),
+)
+
+/** Catppuccin yellow — used for warning snackbars (M3 has no semantic warning role). */
+val WarningAccentLight = Color(0xFFDF8E1D)
+val WarningAccentDark = Color(0xFFEED49F)
+
+/** Foreground paired with the warning accent above (legible on each yellow). */
+val WarningOnAccentLight = Color(0xFFFFFFFF)
+val WarningOnAccentDark = Color(0xFF24273A)
+
+/**
+ * "Cool celebration" Catppuccin accent palette for the confetti overlay — purples, blues,
+ * pink, and a peach/rosewater warm note. Deliberately omits red/yellow/green, which carry
+ * error/warning/in-progress semantics elsewhere in the app and clash with a celebratory feel.
+ *
+ * Latte values from https://catppuccin.com/palette ; Macchiato likewise.
+ */
+val ConfettiPaletteLight = listOf(
+    Color(0xFF1E66F5), // Blue
+    Color(0xFF209FB5), // Sapphire
+    Color(0xFF04A5E5), // Sky
+    Color(0xFF7287FD), // Lavender
+    Color(0xFF8839EF), // Mauve
+    Color(0xFFEA76CB), // Pink
+    Color(0xFFFE640B), // Peach
+    Color(0xFFDC8A78), // Rosewater
+)
+val ConfettiPaletteDark = listOf(
+    Color(0xFF8AADF4), // Blue
+    Color(0xFF7DC4E4), // Sapphire
+    Color(0xFF91D7E3), // Sky
+    Color(0xFFB7BDF8), // Lavender
+    Color(0xFFC6A0F6), // Mauve
+    Color(0xFFF5BDE6), // Pink
+    Color(0xFFF5A97F), // Peach
+    Color(0xFFF4DBD6), // Rosewater
 )
 
 /**
- * Amber accent used for warning snackbars (M3 has no semantic warning role).
+ * Scrollbar thumb colors — Catppuccin overlay tones with explicit alpha so the bar is
+ * actually visible on both surfaces (Compose Desktop's default style is black-on-anything
+ * at 12% alpha, which disappears on dark backgrounds).
  */
-val WarningAccentLight = Color(0xFFB26500)
-val WarningAccentDark = Color(0xFFFFB95C)
+val ScrollbarThumbLight = Color(0xFF6C6F85).copy(alpha = 0.45f)         // Latte subtext0
+val ScrollbarThumbHoverLight = Color(0xFF6C6F85).copy(alpha = 0.75f)
+val ScrollbarThumbDark = Color(0xFFA5ADCB).copy(alpha = 0.45f)          // Macchiato subtext0
+val ScrollbarThumbHoverDark = Color(0xFFA5ADCB).copy(alpha = 0.80f)

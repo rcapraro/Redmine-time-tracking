@@ -155,7 +155,7 @@ fun DatePicker(
                                     full = true
                                 )
                             } ${currentYearMonth.year}",
-                            style = MaterialTheme.typography.titleLarge
+                            style = MaterialTheme.typography.titleMedium
                         )
                         IconButton(
                             onClick = { currentYearMonth = currentYearMonth.plusMonths(1) },

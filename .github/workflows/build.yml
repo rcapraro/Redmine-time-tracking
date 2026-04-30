@@ -131,13 +131,23 @@ jobs:
       - name: List downloaded artifacts
         run: find artifacts -type f | sort
 
+      - name: Determine prerelease flag
+        id: prerelease_flag
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_name }}" == *-* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
           name: RedmineTime ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.prerelease_flag.outputs.prerelease }}
           files: |
             artifacts/windows-installer/*.msi
             artifacts/windows-portable/*.zip

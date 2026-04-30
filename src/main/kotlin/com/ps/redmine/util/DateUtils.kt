@@ -55,19 +55,23 @@ fun getWorkingDaysInMonth(year: Int, month: Int): Int {
     val firstDay = LocalDate(year, month, 1)
     // Get the last day of the month by going to the first day of next month and subtracting 1 day
     val lastDay = lastDayOfMonth(year, month)
+    return countWorkingDays(firstDay, lastDay)
+}
 
-    var workingDays = 0
-    var currentDay = firstDay
-
-    while (currentDay <= lastDay) {
-        // Monday = 1, Tuesday = 2, ..., Friday = 5, Saturday = 6, Sunday = 7
-        if (currentDay.dayOfWeek.isoDayNumber in 1..5) {
-            workingDays++
-        }
-        currentDay = currentDay.plus(1, DateTimeUnit.DAY)
+/**
+ * Counts business days (ISO 1..5) in [start, end], optionally excluding ISO weekdays the user
+ * has marked as non-working. Both endpoints inclusive.
+ */
+fun countWorkingDays(start: LocalDate, end: LocalDate, excludedIsoDays: Set<Int> = emptySet()): Int {
+    if (end < start) return 0
+    var count = 0
+    var cursor = start
+    while (cursor <= end) {
+        val iso = cursor.dayOfWeek.isoDayNumber
+        if (iso in 1..5 && !excludedIsoDays.contains(iso)) count++
+        cursor = cursor.plus(1, DateTimeUnit.DAY)
     }
-
-    return workingDays
+    return count
 }
 
 /**

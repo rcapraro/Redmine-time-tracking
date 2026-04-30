@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -77,7 +76,7 @@ import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
-import java.util.*
+import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -178,7 +177,7 @@ fun App(
         updateManager.checkForUpdates()
     }
 
-    // Non-working days (Mon–Wed) from configuration
+    // Non-working days (Mon–Fri) from configuration
     var nonWorkingIsoDays by remember { mutableStateOf(ConfigurationManager.loadConfig().nonWorkingIsoDays) }
 
     // Cleanup update manager when app is disposed
@@ -192,28 +191,15 @@ fun App(
     val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
 
     // Working-day arithmetic for the current month — lifted so onSave can detect a completion transition.
-    val workingDays = remember(currentMonth) {
-        getWorkingDaysInMonth(currentMonth.year, currentMonth.monthValue)
+    val effectiveDays = remember(currentMonth, nonWorkingIsoDays) {
+        val firstK = kotlinx.datetime.LocalDate(currentMonth.year, currentMonth.monthValue, 1)
+        val lastK = kotlinx.datetime.LocalDate(
+            currentMonth.year,
+            currentMonth.monthValue,
+            lengthOfMonth(currentMonth.year, currentMonth.monthValue)
+        )
+        countWorkingDays(firstK, lastK, nonWorkingIsoDays)
     }
-    val excludedCount = remember(currentMonth, nonWorkingIsoDays) {
-        if (nonWorkingIsoDays.isEmpty()) 0 else {
-            val firstK = kotlinx.datetime.LocalDate(currentMonth.year, currentMonth.monthValue, 1)
-            val lastK = kotlinx.datetime.LocalDate(
-                currentMonth.year,
-                currentMonth.monthValue,
-                lengthOfMonth(currentMonth.year, currentMonth.monthValue)
-            )
-            var count = 0
-            var dK = firstK
-            while (dK <= lastK) {
-                val iso = dK.dayOfWeek.isoDayNumber
-                if (iso in 1..5 && nonWorkingIsoDays.contains(iso)) count++
-                dK = dK.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
-            }
-            count
-        }
-    }
-    val effectiveDays = workingDays - excludedCount
     val expectedHours = effectiveDays * WorkHours.configuredDailyHours()
     val isCompleted = expectedHours > 0 && totalHours >= expectedHours
 
@@ -238,10 +224,11 @@ fun App(
         }
 
         var d = firstDay
+        var firstWorkingDay: LocalDate? = null
         while (d <= lastDay) {
-            val iso = d.dayOfWeek.isoDayNumber // 1..7
-            val isWorkingDay = iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))
-            if (isWorkingDay) {
+            val iso = d.dayOfWeek.isoDayNumber
+            if (iso in 1..5 && !excludedIsoDays.contains(iso)) {
+                if (firstWorkingDay == null) firstWorkingDay = d
                 val totalForDay = entries
                     .asSequence()
                     .filter { it.date == d }
@@ -253,14 +240,7 @@ fun App(
             }
             d = d.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
         }
-        // Fallback: first working day of month, else today
-        d = firstDay
-        while (d <= lastDay) {
-            val iso = d.dayOfWeek.isoDayNumber
-            if (iso in 1..5 && (excludedIsoDays.isEmpty() || !excludedIsoDays.contains(iso))) return d
-            d = d.plus(1, kotlinx.datetime.DateTimeUnit.DAY)
-        }
-        return today
+        return firstWorkingDay ?: today
     }
 
     fun loadTimeEntries(yearMonth: YearMonth) {
@@ -446,14 +426,6 @@ fun App(
                             }
                         }
                     )
-                    // TEMPORARY: test button for the month-completed confetti — remove when validated.
-                    IconButton(onClick = { confettiTrigger++ }) {
-                        Icon(
-                            imageVector = Icons.Default.Celebration,
-                            contentDescription = "Test confetti",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                     IconButton(onClick = { showConfigDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -493,7 +465,7 @@ fun App(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -504,11 +476,14 @@ fun App(
                                                 selectedTimeEntry = null
                                             }
                                         },
-                                        modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                             contentDescription = Strings["nav_previous"],
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                     AnimatedContent(
@@ -529,7 +504,7 @@ fun App(
                                                     full = true
                                                 )
                                             } ${month.year}",
-                                            style = MaterialTheme.typography.titleLarge
+                                            style = MaterialTheme.typography.titleMedium
                                         )
                                     }
                                     IconButton(
@@ -539,32 +514,35 @@ fun App(
                                                 selectedTimeEntry = null
                                             }
                                         },
-                                        modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                             contentDescription = Strings["nav_next"],
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                 }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Use key parameter to force recomposition when language changes
-                                    key(currentLanguage) {
-                                        TextButton(
-                                            onClick = {
-                                                if (!isLoading && !isGlobalLoading) {
-                                                    currentMonth = YearMonth.now()
-                                                    selectedTimeEntry = null
-                                                }
-                                            },
-                                            modifier = Modifier.alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
-                                        ) {
-                                            Text(Strings["today_shortcut"])
-                                        }
+                                // Use key parameter to force recomposition when language changes
+                                key(currentLanguage) {
+                                    TextButton(
+                                        onClick = {
+                                            if (!isLoading && !isGlobalLoading) {
+                                                currentMonth = YearMonth.now()
+                                                selectedTimeEntry = null
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        modifier = Modifier
+                                            .heightIn(min = 24.dp)
+                                            .alpha(if (isLoading || isGlobalLoading) 0.6f else 1f)
+                                    ) {
+                                        Text(
+                                            text = Strings["today_shortcut"],
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
                                     }
                                 }
                                 // Use key parameter to force recomposition when language changes
@@ -573,7 +551,7 @@ fun App(
                                         text = Strings["nav_help"],
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(vertical = 4.dp)
+                                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
                                     )
                                 }
                             }
@@ -585,11 +563,11 @@ fun App(
                             ) {
                                 Text(
                                     text = Strings["total_hours"],
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                                 Text(
                                     text = Strings["total_hours_format"].format(totalHours),
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -627,7 +605,7 @@ fun App(
                                 LinearProgressIndicator(
                                     progress = { (completionPercentage / 100).toFloat() },
                                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(6.dp),
-                                    color = if (isCompleted) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.secondary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                     drawStopIndicator = {},
                                 )
@@ -929,7 +907,7 @@ fun TimeEntryDetail(
                         } catch (e: Exception) {
                             // onSave handles its own exceptions; this is a defensive
                             // fallback for unexpected synchronous errors
-                            System.err.println("Warning: Unexpected error during save: ${e.message}")
+                            onError(e.message ?: Strings["error_dialog_message"])
                         } finally {
                             isSaving = false
                         }
@@ -1057,7 +1035,7 @@ fun TimeEntryDetail(
         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
 
         when {
-            event.key == Key.S && event.isMetaPressed && isValid && !isLoading && !isSaving && !isGlobalLoading -> {
+            event.isSaveShortcut() && isValid && !isLoading && !isSaving && !isGlobalLoading -> {
                 saveEntry()
                 true
             }

@@ -78,6 +78,33 @@ class UpdateServiceTest {
     }
 
     @Test
+    fun `isNewerVersion should treat pre-release as older than same stable core`() {
+        val updateService = UpdateService()
+        val method =
+            UpdateService::class.java.getDeclaredMethod("isNewerVersion", String::class.java, String::class.java)
+        method.isAccessible = true
+
+        // User on a pre-release should be offered the stable of the same core.
+        assertTrue(method.invoke(updateService, "2.0.0-beta", "2.0.0") as Boolean)
+        assertTrue(method.invoke(updateService, "2.0.0-rc1", "2.0.0") as Boolean)
+
+        // Stable should not be considered older than its pre-release.
+        assertFalse(method.invoke(updateService, "2.0.0", "2.0.0-beta") as Boolean)
+
+        // Same pre-release tag → no update.
+        assertFalse(method.invoke(updateService, "2.0.0-beta", "2.0.0-beta") as Boolean)
+
+        // A newer pre-release of the same core (lexical) is considered newer.
+        assertTrue(method.invoke(updateService, "2.0.0-beta", "2.0.0-rc1") as Boolean)
+
+        // A newer stable always beats an older pre-release.
+        assertTrue(method.invoke(updateService, "1.9.0", "2.0.0-beta") as Boolean)
+
+        // An older stable is not newer than a pre-release of a higher core.
+        assertFalse(method.invoke(updateService, "2.0.0-beta", "1.9.0") as Boolean)
+    }
+
+    @Test
     fun `getPlatformAsset should return correct asset for platform`() {
         val updateService = UpdateService()
 

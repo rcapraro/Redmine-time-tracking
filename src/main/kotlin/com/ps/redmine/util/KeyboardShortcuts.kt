@@ -31,6 +31,11 @@ enum class KeyShortcut {
     Cancel
 }
 
+fun IKeyEventInfo.isSaveShortcut(): Boolean =
+    type == KeyEventType.KeyDown && key == Key.S && (isMetaPressed || isCtrlPressed)
+
+fun KeyEvent.isSaveShortcut(): Boolean = KeyEventWrapper(this).isSaveShortcut()
+
 object KeyShortcutManager {
     // Concurrent list — registration happens from Compose lifecycle, iteration from AWT key dispatch
     private val shortcutCallbacks = CopyOnWriteArrayList<(KeyShortcut) -> Unit>()

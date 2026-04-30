@@ -194,7 +194,7 @@ fun DateHeader(
             ) {
                 Text(
                     text = DateFormatter.formatShort(date, locale),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
 
@@ -205,7 +205,7 @@ fun DateHeader(
                 ) {
                     Text(
                         text = Strings["hours_format"].format(totalHours),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
