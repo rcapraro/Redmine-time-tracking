@@ -48,8 +48,7 @@ import com.ps.redmine.util.*
 import com.ps.redmine.util.KeyShortcut
 import com.ps.redmine_time.generated.resources.Res
 import com.ps.redmine_time.generated.resources.app_icon
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
@@ -116,6 +115,9 @@ fun App(
     var isLoading by remember { mutableStateOf(false) } // For data loading
     var isGlobalLoading by remember { mutableStateOf(false) } // For global loading (config changes)
     var deletingEntryId by remember { mutableStateOf<Int?>(null) }
+    var selectedEntryIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+    var showBulkEditDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
     var configVersion by remember { mutableStateOf(0) }
 
@@ -271,6 +273,72 @@ fun App(
         }
     }
 
+    fun resolveDuplicateDates(timeEntry: TimeEntry, target: DuplicateTarget): List<LocalDate> {
+        fun isWorkingDay(d: LocalDate): Boolean {
+            val iso = d.dayOfWeek.isoDayNumber
+            return iso in 1..5 && iso !in nonWorkingIsoDays
+        }
+        return when (target) {
+            DuplicateTarget.SameDay -> listOf(timeEntry.date)
+            DuplicateTarget.NextDay -> {
+                var d = timeEntry.date.plus(1, DateTimeUnit.DAY)
+                while (!isWorkingDay(d)) d = d.plus(1, DateTimeUnit.DAY)
+                listOf(d)
+            }
+
+            is DuplicateTarget.Range -> buildList {
+                var d = target.from
+                while (d <= target.to) {
+                    if (isWorkingDay(d)) add(d)
+                    d = d.plus(1, DateTimeUnit.DAY)
+                }
+            }
+        }
+    }
+
+    fun duplicateTimeEntry(timeEntry: TimeEntry, target: DuplicateTarget) {
+        val dates = resolveDuplicateDates(timeEntry, target)
+        if (dates.isEmpty()) {
+            notifier.warning(Strings["duplicate_range_no_working_days"])
+            return
+        }
+        scope.launch {
+            try {
+                val previousTotal = totalHours
+                coroutineScope {
+                    dates.map { date ->
+                        async { redmineClient.createTimeEntry(timeEntry.copy(id = null, date = date)) }
+                    }.awaitAll()
+                }
+                timeEntries = redmineClient.getTimeEntriesForMonth(
+                    currentMonth.year,
+                    currentMonth.monthValue
+                )
+                val message = if (dates.size == 1) {
+                    Strings["entry_created"]
+                } else {
+                    Strings["duplicate_entries_created"].format(dates.size)
+                }
+                notifier.success(message)
+
+                val newTotal = timeEntries.sumOf { it.hours.toDouble() }
+                if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                    confettiTrigger++
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleException(
+                    e,
+                    notifier,
+                    { errorDialogMessage = it },
+                    { errorDialogDetails = it },
+                    { showErrorDialog = it }
+                )
+            }
+        }
+    }
+
     fun deleteTimeEntry(timeEntry: TimeEntry) {
         scope.launch {
             timeEntry.id?.let { id ->
@@ -298,7 +366,89 @@ fun App(
         }
     }
 
+    fun bulkDeleteSelected() {
+        val ids = selectedEntryIds.toList()
+        if (ids.isEmpty()) return
+        // Optimistic UI: remove rows + clear selection immediately so the user
+        // sees the result while the network calls are still in flight.
+        timeEntries = timeEntries.filter { it.id !in ids }
+        selectedEntryIds = emptySet()
+        selectedTimeEntry = null
+        scope.launch {
+            try {
+                coroutineScope {
+                    ids.map { id -> async { redmineClient.deleteTimeEntry(id) } }.awaitAll()
+                }
+                notifier.success(Strings["bulk_entries_deleted"].format(ids.size))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleException(
+                    e,
+                    notifier,
+                    { errorDialogMessage = it },
+                    { errorDialogDetails = it },
+                    { showErrorDialog = it }
+                )
+            } finally {
+                loadTimeEntries(currentMonth)
+            }
+        }
+    }
+
+    fun bulkUpdateSelected(
+        newProject: Project?,
+        newActivity: Activity?,
+        newIssue: Issue?,
+        newHours: Float?,
+        newComments: String?,
+    ) {
+        val targets = timeEntries.filter { it.id != null && it.id in selectedEntryIds }
+        if (targets.isEmpty()) return
+        selectedEntryIds = emptySet()
+        scope.launch {
+            try {
+                val previousTotal = totalHours
+                coroutineScope {
+                    targets.map { entry ->
+                        async {
+                            val updated = entry.copy(
+                                project = newProject ?: entry.project,
+                                activity = newActivity ?: entry.activity,
+                                issue = newIssue ?: entry.issue,
+                                hours = newHours ?: entry.hours,
+                                comments = newComments ?: entry.comments,
+                            )
+                            redmineClient.updateTimeEntry(updated)
+                        }
+                    }.awaitAll()
+                }
+                timeEntries = redmineClient.getTimeEntriesForMonth(
+                    currentMonth.year,
+                    currentMonth.monthValue
+                )
+                notifier.success(Strings["bulk_entries_updated"].format(targets.size))
+
+                val newTotal = timeEntries.sumOf { it.hours.toDouble() }
+                if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                    confettiTrigger++
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                handleException(
+                    e,
+                    notifier,
+                    { errorDialogMessage = it },
+                    { errorDialogDetails = it },
+                    { showErrorDialog = it }
+                )
+            }
+        }
+    }
+
     LaunchedEffect(currentMonth) {
+        selectedEntryIds = emptySet()
         loadTimeEntries(currentMonth)
     }
 
@@ -456,7 +606,7 @@ fun App(
                         shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                     ) {
-                        Column(modifier = Modifier.fillMaxSize().padding(10.dp)) {
+                        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 10.dp)) {
                             // Month navigation and total hours
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Column(
@@ -643,6 +793,13 @@ fun App(
                                 }
                             }
 
+                            BulkActionBar(
+                                count = selectedEntryIds.size,
+                                onClear = { selectedEntryIds = emptySet() },
+                                onEdit = { showBulkEditDialog = true },
+                                onDelete = { showBulkDeleteConfirm = true },
+                            )
+
                             Crossfade(
                                 targetState = isLoading && !isGlobalLoading && deletingEntryId == null,
                                 animationSpec = tween(220),
@@ -657,6 +814,17 @@ fun App(
                                             selectedTimeEntry = selectedTimeEntry,
                                             onTimeEntrySelected = { selectedTimeEntry = it },
                                             onDelete = { entry -> deleteTimeEntry(entry) },
+                                            onDuplicate = { entry, target -> duplicateTimeEntry(entry, target) },
+                                            selectedEntryIds = selectedEntryIds,
+                                            onToggleSelect = { entry ->
+                                                entry.id?.let { id ->
+                                                    selectedEntryIds = if (id in selectedEntryIds) {
+                                                        selectedEntryIds - id
+                                                    } else {
+                                                        selectedEntryIds + id
+                                                    }
+                                                }
+                                            },
                                             deletingEntryId = deletingEntryId,
                                             locale = currentLocale
                                         )
@@ -796,6 +964,36 @@ fun App(
                 errorMessage = errorDialogMessage,
                 technicalDetails = errorDialogDetails,
                 onDismiss = { showErrorDialog = false }
+            )
+        }
+
+        if (showBulkDeleteConfirm) {
+            ConfirmDialog(
+                title = Strings["bulk_delete_title"],
+                message = Strings["bulk_delete_message"].format(selectedEntryIds.size),
+                confirmLabel = Strings["confirm_delete_yes"],
+                dismissLabel = Strings["confirm_delete_no"],
+                destructive = true,
+                onConfirm = {
+                    showBulkDeleteConfirm = false
+                    bulkDeleteSelected()
+                },
+                onDismiss = { showBulkDeleteConfirm = false },
+            )
+        }
+
+        if (showBulkEditDialog) {
+            val selectedEntries = remember(timeEntries, selectedEntryIds) {
+                timeEntries.filter { it.id != null && it.id in selectedEntryIds }
+            }
+            BulkEditDialog(
+                selectedEntries = selectedEntries,
+                redmineClient = redmineClient,
+                onDismiss = { showBulkEditDialog = false },
+                onApply = { newProject, newActivity, newIssue, newHours, newComments ->
+                    showBulkEditDialog = false
+                    bulkUpdateSelected(newProject, newActivity, newIssue, newHours, newComments)
+                },
             )
         }
     }

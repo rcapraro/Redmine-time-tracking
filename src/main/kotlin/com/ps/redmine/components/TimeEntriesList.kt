@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EventBusy
@@ -26,8 +27,17 @@ import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
 import com.ps.redmine.util.WorkHours
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.plus
 import java.util.*
+
+sealed interface DuplicateTarget {
+    data object SameDay : DuplicateTarget
+    data object NextDay : DuplicateTarget
+    data class Range(val from: LocalDate, val to: LocalDate) : DuplicateTarget
+}
 
 @Composable
 fun TimeEntriesList(
@@ -35,10 +45,14 @@ fun TimeEntriesList(
     selectedTimeEntry: TimeEntry?,
     onTimeEntrySelected: (TimeEntry) -> Unit,
     onDelete: (TimeEntry) -> Unit,
+    onDuplicate: (TimeEntry, DuplicateTarget) -> Unit,
+    selectedEntryIds: Set<Int> = emptySet(),
+    onToggleSelect: (TimeEntry) -> Unit = {},
     deletingEntryId: Int? = null,
     locale: Locale = Locale.getDefault()
 ) {
     var pendingDelete by remember { mutableStateOf<TimeEntry?>(null) }
+    var rangeDuplicateEntry by remember { mutableStateOf<TimeEntry?>(null) }
 
     val entriesByDate = remember(timeEntries) {
         timeEntries.groupBy { it.date }
@@ -61,7 +75,7 @@ fun TimeEntriesList(
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 6.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+            contentPadding = PaddingValues(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth().fillMaxHeight()
         ) {
@@ -79,8 +93,13 @@ fun TimeEntriesList(
                     TimeEntryItem(
                         timeEntry = entry,
                         isSelected = entry == selectedTimeEntry,
+                        isChecked = entry.id != null && entry.id in selectedEntryIds,
+                        onCheckedChange = { onToggleSelect(entry) },
                         onClick = { onTimeEntrySelected(entry) },
                         onDelete = { pendingDelete = entry },
+                        onDuplicateSameDay = { onDuplicate(entry, DuplicateTarget.SameDay) },
+                        onDuplicateNextDay = { onDuplicate(entry, DuplicateTarget.NextDay) },
+                        onDuplicateRange = { rangeDuplicateEntry = entry },
                         isLoading = entry.id == deletingEntryId,
                         modifier = Modifier.animateItem()
                     )
@@ -110,6 +129,87 @@ fun TimeEntriesList(
             onDismiss = { pendingDelete = null },
         )
     }
+
+    rangeDuplicateEntry?.let { entry ->
+        DuplicateRangeDialog(
+            entry = entry,
+            locale = locale,
+            onConfirm = { from, to ->
+                rangeDuplicateEntry = null
+                onDuplicate(entry, DuplicateTarget.Range(from, to))
+            },
+            onDismiss = { rangeDuplicateEntry = null },
+        )
+    }
+}
+
+@Composable
+private fun DuplicateRangeDialog(
+    entry: TimeEntry,
+    locale: Locale,
+    onConfirm: (LocalDate, LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val initial = remember(entry) {
+        var d = entry.date
+        repeat(1) { d = d.nextNonWeekend() }
+        d
+    }
+    var fromDate by remember(entry) { mutableStateOf(initial) }
+    var toDate by remember(entry) { mutableStateOf(initial) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(Strings["duplicate_range_title"]) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = Strings["duplicate_range_from"],
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                DatePicker(
+                    selectedDate = fromDate,
+                    onDateSelected = { fromDate = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    locale = locale,
+                )
+                Text(
+                    text = Strings["duplicate_range_to"],
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                DatePicker(
+                    selectedDate = toDate,
+                    onDateSelected = { toDate = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    locale = locale,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val (a, b) = if (fromDate <= toDate) fromDate to toDate else toDate to fromDate
+                    onConfirm(a, b)
+                },
+                enabled = true,
+            ) {
+                Text(Strings["duplicate_range_confirm"])
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(Strings["confirm_delete_no"])
+            }
+        },
+    )
+}
+
+private fun LocalDate.nextNonWeekend(): LocalDate {
+    var d = this.plus(1, DateTimeUnit.DAY)
+    while (d.dayOfWeek.isoDayNumber !in 1..5) {
+        d = d.plus(1, DateTimeUnit.DAY)
+    }
+    return d
 }
 
 @Composable
@@ -253,11 +353,17 @@ private fun StatusRow(
 fun TimeEntryItem(
     timeEntry: TimeEntry,
     isSelected: Boolean,
+    isChecked: Boolean,
+    onCheckedChange: () -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    onDuplicateSameDay: () -> Unit,
+    onDuplicateNextDay: () -> Unit,
+    onDuplicateRange: () -> Unit,
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    var duplicateMenuExpanded by remember { mutableStateOf(false) }
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainer,
@@ -284,11 +390,18 @@ fun TimeEntryItem(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth()
-                .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 4.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Checkbox(
+                checked = isChecked,
+                onCheckedChange = { if (!isLoading) onCheckedChange() },
+                enabled = !isLoading && timeEntry.id != null,
+                modifier = Modifier.size(36.dp),
+            )
+
+            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -333,6 +446,49 @@ fun TimeEntryItem(
                         text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Box {
+                IconButton(
+                    onClick = { if (!isLoading) duplicateMenuExpanded = true },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .padding(start = 4.dp)
+                        .alpha(if (isLoading) 0.6f else 1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = Strings["duplicate_time_entry"],
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                DropdownMenu(
+                    expanded = duplicateMenuExpanded,
+                    onDismissRequest = { duplicateMenuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(Strings["duplicate_same_day"]) },
+                        onClick = {
+                            duplicateMenuExpanded = false
+                            onDuplicateSameDay()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(Strings["duplicate_next_day"]) },
+                        onClick = {
+                            duplicateMenuExpanded = false
+                            onDuplicateNextDay()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(Strings["duplicate_range"]) },
+                        onClick = {
+                            duplicateMenuExpanded = false
+                            onDuplicateRange()
+                        },
                     )
                 }
             }
