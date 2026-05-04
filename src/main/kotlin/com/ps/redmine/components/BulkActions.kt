@@ -2,7 +2,10 @@ package com.ps.redmine.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -11,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.model.Activity
 import com.ps.redmine.model.Issue
@@ -191,10 +195,16 @@ fun BulkEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(min = 760.dp, max = 960.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(Strings["bulk_edit_title"]) },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 640.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = Strings["selection_count"].format(selectedEntries.size),
@@ -268,21 +278,32 @@ fun BulkEditDialog(
                     onCheckedChange = { modifyHours = it },
                 ) {
                     Column {
-                        OutlinedTextField(
-                            value = hoursText,
-                            onValueChange = { input ->
-                                if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
-                                    val candidate = input.replace(',', '.').toFloatOrNull()
-                                    if (candidate == null || candidate <= maxHours) {
-                                        hoursText = input
-                                    }
-                                }
-                            },
-                            label = { Text(Strings["bulk_edit_modify_hours"]) },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            isError = modifyHours && !hoursValid,
-                        )
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = hoursText,
+                                onValueChange = { input ->
+                                    if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
+                                        val candidate = input.replace(',', '.').toFloatOrNull()
+                                        if (candidate == null || candidate <= maxHours) {
+                                            hoursText = input
+                                        }
+                                    }
+                                },
+                                label = { Text(Strings["bulk_edit_modify_hours"]) },
+                                modifier = Modifier.width(180.dp),
+                                singleLine = true,
+                                isError = modifyHours && !hoursValid,
+                            )
+                            TextButton(
+                                onClick = { hoursText = Strings["total_hours_format"].format(maxHours) },
+                            ) {
+                                Text(Strings["full_day"])
+                            }
+                        }
                         if (modifyHours && hoursError != null && hoursText.isNotEmpty()) {
                             Text(
                                 text = hoursError,
@@ -300,13 +321,41 @@ fun BulkEditDialog(
                     checked = modifyComments,
                     onCheckedChange = { modifyComments = it },
                 ) {
-                    OutlinedTextField(
-                        value = commentsText,
-                        onValueChange = { commentsText = it },
-                        label = { Text(Strings["bulk_edit_modify_comments"]) },
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = modifyComments && !commentsValid,
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = commentsText,
+                            onValueChange = { newValue ->
+                                if (newValue.length <= 255) {
+                                    commentsText = newValue
+                                }
+                            },
+                            label = { Text(Strings["bulk_edit_modify_comments"]) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp),
+                            minLines = 5,
+                            isError = modifyComments && !commentsValid,
+                            trailingIcon = if (commentsText.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { commentsText = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = Strings["clear_button_description"],
+                                        )
+                                    }
+                                }
+                            } else null,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            Text(
+                                text = Strings["char_count"].format(commentsText.length),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (commentsText.length > 240) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
 
                 errorMessage?.let {
@@ -369,12 +418,14 @@ private fun BulkEditFieldRow(
             style = MaterialTheme.typography.bodyMedium,
             color = if (enabled) MaterialTheme.colorScheme.onSurface
             else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            softWrap = false,
+            modifier = if (checked && enabled) Modifier.width(200.dp) else Modifier.weight(1f),
         )
-    }
-    if (checked && enabled) {
-        Box(modifier = Modifier.padding(start = 56.dp)) {
-            content()
+        if (checked && enabled) {
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
         }
     }
 }
