@@ -117,6 +117,14 @@ fun HelpDialog(onDismiss: () -> Unit) {
                     HelpSection(title = Strings["help_settings_title"]) {
                         ActionRow(Icons.Filled.Settings, Strings["help_settings_body"])
                     }
+
+                    HelpSection(title = Strings["help_update_title"]) {
+                        ActionRow(
+                            icon = Icons.Filled.Download,
+                            text = Strings["help_update_body"],
+                            iconTint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
 
                 Row(

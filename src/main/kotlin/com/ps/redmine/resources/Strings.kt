@@ -221,6 +221,8 @@ object Strings {
             "help_shortcut_today" to "Revenir au mois courant",
             "help_settings_title" to "Paramètres",
             "help_settings_body" to "L'icône Paramètres ouvre la configuration : URL Redmine, clé d'API, langue, thème sombre, heures par jour et jours non travaillés. Si vous êtes administrateur Redmine, le bandeau supérieur permet aussi de saisir le temps pour un autre utilisateur (impersonation).",
+            "help_update_title" to "Mise à jour",
+            "help_update_body" to "Lorsqu'une nouvelle version stable est publiée, un bouton « Mise à jour » apparaît dans le bandeau supérieur, marqué d'une pastille rouge. Cliquez dessus pour voir les notes de version et télécharger l'installateur adapté à votre système.",
         ),
         Language.ENGLISH to mapOf(
             "configuration_title" to "Configuration",
@@ -423,6 +425,8 @@ object Strings {
             "help_shortcut_today" to "Jump back to the current month",
             "help_settings_title" to "Settings",
             "help_settings_body" to "The Settings icon opens the configuration: Redmine URL, API key, language, dark theme, daily hours and non-working days. If you are a Redmine administrator, the top bar also lets you log time on behalf of another user (impersonation).",
+            "help_update_title" to "Updates",
+            "help_update_body" to "When a new stable release is published, an \"Update\" button appears in the top bar with a red dot. Click it to view release notes and download the installer for your platform.",
         )
     )
 

@@ -10,18 +10,25 @@ sombre qui peut être activé dans les paramètres.*
 
 ## Fonctionnalités
 
-- **Vue d'ensemble mensuelle des temps** avec navigation intuitive
-- **Suivi de progression mensuelle** avec indicateurs visuels montrant le pourcentage de completion
-- **Calcul des jours ouvrables** et suivi des heures attendues (jours ouvrables × 7,5 heures)
-- **Ajout et modification des temps** avec validation complète
-- **Sélection de projet et d'activité** avec menus déroulants recherchables
-- **Intégration des tickets** - sélection des tickets associés aux projets choisis
-- **Navigation facile entre les mois** avec raccourcis clavier
-- **Création et modification rapide des temps** avec valeurs par défaut intelligentes
+- **Vue d'ensemble mensuelle des saisies** avec navigation intuitive
+- **Barres de progression hebdomadaires et mensuelle** avec pourcentage de completion et infobulles par semaine ISO
+- **Temps de travail configurable** — heures par jour (6 / 6,5 / 7 / 7,5 h) et jusqu'à 4 jours non travaillés en semaine
+- **Ajout, modification et suppression de saisies** avec validation complète
+- **Duplication de saisies** sur le même jour, sur le jour ouvré suivant, ou sur une plage de dates
+- **Modification et suppression groupées** — sélectionnez plusieurs saisies pour modifier projet, activité, demande,
+  heures ou commentaire en une seule opération
+- **Sélecteurs de projet, ticket et activité** avec menus déroulants recherchables
+- **Navigation facile entre les mois** avec boutons fléchés, raccourci « Aujourd'hui » et raccourcis clavier
+- **Aide intégrée** (bouton Aide dans le bandeau supérieur) résumant les actions, icônes et raccourcis
+- **Mises à jour intégrées** — un bouton « Téléchargement » apparaît dans le bandeau supérieur lorsqu'une nouvelle
+  version stable est disponible
+- **Impersonation** — les administrateurs peuvent saisir le temps pour le compte d'un autre utilisateur Redmine depuis
+  le bandeau supérieur
+- **Bandeau de statut en temps réel** affichant la date du jour, l'heure courante et le numéro de la semaine ISO
 - **Support SSL** (y compris les certificats auto-signés avec confiance automatique et vérification du nom d'hôte
   désactivée)
 - **Apparence native** qui s'intègre avec votre système d'exploitation
-- **Support des thèmes clair et sombre** avec intégration système
+- **Thèmes clair et sombre**
 - **Raccourcis clavier** pour une productivité améliorée
 - **Support multilingue** (français et anglais) avec système de secours intelligent
 - **Gestion d'erreurs robuste** avec messages d'erreur conviviaux
@@ -43,7 +50,7 @@ L'application prend en charge plusieurs langues avec un système de secours inte
 
 L'application utilise le français par défaut. Vous pouvez changer la langue dans le panneau de configuration :
 
-1. Cliquez sur l'icône des paramètres dans la barre supérieure
+1. Cliquez sur le bouton **Paramètres** (icône d'engrenage) dans le bandeau supérieur
 2. Sélectionnez votre langue préférée (français ou anglais) dans le menu déroulant
 3. Cliquez sur Enregistrer
 
@@ -63,12 +70,16 @@ L'application peut être configurée de deux manières :
 
 ### Configuration graphique
 
-Cliquez sur l'icône des paramètres dans la barre supérieure pour ouvrir la boîte de dialogue de configuration. Vous
-pouvez définir :
+Cliquez sur le bouton **Paramètres** (icône d'engrenage) dans le bandeau supérieur pour ouvrir la boîte de dialogue de
+configuration. Vous pouvez définir :
 
-- URL Redmine
-- Clé d'API (la clé d'API Redmine)
-- Thème sombre
+- **URL Redmine**
+- **Clé d'API** — la clé d'API Redmine (un bouton afficher/masquer et un lien « Comment obtenir votre clé d'API ? » sont
+  disponibles)
+- **Thème sombre** — bascule entre les thèmes clair et sombre Material 3
+- **Langue** — français ou anglais
+- **Heures par jour** — 6, 6,5, 7 ou 7,5 (sert de cible quotidienne, hebdomadaire et mensuelle)
+- **Jours non travaillés** — jusqu'à 4 jours de la semaine (lundi–vendredi) qui ne comptent pas comme jours ouvrés
 
 La configuration est automatiquement sauvegardée et stockée de manière sécurisée via l'API Java Preferences dans les
 préférences de votre système :
@@ -159,43 +170,75 @@ Les installateurs publiés seront disponibles sur la page des versions GitHub.
 ### Configuration initiale
 
 1. **Configurer la connexion Redmine** :
-    - Option 1 : Cliquez sur l'icône des paramètres dans la barre supérieure pour configurer votre connexion Redmine
+    - Option 1 : Cliquez sur le bouton **Paramètres** (icône d'engrenage) dans le bandeau supérieur pour configurer
+      votre connexion Redmine
     - Option 2 : Définir les variables d'environnement comme décrit dans la section Configuration
 2. **Lancer l'application**
 
+### Bandeau supérieur
+
+Le bandeau supérieur regroupe les informations de statut et les actions globales :
+
+- **Pastille utilisateur** — affiche votre compte ; les administrateurs peuvent cliquer dessus pour saisir le temps pour
+  un autre utilisateur Redmine (un badge coloré rappelle alors pour qui vous saisissez). Choisissez « Moi-même » pour
+  revenir sur votre compte. L'impersonation n'est jamais persistée.
+- **Pastilles d'information** — date du jour, heure courante et numéro de la semaine ISO.
+- **Mise à jour** (icône de téléchargement, avec un point rouge) — n'apparaît que lorsqu'une nouvelle version stable est
+  disponible ; ouvre la boîte de dialogue de mise à jour avec les notes de version et un téléchargement direct de
+  l'installateur correspondant à votre OS.
+- **Paramètres** (icône d'engrenage) — ouvre la boîte de dialogue de configuration.
+- **Aide** (icône point d'interrogation) — ouvre un guide intégré listant chaque action, icône et raccourci.
+
 ### Gestion des saisies de temps
 
-1. **Naviguer entre les mois** en utilisant les boutons de navigation ou les raccourcis clavier (Alt+← / Alt+→)
-2. **Voir la progression mensuelle** : L'application affiche :
+1. **Naviguer entre les mois** avec les flèches au-dessus de la liste, le raccourci « Aujourd'hui (Alt+T) » ou les
+   raccourcis clavier (Alt+← / Alt+→).
+2. **Voir la progression mensuelle et hebdomadaire** : une colonne de barres de progression hebdomadaires se trouve à
+   l'extrême gauche, à côté du total mensuel. L'application affiche :
     - Total des heures saisies pour le mois
-    - Indicateur de progression mensuelle montrant le pourcentage de completion
-    - Calcul des jours ouvrables et heures attendues (jours ouvrables × 7,5)
-    - Heures restantes nécessaires pour compléter le mois
-3. **Ajouter une nouvelle saisie de temps** :
-    - Cliquez sur le bouton "+" ou sélectionnez "Nouvelle saisie"
-    - Remplir les informations requises :
-        - **Date** : Sélectionner la date pour la saisie de temps
-        - **Heures** : Entrer le nombre d'heures travaillées
-        - **Projet** : Choisir parmi les projets disponibles (menu déroulant recherchable)
-        - **Ticket** : Sélectionner un ticket du projet choisi
-        - **Activité** : Sélectionner le type d'activité effectuée
-        - **Commentaires** : Ajouter des commentaires descriptifs (obligatoire)
-4. **Modifier les saisies existantes** : Cliquez sur n'importe quelle saisie de temps dans la liste pour la modifier
-5. **Sauvegarder les modifications** : Utilisez Ctrl/Cmd+S ou cliquez sur le bouton Sauvegarder
-6. **Annuler les modifications** : Appuyez sur Échap ou cliquez sur Annuler
+    - Progression mensuelle avec pourcentage de completion et célébration lorsque le mois est terminé
+    - Jours ouvrables du mois courant (hors week-ends et hors jours non travaillés configurés)
+    - Heures attendues (jours ouvrables × heures par jour configurées)
+    - Heures restantes pour compléter le mois
+    - Barres de progression par semaine, avec infobulle indiquant la plage de dates et heures / objectif. Cliquez sur
+      une barre hebdomadaire pour vous positionner sur le premier jour ouvré de cette semaine.
+3. **Ajouter une nouvelle saisie de temps** : le panneau de droite est le formulaire de création/édition. Désélectionnez
+   la saisie courante (ou changez de jour) pour afficher le formulaire de création, puis remplissez :
+    - **Date** — choisir une date avec l'icône calendrier, ou utiliser les boutons `-1 / +1 jour` (jours ouvrés)
+    - **Heures** — nombre d'heures travaillées
+    - **Projet** — menu déroulant recherchable
+    - **Ticket** — menu déroulant recherchable filtré par le projet sélectionné
+    - **Activité** — menu déroulant recherchable
+    - **Commentaires** — obligatoires, 255 caractères max
+4. **Modifier une saisie existante** : cliquez sur n'importe quelle saisie de la liste pour la charger dans le
+   formulaire de droite.
+5. **Dupliquer une saisie** : chaque ligne possède une icône de copie qui ouvre un menu — dupliquer pour le même jour,
+   pour le jour ouvré suivant, ou sur une plage de dates (seuls les jours ouvrés de la plage sont dupliqués).
+6. **Supprimer une saisie** : cliquez sur l'icône poubelle rouge de la ligne ; une boîte de confirmation s'affiche.
+7. **Actions groupées** : cochez la case de plusieurs saisies pour faire apparaître la barre d'actions groupées
+   au-dessus de la liste :
+    - **Modifier** — ouvre la boîte de dialogue de modification groupée et permet de choisir quels champs (projet,
+      activité, ticket, heures, commentaire) appliquer à toutes les saisies sélectionnées.
+    - **Supprimer** — supprime toutes les saisies sélectionnées après confirmation.
+    - **Fermer** (X) — vide la sélection courante.
+8. **Sauvegarder les modifications** : utilisez Ctrl/Cmd+S ou cliquez sur le bouton Enregistrer.
+9. **Annuler les modifications** : appuyez sur Échap ou cliquez sur Annuler.
 
 ### Suivi de progression mensuelle
 
 L'application calcule et affiche automatiquement :
 
-- **Jours ouvrables** dans le mois actuel (excluant les week-ends)
-- **Heures attendues** (jours ouvrables × 7,5 heures)
+- **Jours ouvrables** dans le mois courant (lundi–vendredi moins les jours non travaillés configurés)
+- **Heures attendues** (jours ouvrables × heures par jour configurées)
 - **Pourcentage de completion** avec indicateur de progression visuel
-- **Statut codé par couleur** : Vert quand le mois est complété
-- **Heures restantes** nécessaires pour atteindre l'objectif mensuel
+- **Détail par semaine** pour repérer en un clin d'œil la semaine où il manque des heures
+- **Statut codé par couleur** : vert lorsque le jour ou le mois est complet, ambre/rouge lorsqu'il manque ou qu'il y a
+  trop d'heures
+- **Heures restantes** pour atteindre l'objectif mensuel
 
-Note : Vous pouvez mettre à jour vos paramètres de connexion Redmine à tout moment en cliquant sur l'icône des
-paramètres dans la barre supérieure. L'application redémarrera pour appliquer la nouvelle configuration.
+Note : Vous pouvez mettre à jour vos paramètres de connexion Redmine à tout moment depuis le bouton **Paramètres** dans
+le bandeau supérieur. L'application prend en compte les nouveaux identifiants et recharge les données sans
+redémarrer.
 
 ## Raccourcis clavier
 
