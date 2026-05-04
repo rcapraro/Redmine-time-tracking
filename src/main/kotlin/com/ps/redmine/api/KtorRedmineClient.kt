@@ -45,7 +45,8 @@ class KtorRedmineClient(
     private data class ClientState(
         val uri: String,
         val apiKey: String,
-        val httpClient: HttpClient
+        val httpClient: HttpClient,
+        val impersonateAs: String? = null
     )
 
     @Volatile
@@ -239,7 +240,7 @@ class KtorRedmineClient(
 
     override fun updateConfiguration(newUri: String, newApiKey: String) {
         // Clear caches first — readers seeing the new state should not see stale data
-        clearCaches()
+        clearAllCaches()
 
         if (httpClientOverride == null) {
             // Build a fully-formed new client, then swap atomically. In-flight
@@ -247,7 +248,8 @@ class KtorRedmineClient(
             // the old server until they complete, then the old client is closed.
             val old = state
             val newClient = createHttpClient(newApiKey)
-            state = ClientState(newUri, newApiKey, newClient)
+            // Drop any prior impersonation — credentials change must reset it.
+            state = ClientState(newUri, newApiKey, newClient, impersonateAs = null)
             try {
                 old.httpClient.close()
             } catch (_: Exception) {
@@ -255,16 +257,27 @@ class KtorRedmineClient(
             }
         } else {
             // Test path: keep the override but update uri/apiKey
-            state = state.copy(uri = newUri, apiKey = newApiKey)
+            state = state.copy(uri = newUri, apiKey = newApiKey, impersonateAs = null)
         }
     }
 
-    private fun clearCaches() {
+    override fun setImpersonation(login: String?) {
+        // Project/issue visibility differs per user, so transient caches must go.
+        // The cached account stays — it describes the real authenticated user.
+        clearTransientCaches()
+        state = state.copy(impersonateAs = login)
+    }
+
+    private fun clearAllCaches() {
+        clearTransientCaches()
+        cachedAccount = null
+    }
+
+    private fun clearTransientCaches() {
         projectCache.clear()
         projectActivitiesCache.clear()
         projectIssuesCache.clear()
         issueCache.clear()
-        cachedAccount = null
         projectsFetchedAtMs = 0L
     }
 
@@ -280,10 +293,13 @@ class KtorRedmineClient(
     /**
      * Loads `/my/account.json` once per configuration and caches the response.
      * Both [getUserWeeklyHours] and [getCurrentUser] derive their values from this.
+     *
+     * Always bypasses impersonation — the cached account describes the real
+     * authenticated user, not whoever is currently being acted on behalf of.
      */
     private suspend fun fetchAccount(): RedmineAccountResponse {
         cachedAccount?.let { return it }
-        val account = getAndParse<RedmineAccountResponse>("/my/account.json")
+        val account = getAndParse<RedmineAccountResponse>("/my/account.json", bypassImpersonation = true)
         cachedAccount = account
         return account
     }
@@ -301,7 +317,13 @@ class KtorRedmineClient(
 
     override suspend fun getCurrentUser(): User? = try {
         val u = fetchAccount().user
-        User(id = u.id, firstName = u.firstname, lastName = u.lastname, login = u.login)
+        User(
+            id = u.id,
+            firstName = u.firstname,
+            lastName = u.lastname,
+            login = u.login,
+            admin = u.admin
+        )
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -309,13 +331,65 @@ class KtorRedmineClient(
         null
     }
 
+    override suspend fun listUsers(): List<User> = withContext(Dispatchers.IO) {
+        val limit = 100
+
+        val firstPageEndpoint = "/users.json?limit=${limit}&offset=0"
+        val firstPage = getAndParse<RedmineUsersResponse>(firstPageEndpoint, bypassImpersonation = true)
+
+        val all = mutableListOf<RedmineUser>()
+        all.addAll(firstPage.users)
+
+        val totalCount = firstPage.totalCount
+        if (totalCount > limit) {
+            val remainingOffsets = mutableListOf<Int>()
+            var offset = limit
+            while (offset < totalCount) {
+                remainingOffsets.add(offset)
+                offset += limit
+            }
+
+            val remainingResponses = coroutineScope {
+                remainingOffsets.map { pageOffset ->
+                    async {
+                        val endpoint = "/users.json?limit=${limit}&offset=${pageOffset}"
+                        getAndParse<RedmineUsersResponse>(endpoint, bypassImpersonation = true)
+                    }
+                }.awaitAll()
+            }
+
+            remainingResponses.forEach { all.addAll(it.users) }
+        }
+
+        all.map { u ->
+            User(
+                id = u.id,
+                firstName = u.firstname,
+                lastName = u.lastname,
+                login = u.login,
+                admin = u.admin
+            )
+        }.sortedBy { it.displayName.lowercase() }
+    }
+
     /**
-     * Helper method to make a GET request to the Redmine API
+     * Helper method to make a GET request to the Redmine API.
+     *
+     * @param bypassImpersonation when true, omits the `X-Redmine-Switch-User`
+     *   header even if impersonation is set. Used for calls that must reflect
+     *   the real authenticated user (e.g. `/my/account.json`, `/users.json`).
      */
-    private suspend inline fun <reified T> getAndParse(endpoint: String): T = withContext(Dispatchers.IO) {
+    private suspend inline fun <reified T> getAndParse(
+        endpoint: String,
+        bypassImpersonation: Boolean = false
+    ): T = withContext(Dispatchers.IO) {
         val current = state
         try {
-            val response = current.httpClient.get("${current.uri}$endpoint")
+            val response = current.httpClient.get("${current.uri}$endpoint") {
+                if (!bypassImpersonation) current.impersonateAs?.let {
+                    header("X-Redmine-Switch-User", it)
+                }
+            }
 
             if (!response.status.isSuccess()) {
                 throw createApiException(
@@ -337,11 +411,18 @@ class KtorRedmineClient(
     /**
      * Helper method to make a POST request to the Redmine API
      */
-    private suspend inline fun <reified R> postAndParse(endpoint: String, body: String): R =
+    private suspend inline fun <reified R> postAndParse(
+        endpoint: String,
+        body: String,
+        bypassImpersonation: Boolean = false
+    ): R =
         withContext(Dispatchers.IO) {
             val current = state
             try {
                 val response = current.httpClient.post("${current.uri}$endpoint") {
+                    if (!bypassImpersonation) current.impersonateAs?.let {
+                        header("X-Redmine-Switch-User", it)
+                    }
                     setBody(body)
                 }
 
@@ -365,11 +446,18 @@ class KtorRedmineClient(
     /**
      * Helper method to make a PUT request to the Redmine API
      */
-    private suspend inline fun <reified R> putAndParse(endpoint: String, body: String): R =
+    private suspend inline fun <reified R> putAndParse(
+        endpoint: String,
+        body: String,
+        bypassImpersonation: Boolean = false
+    ): R =
         withContext(Dispatchers.IO) {
             val current = state
             try {
                 val response = current.httpClient.put("${current.uri}$endpoint") {
+                    if (!bypassImpersonation) current.impersonateAs?.let {
+                        header("X-Redmine-Switch-User", it)
+                    }
                     setBody(body)
                 }
 
@@ -400,10 +488,17 @@ class KtorRedmineClient(
     /**
      * Helper method to make a DELETE request to the Redmine API
      */
-    private suspend fun delete(endpoint: String): Unit = withContext(Dispatchers.IO) {
+    private suspend fun delete(
+        endpoint: String,
+        bypassImpersonation: Boolean = false
+    ): Unit = withContext(Dispatchers.IO) {
         val current = state
         try {
-            val response = current.httpClient.delete("${current.uri}$endpoint")
+            val response = current.httpClient.delete("${current.uri}$endpoint") {
+                if (!bypassImpersonation) current.impersonateAs?.let {
+                    header("X-Redmine-Switch-User", it)
+                }
+            }
 
             if (!response.status.isSuccess()) {
                 throw createApiException(

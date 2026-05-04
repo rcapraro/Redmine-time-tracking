@@ -18,6 +18,20 @@ interface RedmineClientInterface : Closeable {
     fun updateConfiguration(newUri: String, newApiKey: String)
 
     /**
+     * Sets (or clears, with null) the user to act on behalf of via the
+     * `X-Redmine-Switch-User` header. Requires the configured API key
+     * to belong to a Redmine administrator.
+     *
+     * @param login the target user's Redmine login, or null to stop impersonating.
+     */
+    fun setImpersonation(login: String?)
+
+    /**
+     * Lists all active users. Requires admin privileges in Redmine.
+     */
+    suspend fun listUsers(): List<User>
+
+    /**
      * Gets the user's theoretical weekly working hours from Redmine (custom field id 27).
      * Returns null if not available.
      */

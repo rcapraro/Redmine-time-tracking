@@ -184,6 +184,14 @@ data class RedmineAccountResponse(
 )
 
 @Serializable
+data class RedmineUsersResponse(
+    val users: List<RedmineUser> = emptyList(),
+    @SerialName("total_count") val totalCount: Int = 0,
+    val offset: Int = 0,
+    val limit: Int = 25
+)
+
+@Serializable
 data class RedmineUser(
     val id: Int = -1,
     val login: String = "",

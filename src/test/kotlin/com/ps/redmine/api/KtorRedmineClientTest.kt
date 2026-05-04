@@ -297,4 +297,189 @@ class KtorRedmineClientTest {
         assertEquals(422, ex.statusCode)
         assertTrue(ex.message!!.contains("Validation error"))
     }
+
+    @Test
+    fun `setImpersonation adds X-Redmine-Switch-User to writes and ordinary reads`() = runTest {
+        val createdResponse = com.ps.redmine.model.RedmineTimeEntryResponse(
+            timeEntry = com.ps.redmine.model.RedmineTimeEntry(
+                id = 10,
+                spentOn = "2024-01-10",
+                hours = 8.0f,
+                activity = com.ps.redmine.model.RedmineActivity(1, "Dev"),
+                project = com.ps.redmine.model.RedmineProject(1, "Proj"),
+                issue = com.ps.redmine.model.RedmineIssue(200, "Issue 200"),
+                comments = "work"
+            )
+        )
+        val issueResponse = com.ps.redmine.model.RedmineIssueResponse(
+            issue = com.ps.redmine.model.RedmineIssue(200, "Issue 200")
+        )
+
+        val switchUserSeen = mutableListOf<String?>()
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { req ->
+                    switchUserSeen += req.headers["X-Redmine-Switch-User"]
+                    when {
+                        req.method == HttpMethod.Post &&
+                                req.url.encodedPath.endsWith("/time_entries.json") -> respond(
+                            content = json.encodeToString(createdResponse),
+                            status = HttpStatusCode.OK,
+                            headers = io.ktor.http.headersOf(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json.toString()
+                            )
+                        )
+
+                        req.method == HttpMethod.Get &&
+                                req.url.encodedPath.endsWith("/issues/200.json") -> respond(
+                            content = json.encodeToString(issueResponse),
+                            status = HttpStatusCode.OK,
+                            headers = io.ktor.http.headersOf(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json.toString()
+                            )
+                        )
+
+                        else -> error("Unhandled request: ${'$'}{req.method} ${'$'}{req.url}")
+                    }
+                }
+            }
+            defaultRequest {
+                header("X-Redmine-API-Key", "test-key")
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+        }
+
+        val api = KtorRedmineClient("http://localhost", "test-key", client)
+        api.setImpersonation("alice")
+
+        api.createTimeEntry(
+            TimeEntry(
+                id = null,
+                date = kotlinx.datetime.LocalDate(2024, 1, 10),
+                hours = 8.0f,
+                activity = Activity(1, "Dev"),
+                project = Project(1, "Proj"),
+                issue = Issue(200, "Issue 200"),
+                comments = "work"
+            )
+        )
+
+        // Both the POST and the post-create GET /issues/200.json must carry the header.
+        assertTrue(switchUserSeen.isNotEmpty(), "At least one request should have been made")
+        assertTrue(
+            switchUserSeen.all { it == "alice" },
+            "All impersonated requests must carry X-Redmine-Switch-User: alice, saw $switchUserSeen"
+        )
+    }
+
+    @Test
+    fun `getCurrentUser bypasses impersonation header even when set`() = runTest {
+        val accountResponse = com.ps.redmine.model.RedmineAccountResponse(
+            user = com.ps.redmine.model.RedmineUser(
+                id = 1,
+                login = "admin",
+                admin = true,
+                firstname = "Ada",
+                lastname = "Min"
+            )
+        )
+
+        var lastSwitchUserHeader: String? = "<unset>"
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { req ->
+                    if (req.url.encodedPath.endsWith("/my/account.json")) {
+                        lastSwitchUserHeader = req.headers["X-Redmine-Switch-User"]
+                        respond(
+                            content = json.encodeToString(accountResponse),
+                            status = HttpStatusCode.OK,
+                            headers = io.ktor.http.headersOf(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json.toString()
+                            )
+                        )
+                    } else error("Unhandled request: ${'$'}{req.method} ${'$'}{req.url}")
+                }
+            }
+            defaultRequest {
+                header("X-Redmine-API-Key", "test-key")
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+        }
+
+        val api = KtorRedmineClient("http://localhost", "test-key", client)
+        api.setImpersonation("alice")
+
+        val user = api.getCurrentUser()
+        assertNotNull(user)
+        assertEquals(1, user!!.id)
+        assertTrue(user.admin, "admin flag should be propagated from RedmineUser")
+        assertNull(
+            lastSwitchUserHeader,
+            "getCurrentUser must not send X-Redmine-Switch-User even while impersonating"
+        )
+    }
+
+    @Test
+    fun `listUsers paginates and bypasses impersonation header`() = runTest {
+        fun makeUser(id: Int) = com.ps.redmine.model.RedmineUser(
+            id = id,
+            login = "user$id",
+            firstname = "First$id",
+            lastname = "Last$id"
+        )
+
+        val page1 = com.ps.redmine.model.RedmineUsersResponse(
+            users = (1..100).map(::makeUser),
+            totalCount = 130,
+            offset = 0,
+            limit = 100
+        )
+        val page2 = com.ps.redmine.model.RedmineUsersResponse(
+            users = (101..130).map(::makeUser),
+            totalCount = 130,
+            offset = 100,
+            limit = 100
+        )
+
+        val switchUserHeaders = mutableListOf<String?>()
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { req ->
+                    if (req.url.encodedPath.endsWith("/users.json")) {
+                        switchUserHeaders += req.headers["X-Redmine-Switch-User"]
+                        val offset = req.url.parameters["offset"]
+                        val payload = if (offset == "0") page1 else page2
+                        respond(
+                            content = json.encodeToString(payload),
+                            status = HttpStatusCode.OK,
+                            headers = io.ktor.http.headersOf(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json.toString()
+                            )
+                        )
+                    } else error("Unhandled request: ${'$'}{req.method} ${'$'}{req.url}")
+                }
+            }
+            defaultRequest {
+                header("X-Redmine-API-Key", "test-key")
+                contentType(ContentType.Application.Json)
+                accept(ContentType.Application.Json)
+            }
+        }
+
+        val api = KtorRedmineClient("http://localhost", "test-key", client)
+        api.setImpersonation("alice")
+
+        val users = api.listUsers()
+        assertEquals(130, users.size)
+        assertTrue(
+            switchUserHeaders.all { it == null },
+            "listUsers must bypass impersonation, saw $switchUserHeaders"
+        )
+    }
 }

@@ -8,9 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Schedule
@@ -37,10 +35,7 @@ import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
-import com.ps.redmine.model.Activity
-import com.ps.redmine.model.Issue
-import com.ps.redmine.model.Project
-import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.*
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.ui.RedmineTimeTheme
 import com.ps.redmine.update.UpdateManager
@@ -157,11 +152,36 @@ fun App(
         updateManager.checkForUpdates()
     }
 
-    // Display name of the authenticated Redmine user, resolved from the API key.
-    // Reloaded when the configuration changes (configVersion bumps).
-    var userDisplayName by remember { mutableStateOf<String?>(null) }
+    // Authenticated Redmine user (resolved from the API key — always the *real* user,
+    // even while impersonation is active). Reloaded when configVersion bumps.
+    var currentUser by remember { mutableStateOf<User?>(null) }
+
+    // Full user list — populated only when [currentUser] is an admin. Used to
+    // power the impersonation dropdown in [StatusPill].
+    var allUsers by remember { mutableStateOf<List<User>>(emptyList()) }
+
+    // Currently impersonated user, or null when acting as self. Session-only —
+    // never persisted, and reset on every credentials change.
+    var impersonatedUser by remember { mutableStateOf<User?>(null) }
+
     LaunchedEffect(configVersion) {
-        userDisplayName = redmineClient.getCurrentUser()?.displayName
+        // A credentials change must drop any prior impersonation before we even
+        // ask the new server who we are.
+        impersonatedUser = null
+        val user = redmineClient.getCurrentUser()
+        currentUser = user
+        allUsers = if (user?.admin == true) {
+            try {
+                redmineClient.listUsers()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                System.err.println("Warning: Failed to load users for impersonation: ${e.message}")
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
     }
 
     // Wall-clock state ticking once per second so the date/time/week shown in the
@@ -452,6 +472,21 @@ fun App(
         loadTimeEntries(currentMonth)
     }
 
+    // Apply impersonation to the API client and reload entries when the target changes.
+    // Skipped on the very first composition — the LaunchedEffect(currentMonth) above
+    // already loads on initial show.
+    var impersonationInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(impersonatedUser) {
+        if (!impersonationInitialized) {
+            impersonationInitialized = true
+            return@LaunchedEffect
+        }
+        redmineClient.setImpersonation(impersonatedUser?.login)
+        selectedTimeEntry = null
+        selectedEntryIds = emptySet()
+        loadTimeEntries(currentMonth)
+    }
+
     // Handle keyboard shortcuts
     DisposableEffect(Unit) {
         val callback: (KeyShortcut) -> Unit = { shortcut ->
@@ -564,7 +599,10 @@ fun App(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     StatusPill(
-                        userDisplayName = userDisplayName,
+                        currentUser = currentUser,
+                        impersonatedUser = impersonatedUser,
+                        allUsers = allUsers,
+                        onImpersonate = { target -> impersonatedUser = target },
                         clockNow = clockNow,
                         locale = currentLocale,
                         languageKey = currentLanguage,
@@ -1645,7 +1683,10 @@ fun main() {
 
 @Composable
 private fun StatusPill(
-    userDisplayName: String?,
+    currentUser: User?,
+    impersonatedUser: User?,
+    allUsers: List<User>,
+    onImpersonate: (User?) -> Unit,
     clockNow: LocalDateTime,
     locale: Locale,
     languageKey: String,
@@ -1659,17 +1700,28 @@ private fun StatusPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            userDisplayName?.let { name ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    UserAvatar(name)
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+            currentUser?.let { real ->
+                val displayed = impersonatedUser ?: real
+                val isAdminWithUsers = real.admin && allUsers.isNotEmpty()
+                if (isAdminWithUsers) {
+                    UserSwitcher(
+                        displayedUser = displayed,
+                        isImpersonating = impersonatedUser != null,
+                        allUsers = allUsers,
+                        onImpersonate = onImpersonate,
                     )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        UserAvatar(displayed.displayName, badged = false)
+                        Text(
+                            text = displayed.displayName,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
                 StatusDivider()
             }
@@ -1819,20 +1871,165 @@ private fun InfoChip(icon: ImageVector, text: String) {
 }
 
 @Composable
-private fun UserAvatar(name: String) {
+private fun UserAvatar(name: String, badged: Boolean = false) {
     val initials = remember(name) { computeInitials(name) }
-    Box(
-        modifier = Modifier
-            .size(26.dp)
+    val bg = if (badged) MaterialTheme.colorScheme.tertiaryContainer
+    else MaterialTheme.colorScheme.primaryContainer
+    val fg = if (badged) MaterialTheme.colorScheme.onTertiaryContainer
+    else MaterialTheme.colorScheme.onPrimaryContainer
+    Box(contentAlignment = Alignment.Center) {
+        val circle = Modifier
+            .size(28.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = initials,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
+            .background(bg)
+            .let {
+                if (badged) it.border(2.dp, MaterialTheme.colorScheme.tertiary, CircleShape)
+                else it
+            }
+        Box(modifier = circle, contentAlignment = Alignment.Center) {
+            Text(
+                text = initials,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = fg,
+            )
+        }
+        if (badged) {
+            // Prominent overlay that signals "you are impersonating someone".
+            // Outer ring uses the surrounding surface color so the badge stands out
+            // against the avatar regardless of background.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(1.5.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SwitchAccount,
+                    contentDescription = Strings["impersonate_acting_as"],
+                    tint = MaterialTheme.colorScheme.onTertiary,
+                    modifier = Modifier.size(11.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserSwitcher(
+    displayedUser: User,
+    isImpersonating: Boolean,
+    allUsers: List<User>,
+    onImpersonate: (User?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(expanded) {
+        if (!expanded) query = ""
+    }
+    val filtered = remember(query, allUsers) {
+        if (query.isBlank()) allUsers
+        else allUsers.filter {
+            it.displayName.contains(query, ignoreCase = true) ||
+                    it.login.contains(query, ignoreCase = true)
+        }
+    }
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable { expanded = true }
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            UserAvatar(displayedUser.displayName, badged = isImpersonating)
+            Text(
+                text = displayedUser.displayName,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isImpersonating) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurface,
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .heightIn(max = 420.dp)
+                .widthIn(min = 240.dp, max = 360.dp),
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                placeholder = { Text(Strings["impersonate_search_placeholder"]) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+            // "Myself" entry — clears impersonation. The leading icon mirrors the
+            // size of user avatars below so the row aligns visually, and uses the
+            // primary color to make "this is the real account" unmistakable.
+            DropdownMenuItem(
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AccountCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                        Text(
+                            text = Strings["impersonate_self"],
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        )
+                    }
+                },
+                onClick = {
+                    expanded = false
+                    onImpersonate(null)
+                },
+            )
+            HorizontalDivider()
+            if (filtered.isEmpty()) {
+                DropdownMenuItem(
+                    enabled = false,
+                    text = { Text(Strings["impersonate_no_users"]) },
+                    onClick = {},
+                )
+            } else {
+                filtered.forEach { user ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                UserAvatar(user.displayName, badged = false)
+                                Text(user.displayName)
+                            }
+                        },
+                        onClick = {
+                            expanded = false
+                            onImpersonate(user)
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

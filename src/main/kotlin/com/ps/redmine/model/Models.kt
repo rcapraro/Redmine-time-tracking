@@ -32,6 +32,7 @@ data class User(
     val firstName: String,
     val lastName: String,
     val login: String,
+    val admin: Boolean = false,
 ) {
     val displayName: String
         get() = listOf(firstName, lastName)
