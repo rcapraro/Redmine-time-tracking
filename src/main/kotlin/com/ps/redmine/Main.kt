@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.DateRange
@@ -114,6 +115,7 @@ fun App(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var showBulkEditDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     var configVersion by remember { mutableStateOf(0) }
 
     // Error dialog state
@@ -579,6 +581,12 @@ fun App(
             )
         }
 
+        if (showHelpDialog) {
+            key(currentLanguage) {
+                HelpDialog(onDismiss = { showHelpDialog = false })
+            }
+        }
+
         Scaffold(
             snackbarHost = {
                 SnackbarHost(
@@ -616,6 +624,7 @@ fun App(
                                 }
                             },
                             onSettingsClick = { showConfigDialog = true },
+                            onHelpClick = { showHelpDialog = true },
                         )
                     }
                 }
@@ -1772,6 +1781,7 @@ private fun ActionPill(
     hasUpdate: Boolean,
     onUpdateClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onHelpClick: () -> Unit,
 ) {
     Surface(
         shape = MaterialTheme.shapes.medium,
@@ -1797,6 +1807,13 @@ private fun ActionPill(
                 text = Strings["settings"],
                 contentDescription = Strings["settings"],
                 onClick = onSettingsClick,
+            )
+            StatusDivider()
+            ActionChip(
+                icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                text = Strings["help"],
+                contentDescription = Strings["help"],
+                onClick = onHelpClick,
             )
         }
     }
