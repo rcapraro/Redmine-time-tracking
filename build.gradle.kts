@@ -124,13 +124,18 @@ compose.desktop {
             "-Djava.awt.headless=false"
         )
 
-        // Disable ProGuard to avoid Java version compatibility issues
         buildTypes.release.proguard {
-            isEnabled = false
+            isEnabled = true
+            optimize = true
+            obfuscate = false
+            configurationFiles.from(project.file("proguard-rules.pro"))
         }
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
+            // Slim the bundled JRE — only ship the JDK modules the app actually needs.
+            // List produced by `./gradlew suggestRuntimeModules`; rerun if dependencies change.
+            modules("java.instrument", "java.management", "java.prefs", "jdk.unsupported")
             packageName = "RedmineTime"
             val appVersionStr = project.findProperty("appVersion")?.toString() ?: "1.0.0"
             // jpackage requires a strict X.Y.Z numeric version — strip any pre-release suffix (e.g. "-beta").
