@@ -3,6 +3,7 @@ package com.ps.redmine.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
@@ -318,6 +320,43 @@ fun DateHeader(
 }
 
 @Composable
+private fun EllipsizedHoverText(
+    text: String,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+) {
+    TooltipArea(
+        tooltip = {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.small,
+                tonalElevation = 2.dp,
+                shadowElevation = 4.dp,
+            ) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .widthIn(max = 360.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        },
+        delayMillis = 500,
+    ) {
+        Text(
+            text = text,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 private fun StatusRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
@@ -401,10 +440,13 @@ fun TimeEntryItem(
                 modifier = Modifier.size(36.dp),
             )
 
-            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+            Column(
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -418,19 +460,6 @@ fun TimeEntryItem(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-                    Text(
-                        text = timeEntry.project.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -442,12 +471,19 @@ fun TimeEntryItem(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-                    Text(
-                        text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
+
+                EllipsizedHoverText(
+                    text = timeEntry.project.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                EllipsizedHoverText(
+                    text = Strings["issue_item_format"].format(timeEntry.issue.id, timeEntry.issue.subject),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Box {
