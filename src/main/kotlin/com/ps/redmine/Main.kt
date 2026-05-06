@@ -639,6 +639,7 @@ fun App(
                             timeEntries = timeEntries,
                             currentMonth = currentMonth,
                             excludedIsoDays = nonWorkingIsoDays,
+                            selectedDate = selectedDate,
                             modifier = Modifier.padding(2.dp).focusProperties { canFocus = false },
                             onWeekClick = { weekInfo ->
                                 selectedDate = weekInfo.startDate
@@ -873,7 +874,11 @@ fun App(
                                                 }
                                             },
                                             deletingEntryId = deletingEntryId,
-                                            locale = currentLocale
+                                            locale = currentLocale,
+                                            selectedWeekStart = selectedDate.minus(
+                                                selectedDate.dayOfWeek.isoDayNumber - 1,
+                                                DateTimeUnit.DAY
+                                            ),
                                         )
                                     }
                                 }

@@ -32,6 +32,7 @@ import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import java.util.*
 
@@ -51,7 +52,8 @@ fun TimeEntriesList(
     selectedEntryIds: Set<Int> = emptySet(),
     onToggleSelect: (TimeEntry) -> Unit = {},
     deletingEntryId: Int? = null,
-    locale: Locale = Locale.getDefault()
+    locale: Locale = Locale.getDefault(),
+    selectedWeekStart: LocalDate? = null,
 ) {
     var pendingDelete by remember { mutableStateOf<TimeEntry?>(null) }
     var rangeDuplicateEntry by remember { mutableStateOf<TimeEntry?>(null) }
@@ -74,6 +76,19 @@ fun TimeEntriesList(
 
     Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         val listState = rememberLazyListState()
+
+        LaunchedEffect(selectedWeekStart, entriesByDate) {
+            if (selectedWeekStart == null) return@LaunchedEffect
+            val weekEnd = selectedWeekStart.plus(6, DateTimeUnit.DAY)
+            var index = 0
+            for ((date, entries) in entriesByDate) {
+                if (date in selectedWeekStart..weekEnd) {
+                    listState.animateScrollToItem(index)
+                    break
+                }
+                index += 1 + entries.size
+            }
+        }
 
         LazyColumn(
             state = listState,

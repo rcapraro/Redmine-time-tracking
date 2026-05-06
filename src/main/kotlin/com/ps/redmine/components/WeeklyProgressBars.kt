@@ -6,6 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 
 /**
@@ -87,6 +91,7 @@ fun WeeklyProgressBars(
     timeEntries: List<TimeEntry>,
     currentMonth: YearMonth,
     excludedIsoDays: Set<Int> = emptySet(),
+    selectedDate: LocalDate? = null,
     modifier: Modifier = Modifier,
     onWeekClick: ((WeekInfo) -> Unit)? = null
 ) {
@@ -104,6 +109,8 @@ fun WeeklyProgressBars(
         weeklyProgress.forEach { progress ->
             val isCurrentWeek =
                 isCurrentMonth && today >= progress.weekInfo.startDate && today <= progress.weekInfo.endDate
+            val isSelectedWeek = selectedDate != null &&
+                    selectedDate >= progress.weekInfo.startDate && selectedDate <= progress.weekInfo.endDate
             TooltipArea(
                 tooltip = { WeekTooltip(progress, isCurrentWeek) },
                 modifier = Modifier.weight(1f),
@@ -112,6 +119,7 @@ fun WeeklyProgressBars(
                 WeekProgressBar(
                     progress = progress,
                     isCurrentWeek = isCurrentWeek,
+                    isSelectedWeek = isSelectedWeek,
                     modifier = Modifier
                         .fillMaxSize()
                         .clickable(enabled = onWeekClick != null) { onWeekClick?.invoke(progress.weekInfo) }
@@ -168,6 +176,7 @@ private fun WeekTooltip(progress: WeeklyProgress, isCurrentWeek: Boolean) {
 private fun WeekProgressBar(
     progress: WeeklyProgress,
     isCurrentWeek: Boolean,
+    isSelectedWeek: Boolean,
     modifier: Modifier = Modifier
 ) {
     // In-progress weeks get primary (Violet); complete weeks switch to secondary (Emerald)
@@ -204,61 +213,78 @@ private fun WeekProgressBar(
             modifier = Modifier.padding(bottom = 2.dp)
         )
 
-        Canvas(
+        Box(
             modifier = Modifier
-                .width(16.dp)
-                .weight(1f)
-                .padding(horizontal = 1.dp)
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
         ) {
-            val barWidth = size.width
-            val barHeight = size.height
-            val cornerRadius = CornerRadius(4.dp.toPx())
-
-            drawRoundRect(
-                color = backgroundColor,
-                topLeft = Offset(0f, 0f),
-                size = Size(barWidth, barHeight),
-                cornerRadius = cornerRadius
-            )
-
-            if (animatedPercent > 0) {
-                val progressHeight = (barHeight * (animatedPercent / 100f)).coerceAtMost(barHeight)
+            if (isSelectedWeek) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .size(14.dp)
+                )
+            }
+            Canvas(
+                modifier = Modifier
+                    .width(16.dp)
+                    .fillMaxHeight()
+                    .padding(horizontal = 1.dp)
+            ) {
+                val barWidth = size.width
+                val barHeight = size.height
+                val cornerRadius = CornerRadius(4.dp.toPx())
 
                 drawRoundRect(
-                    color = fillColor,
-                    topLeft = Offset(0f, barHeight - progressHeight),
-                    size = Size(barWidth, progressHeight),
+                    color = backgroundColor,
+                    topLeft = Offset(0f, 0f),
+                    size = Size(barWidth, barHeight),
                     cornerRadius = cornerRadius
                 )
 
-                if (progress.isNonWorkedWeek) {
-                    val stroke = 2.dp.toPx()
-                    val inset = 3.dp.toPx()
-                    drawLine(
-                        color = nonWorkedMarkerColor,
-                        start = Offset(inset, inset),
-                        end = Offset(barWidth - inset, barHeight - inset),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
+                if (animatedPercent > 0) {
+                    val progressHeight = (barHeight * (animatedPercent / 100f)).coerceAtMost(barHeight)
+
+                    drawRoundRect(
+                        color = fillColor,
+                        topLeft = Offset(0f, barHeight - progressHeight),
+                        size = Size(barWidth, progressHeight),
+                        cornerRadius = cornerRadius
                     )
-                    drawLine(
-                        color = nonWorkedMarkerColor,
-                        start = Offset(barWidth - inset, inset),
-                        end = Offset(inset, barHeight - inset),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
+
+                    if (progress.isNonWorkedWeek) {
+                        val stroke = 2.dp.toPx()
+                        val inset = 3.dp.toPx()
+                        drawLine(
+                            color = nonWorkedMarkerColor,
+                            start = Offset(inset, inset),
+                            end = Offset(barWidth - inset, barHeight - inset),
+                            strokeWidth = stroke,
+                            cap = StrokeCap.Round
+                        )
+                        drawLine(
+                            color = nonWorkedMarkerColor,
+                            start = Offset(barWidth - inset, inset),
+                            end = Offset(inset, barHeight - inset),
+                            strokeWidth = stroke,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
+                if (isCurrentWeek) {
+                    drawRoundRect(
+                        color = currentWeekStrokeColor,
+                        topLeft = Offset(0f, 0f),
+                        size = Size(barWidth, barHeight),
+                        cornerRadius = cornerRadius,
+                        style = Stroke(width = 2.5.dp.toPx())
                     )
                 }
-            }
-
-            if (isCurrentWeek) {
-                drawRoundRect(
-                    color = currentWeekStrokeColor,
-                    topLeft = Offset(0f, 0f),
-                    size = Size(barWidth, barHeight),
-                    cornerRadius = cornerRadius,
-                    style = Stroke(width = 2.5.dp.toPx())
-                )
             }
         }
 
