@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -32,7 +33,6 @@ import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
-import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import java.util.*
 
@@ -176,30 +176,47 @@ private fun DuplicateRangeDialog(
     var toDate by remember(entry) { mutableStateOf(initial) }
 
     AlertDialog(
+        modifier = Modifier.width(560.dp),
         onDismissRequest = onDismiss,
         title = { Text(Strings["duplicate_range_title"]) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = Strings["duplicate_range_from"],
-                    style = MaterialTheme.typography.labelMedium,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = Strings["duplicate_range_from"],
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    DatePicker(
+                        selectedDate = fromDate,
+                        onDateSelected = { fromDate = it },
+                        modifier = Modifier.width(200.dp),
+                        locale = locale,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .size(24.dp),
                 )
-                DatePicker(
-                    selectedDate = fromDate,
-                    onDateSelected = { fromDate = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    locale = locale,
-                )
-                Text(
-                    text = Strings["duplicate_range_to"],
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                DatePicker(
-                    selectedDate = toDate,
-                    onDateSelected = { toDate = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    locale = locale,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = Strings["duplicate_range_to"],
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    DatePicker(
+                        selectedDate = toDate,
+                        onDateSelected = { toDate = it },
+                        modifier = Modifier.width(200.dp),
+                        locale = locale,
+                    )
+                }
             }
         },
         confirmButton = {
