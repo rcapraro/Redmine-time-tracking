@@ -21,3 +21,10 @@ out/
 
 ### Junie ###
 .junie/
+
+### Claude Code ###
+.claude/settings.local.json
+
+### lean-ctx ###
+.lean-ctx/graph.db
+.lean-ctx/graph.meta.json

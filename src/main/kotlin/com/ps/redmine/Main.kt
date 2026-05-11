@@ -4,6 +4,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -22,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.contentDescription
@@ -57,6 +61,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * Hoisted out of the onValueChange lambda so it isn't recompiled on every keystroke.
  */
 private val HOURS_INPUT_REGEX = Regex("^\\d*([\\.,]\\d{0,1})?$")
+
+private val UserMenuWidth = 300.dp
 
 /**
  * Checks if an exception is a connection error.
@@ -1950,9 +1956,11 @@ private fun UserSwitcher(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    LaunchedEffect(expanded) {
-        if (!expanded) query = ""
-    }
+    // 0 = "Myself" row, 1..filtered.size = user rows
+    var highlightedIndex by remember { mutableStateOf(0) }
+    val listState = rememberLazyListState()
+    val searchFocus = remember { FocusRequester() }
+
     val filtered = remember(query, allUsers) {
         if (query.isBlank()) allUsers
         else allUsers.filter {
@@ -1960,6 +1968,53 @@ private fun UserSwitcher(
                     it.login.contains(query, ignoreCase = true)
         }
     }
+    val rowCount = 1 + filtered.size
+
+    LaunchedEffect(expanded) {
+        if (!expanded) {
+            query = ""
+            highlightedIndex = 0
+        } else {
+            searchFocus.requestFocus()
+        }
+    }
+
+    // Re-anchor the highlight when the query changes: typing should preselect the
+    // first matching user (so Enter picks them), an empty query stays on "Myself".
+    LaunchedEffect(query, filtered, expanded) {
+        if (!expanded) return@LaunchedEffect
+        highlightedIndex = when {
+            query.isBlank() -> 0
+            filtered.isNotEmpty() -> 1
+            else -> 0
+        }
+    }
+
+    // LazyColumn layout: index 0 = Self, 1 = divider, 2..N+1 = users
+    LaunchedEffect(highlightedIndex, expanded) {
+        if (!expanded) return@LaunchedEffect
+        val targetListIndex = if (highlightedIndex == 0) 0 else highlightedIndex + 1
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val first = visible.firstOrNull()?.index
+        val last = visible.lastOrNull()?.index
+        if (first == null || last == null || targetListIndex < first || targetListIndex > last) {
+            listState.animateScrollToItem(targetListIndex)
+        }
+    }
+
+    fun commitSelection() {
+        if (highlightedIndex == 0) {
+            expanded = false
+            onImpersonate(null)
+        } else {
+            val user = filtered.getOrNull(highlightedIndex - 1)
+            if (user != null) {
+                expanded = false
+                onImpersonate(user)
+            }
+        }
+    }
+
     Box {
         Row(
             modifier = Modifier
@@ -1986,9 +2041,7 @@ private fun UserSwitcher(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .heightIn(max = 420.dp)
-                .widthIn(min = 240.dp, max = 360.dp),
+            modifier = Modifier.width(UserMenuWidth),
         ) {
             OutlinedTextField(
                 value = query,
@@ -1997,59 +2050,115 @@ private fun UserSwitcher(
                 placeholder = { Text(Strings["impersonate_search_placeholder"]) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .focusRequester(searchFocus)
+                    .onPreviewKeyEvent { event ->
+                        val isDown = event.type == KeyEventType.KeyDown
+                        when (event.key) {
+                            Key.Enter, Key.NumPadEnter -> {
+                                if (isDown) commitSelection()
+                                true
+                            }
+
+                            Key.DirectionDown -> {
+                                if (isDown && rowCount > 0) {
+                                    highlightedIndex = (highlightedIndex + 1).coerceAtMost(rowCount - 1)
+                                }
+                                true
+                            }
+
+                            Key.DirectionUp -> {
+                                if (isDown && rowCount > 0) {
+                                    highlightedIndex = (highlightedIndex - 1).coerceAtLeast(0)
+                                }
+                                true
+                            }
+
+                            Key.Escape -> {
+                                if (isDown) expanded = false
+                                true
+                            }
+
+                            else -> false
+                        }
+                    },
             )
-            // "Myself" entry — clears impersonation. The leading icon mirrors the
-            // size of user avatars below so the row aligns visually, and uses the
-            // primary color to make "this is the real account" unmistakable.
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.AccountCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp),
-                        )
-                        Text(
-                            text = Strings["impersonate_self"],
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            // Fixed width short-circuits DropdownMenuContent's IntrinsicSize.Max query so it
+            // never tries to intrinsically measure the LazyColumn (a SubcomposeLayout). Fixed
+            // height bounds the LazyColumn so animateScrollToItem has somewhere to scroll.
+            Box(modifier = Modifier.width(UserMenuWidth).height(336.dp)) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    // "Myself" entry — clears impersonation. The leading icon mirrors the
+                    // size of user avatars below so the row aligns visually, and uses the
+                    // primary color to make "this is the real account" unmistakable.
+                    item {
+                        val isHighlighted = highlightedIndex == 0
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AccountCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Text(
+                                        text = Strings["impersonate_self"],
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    )
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                onImpersonate(null)
+                            },
+                            modifier = Modifier.background(
+                                if (isHighlighted) MaterialTheme.colorScheme.surfaceVariant
+                                else Color.Transparent
+                            ),
                         )
                     }
-                },
-                onClick = {
-                    expanded = false
-                    onImpersonate(null)
-                },
-            )
-            HorizontalDivider()
-            if (filtered.isEmpty()) {
-                DropdownMenuItem(
-                    enabled = false,
-                    text = { Text(Strings["impersonate_no_users"]) },
-                    onClick = {},
-                )
-            } else {
-                filtered.forEach { user ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                UserAvatar(user.displayName, badged = false)
-                                Text(user.displayName)
-                            }
-                        },
-                        onClick = {
-                            expanded = false
-                            onImpersonate(user)
-                        },
-                    )
+                    item { HorizontalDivider() }
+                    if (filtered.isEmpty()) {
+                        item {
+                            DropdownMenuItem(
+                                enabled = false,
+                                text = { Text(Strings["impersonate_no_users"]) },
+                                onClick = {},
+                            )
+                        }
+                    } else {
+                        itemsIndexed(filtered) { index, user ->
+                            val isHighlighted = (index + 1) == highlightedIndex
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        UserAvatar(user.displayName, badged = false)
+                                        Text(user.displayName)
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onImpersonate(user)
+                                },
+                                modifier = Modifier.background(
+                                    if (isHighlighted) MaterialTheme.colorScheme.surfaceVariant
+                                    else Color.Transparent
+                                ),
+                            )
+                        }
+                    }
                 }
+                VerticalScrollbar(
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                    adapter = rememberScrollbarAdapter(listState),
+                )
             }
         }
     }

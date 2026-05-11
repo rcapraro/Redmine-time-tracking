@@ -1,18 +1,28 @@
 [versions]
-kotlin = "2.2.21"
-compose-plugin = "1.9.3"
-coroutines = "1.10.2"
-datetime = "0.7.1"
-koin = "4.1.1"
-koinCompose = "4.1.1"
-mockk = "1.14.6"
-junit = "6.0.1"
-ktor = "3.3.2"
-kotlinx-serialization = "1.9.0"
+kotlin = "2.3.21"
+compose-plugin = "1.10.3"
+# JetBrains material3 follows its own release cadence; latest stable as of bump.
+compose-material3 = "1.9.0"
+# JetBrains' compose.materialIconsExtended accessor is deprecated and pinned at this
+# version; the artifact itself still works and is binary-compatible with CMP's compose-ui.
+# The AndroidX KMP-published version (1.7.x) pulls in an older androidx.compose.ui that
+# collides with JetBrains' compose-ui at the same package path → runtime NoSuchMethodError.
+compose-icons-extended = "1.7.3"
+coroutines = "1.11.0"
+datetime = "0.8.0"
+koin = "4.2.1"
+koinCompose = "4.2.1"
+mockk = "1.14.9"
+junit = "6.0.3"
+ktor = "3.4.3"
+kotlinx-serialization = "1.11.0"
 slf4j = "2.0.17"
-version-catalog-update = "1.0.1"
+version-catalog-update = "1.1.0"
 
 [libraries]
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-plugin" }
+compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "compose-icons-extended" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -23,7 +33,7 @@ koin-test = { module = "io.insert-koin:koin-test", version.ref = "koin" }
 koin-test-junit5 = { module = "io.insert-koin:koin-test-junit5", version.ref = "koin" }
 mockk = { module = "io.mockk:mockk-jvm", version.ref = "mockk" }
 junit = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
-junit-platform-launcher = "org.junit.platform:junit-platform-launcher:6.0.1"
+junit-platform-launcher = "org.junit.platform:junit-platform-launcher:6.0.3"
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }

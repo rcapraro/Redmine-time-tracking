@@ -25,9 +25,13 @@ repositories {
 dependencies {
     // Compose Desktop
     implementation(compose.desktop.currentOs)
-    implementation(compose.material3)
-    implementation(compose.materialIconsExtended)
-    implementation(compose.components.resources)
+    implementation(libs.compose.material3)
+    // JetBrains pinned this at 1.7.3 — using direct coordinates (not the deprecated
+    // `compose.materialIconsExtended` accessor) silences the warning. AndroidX's
+    // KMP-published equivalent isn't a drop-in: it pulls androidx.compose.ui transitives
+    // that conflict with CMP's compose-ui at runtime.
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.components.resources)
 
     // Ktor client dependencies
     implementation(libs.ktor.client.core)
