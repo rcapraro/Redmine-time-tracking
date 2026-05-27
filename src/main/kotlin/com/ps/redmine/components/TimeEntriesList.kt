@@ -519,19 +519,38 @@ fun TimeEntryItem(
             }
 
             Box {
-                IconButton(
-                    onClick = { if (!isLoading) duplicateMenuExpanded = true },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .padding(start = 4.dp)
-                        .alpha(if (isLoading) 0.6f else 1f)
+                TooltipArea(
+                    tooltip = {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            shape = MaterialTheme.shapes.small,
+                            tonalElevation = 2.dp,
+                            shadowElevation = 4.dp,
+                        ) {
+                            Text(
+                                text = Strings["duplicate_time_entry"],
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    },
+                    delayMillis = 500,
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = Strings["duplicate_time_entry"],
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    IconButton(
+                        onClick = { if (!isLoading) duplicateMenuExpanded = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .padding(start = 4.dp)
+                            .alpha(if (isLoading) 0.6f else 1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = Strings["duplicate_time_entry"],
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
                 DropdownMenu(
                     expanded = duplicateMenuExpanded,
