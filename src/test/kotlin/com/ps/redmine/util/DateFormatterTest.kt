@@ -32,7 +32,14 @@ class DateFormatterTest {
     fun `test full date format in French locale`() {
         Locale.setDefault(Locale.FRENCH)
         val formatted = DateFormatter.formatFull(testDate, Locale.FRENCH)
-        assertEquals("lundi 25 décembre 2023", formatted)
+        assertEquals("Lundi 25 décembre 2023", formatted)
+    }
+
+    @Test
+    fun `test short date format with weekday in French locale`() {
+        Locale.setDefault(Locale.FRENCH)
+        val formatted = DateFormatter.formatShortWithWeekday(testDate, Locale.FRENCH)
+        assertEquals("Lundi 25/12/2023", formatted)
     }
 
     @Test
@@ -47,5 +54,12 @@ class DateFormatterTest {
         Locale.setDefault(Locale.ENGLISH)
         val formatted = DateFormatter.formatFull(testDate, Locale.ENGLISH)
         assertEquals("Monday, December 25, 2023", formatted)
+    }
+
+    @Test
+    fun `test short date format with weekday in English locale`() {
+        Locale.setDefault(Locale.ENGLISH)
+        val formatted = DateFormatter.formatShortWithWeekday(testDate, Locale.ENGLISH)
+        assertEquals("Monday 12/25/23", formatted)
     }
 }

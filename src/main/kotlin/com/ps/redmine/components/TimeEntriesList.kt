@@ -35,6 +35,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.plus
 import java.util.*
+import kotlin.math.abs
 
 sealed interface DuplicateTarget {
     data object SameDay : DuplicateTarget
@@ -285,9 +286,10 @@ fun DateHeader(
     modifier: Modifier = Modifier,
 ) {
     val targetDaily = WorkHours.configuredDailyHours()
-    val missingHours = if (totalHours < targetDaily) targetDaily - totalHours else 0f
-    val excessHours = if (totalHours > targetDaily) totalHours - targetDaily else 0f
-    val isPerfectHours = totalHours == targetDaily
+    val hoursDelta = totalHours - targetDaily
+    val missingHours = if (hoursDelta <= -WorkHours.HOURS_TOLERANCE) -hoursDelta else 0f
+    val excessHours = if (hoursDelta >= WorkHours.HOURS_TOLERANCE) hoursDelta else 0f
+    val isPerfectHours = abs(hoursDelta) < WorkHours.HOURS_TOLERANCE
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -305,10 +307,15 @@ fun DateHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = DateFormatter.formatShort(date, locale),
+                    text = DateFormatter.formatShortWithWeekday(date, locale),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,

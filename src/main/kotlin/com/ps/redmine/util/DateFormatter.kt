@@ -13,12 +13,23 @@ object DateFormatter {
         }
     }
 
+    fun formatShortWithWeekday(date: LocalDate, locale: Locale = Locale.getDefault()): String =
+        "${weekdayLabel(date, locale)} ${formatShort(date, locale)}"
+
     fun formatFull(date: LocalDate, locale: Locale = Locale.getDefault()): String {
-        val dayName = LocaleNames.weekdayName(date.dayOfWeek.isoDayNumber, locale, full = true)
+        val dayName = weekdayLabel(date, locale)
         val monthName = LocaleNames.monthName(date.month.number, locale, full = true)
         return when (locale.language.lowercase()) {
             "en" -> "$dayName, $monthName ${date.day}, ${date.year}"
             else -> "$dayName ${date.day} $monthName ${date.year}"
         }
     }
+
+    /**
+     * Localized full weekday name, capitalized for use at the start of a label —
+     * [LocaleNames] stores the French names lowercase.
+     */
+    private fun weekdayLabel(date: LocalDate, locale: Locale): String =
+        LocaleNames.weekdayName(date.dayOfWeek.isoDayNumber, locale, full = true)
+            .replaceFirstChar { it.titlecase(locale) }
 }
