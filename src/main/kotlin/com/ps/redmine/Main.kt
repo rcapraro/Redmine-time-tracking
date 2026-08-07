@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
@@ -53,6 +54,9 @@ import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
+import java.io.File
+import java.io.FileWriter
+import java.io.PrintWriter
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -1659,6 +1663,26 @@ fun TimeEntryDetail(
 }
 
 fun main() {
+    // An exception escaping a LaunchedEffect cancels the Recomposer's effect job, which stops
+    // recomposition for the whole window while Swing keeps repainting the last frame — the app
+    // just looks frozen. Record it so that failure mode is never silent again.
+    //
+    // stderr alone is not enough: the packaged installers launch through jpackage (javaw on
+    // Windows) with no console attached, so a user hitting this would have nothing to send back.
+    // Append to a crash log as well, which is reachable from any build.
+    Thread.setDefaultUncaughtExceptionHandler { thread, e ->
+        System.err.println("Uncaught exception on thread ${thread.name}")
+        e.printStackTrace()
+        runCatching {
+            val log = File(File(System.getProperty("user.home"), ".redmine-time"), "crash.log")
+            log.parentFile?.mkdirs()
+            PrintWriter(FileWriter(log, true)).use { out ->
+                out.println("=== ${java.time.LocalDateTime.now()} — thread ${thread.name} ===")
+                e.printStackTrace(out)
+            }
+        }
+    }
+
     // Load configuration
     val config = ConfigurationManager.loadConfig()
 
@@ -1956,59 +1980,38 @@ private fun UserSwitcher(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    // 0 = "Myself" row, 1..filtered.size = user rows
-    var highlightedIndex by remember { mutableStateOf(0) }
+    // Highlighted row: 0 = "Myself", 1..filtered.size = user rows, null = nothing highlighted.
+    // Null is what a non-blank query matching nobody produces; it must render no highlight, so
+    // that Enter doing nothing is what the user sees rather than a contradiction.
+    var highlightedIndex by remember { mutableStateOf<Int?>(0) }
     val listState = rememberLazyListState()
     val searchFocus = remember { FocusRequester() }
+    var searchFocused by remember { mutableStateOf(false) }
 
     val filtered = remember(query, allUsers) {
-        if (query.isBlank()) allUsers
-        else allUsers.filter {
-            it.displayName.contains(query, ignoreCase = true) ||
-                    it.login.contains(query, ignoreCase = true)
-        }
+        if (query.isBlank()) allUsers else allUsers.filter { it.matchesQuery(query) }
     }
     val rowCount = 1 + filtered.size
 
+    // Reset on open, not on close: Material3 keeps the popup composed through its exit
+    // transition, so clearing the query on close would visibly repopulate the list with every
+    // user while the menu fades out.
     LaunchedEffect(expanded) {
-        if (!expanded) {
+        if (expanded) {
             query = ""
             highlightedIndex = 0
-        } else {
-            searchFocus.requestFocus()
-        }
-    }
-
-    // Re-anchor the highlight when the query changes: typing should preselect the
-    // first matching user (so Enter picks them), an empty query stays on "Myself".
-    LaunchedEffect(query, filtered, expanded) {
-        if (!expanded) return@LaunchedEffect
-        highlightedIndex = when {
-            query.isBlank() -> 0
-            filtered.isNotEmpty() -> 1
-            else -> 0
-        }
-    }
-
-    // LazyColumn layout: index 0 = Self, 1 = divider, 2..N+1 = users
-    LaunchedEffect(highlightedIndex, expanded) {
-        if (!expanded) return@LaunchedEffect
-        val targetListIndex = if (highlightedIndex == 0) 0 else highlightedIndex + 1
-        val visible = listState.layoutInfo.visibleItemsInfo
-        val first = visible.firstOrNull()?.index
-        val last = visible.lastOrNull()?.index
-        if (first == null || last == null || targetListIndex < first || targetListIndex > last) {
-            listState.animateScrollToItem(targetListIndex)
         }
     }
 
     fun commitSelection() {
-        if (highlightedIndex == 0) {
-            expanded = false
-            onImpersonate(null)
-        } else {
-            val user = filtered.getOrNull(highlightedIndex - 1)
-            if (user != null) {
+        when (val index = highlightedIndex) {
+            null -> return
+            0 -> {
+                expanded = false
+                onImpersonate(null)
+            }
+
+            else -> filtered.getOrNull(index - 1)?.let { user ->
                 expanded = false
                 onImpersonate(user)
             }
@@ -2043,16 +2046,57 @@ private fun UserSwitcher(
             onDismissRequest = { expanded = false },
             modifier = Modifier.width(UserMenuWidth),
         ) {
+            // This must live inside the popup content: on Desktop the popup is a separate
+            // ComposeSceneLayer, so the search field is not attached yet when an outer
+            // LaunchedEffect first runs — and requestFocus() throws IllegalStateException on an
+            // unattached node. An exception escaping a LaunchedEffect cancels the Recomposer's
+            // effect job, which silently freezes the entire window, so it must never escape.
+            //
+            // Keyed on `expanded` rather than Unit: Material3 keeps this content composed through
+            // the menu's exit transition, so a close-then-reopen inside that window would never
+            // re-run a LaunchedEffect(Unit). And the retry polls the field's own focus state —
+            // requestFocus() also returns normally on an attached-but-not-yet-placed node, so
+            // "did not throw" is not "focused".
+            LaunchedEffect(expanded) {
+                if (!expanded) return@LaunchedEffect
+                repeat(30) {
+                    if (searchFocused) return@LaunchedEffect
+                    withFrameNanos { }
+                    runCatching { searchFocus.requestFocus() }
+                }
+                System.err.println("Warning: user switcher search field never took focus")
+            }
+
+            // LazyColumn layout: index 0 = Self, 1 = divider, 2..N+1 = users.
+            ScrollIntoViewEffect(
+                listState = listState,
+                enabled = expanded,
+                targetIndex = highlightedIndex?.let { if (it == 0) 0 else it + 1 },
+            )
+
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = { newQuery ->
+                    query = newQuery
+                    // Re-anchored here rather than from an effect: typing should preselect the
+                    // first match (so Enter picks them) and an empty query stays on "Myself", but
+                    // an effect would leave the highlight pointing into the previous `filtered`
+                    // for a frame — long enough for a fast Enter to commit the wrong user.
+                    highlightedIndex = when {
+                        newQuery.isBlank() -> 0
+                        allUsers.any { it.matchesQuery(newQuery) } -> 1
+                        else -> null
+                    }
+                },
                 singleLine = true,
                 placeholder = { Text(Strings["impersonate_search_placeholder"]) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp)
                     .focusRequester(searchFocus)
+                    .onFocusChanged { searchFocused = it.isFocused }
                     .onPreviewKeyEvent { event ->
+                        if (!expanded) return@onPreviewKeyEvent false
                         val isDown = event.type == KeyEventType.KeyDown
                         when (event.key) {
                             Key.Enter, Key.NumPadEnter -> {
@@ -2060,16 +2104,20 @@ private fun UserSwitcher(
                                 true
                             }
 
+                            // From "nothing highlighted", Down enters at the top and Up at the
+                            // bottom — an explicit arrow press re-arms Enter.
                             Key.DirectionDown -> {
-                                if (isDown && rowCount > 0) {
-                                    highlightedIndex = (highlightedIndex + 1).coerceAtMost(rowCount - 1)
+                                if (isDown) {
+                                    highlightedIndex =
+                                        ((highlightedIndex ?: -1) + 1).coerceAtMost(rowCount - 1)
                                 }
                                 true
                             }
 
                             Key.DirectionUp -> {
-                                if (isDown && rowCount > 0) {
-                                    highlightedIndex = (highlightedIndex - 1).coerceAtLeast(0)
+                                if (isDown) {
+                                    highlightedIndex =
+                                        ((highlightedIndex ?: rowCount) - 1).coerceAtLeast(0)
                                 }
                                 true
                             }
@@ -2083,9 +2131,12 @@ private fun UserSwitcher(
                         }
                     },
             )
-            // Fixed width short-circuits DropdownMenuContent's IntrinsicSize.Max query so it
-            // never tries to intrinsically measure the LazyColumn (a SubcomposeLayout). Fixed
-            // height bounds the LazyColumn so animateScrollToItem has somewhere to scroll.
+            // BOTH dimensions must be fixed, not capped. DropdownMenuContent wraps this in
+            // Modifier.width(IntrinsicSize.Max), and Column.maxIntrinsicWidth measures every child
+            // at its max intrinsic *height* — so a heightIn(max = …) cap, which is not a fixed
+            // constraint, delegates the query straight into the LazyColumn's SubcomposeLayout and
+            // throws. Fixed sizes fast-return the queried value instead. The cost is a full-height
+            // panel for a short list; shrink-wrapping is not reachable while the body is lazy.
             Box(modifier = Modifier.width(UserMenuWidth).height(336.dp)) {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     // "Myself" entry — clears impersonation. The leading icon mirrors the
@@ -2163,6 +2214,9 @@ private fun UserSwitcher(
         }
     }
 }
+
+private fun User.matchesQuery(query: String): Boolean =
+    displayName.contains(query, ignoreCase = true) || login.contains(query, ignoreCase = true)
 
 private fun computeInitials(name: String): String {
     val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }

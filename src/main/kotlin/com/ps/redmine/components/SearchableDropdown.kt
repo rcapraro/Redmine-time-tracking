@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.ScrollIntoViewEffect
 
 private val MenuWidth = 400.dp
 
@@ -62,15 +63,11 @@ fun <T> SearchableDropdown(
         }
     }
 
-    LaunchedEffect(highlightedIndex, expanded) {
-        if (!expanded || highlightedIndex !in filteredItems.indices) return@LaunchedEffect
-        val visible = listState.layoutInfo.visibleItemsInfo
-        val first = visible.firstOrNull()?.index
-        val last = visible.lastOrNull()?.index
-        if (first == null || last == null || highlightedIndex < first || highlightedIndex > last) {
-            listState.animateScrollToItem(highlightedIndex)
-        }
-    }
+    ScrollIntoViewEffect(
+        listState = listState,
+        enabled = expanded,
+        targetIndex = highlightedIndex.takeIf { it in filteredItems.indices },
+    )
 
     ExposedDropdownMenuBox(
         expanded = expanded && enabled,
@@ -186,8 +183,11 @@ fun <T> SearchableDropdown(
                     )
                 }
             } else {
-                // Fixed width short-circuits DropdownMenuContent's IntrinsicSize.Max query so it
-                // never tries to intrinsically measure the LazyColumn (a SubcomposeLayout).
+                // BOTH dimensions must be fixed, not capped. DropdownMenuContent wraps this in
+                // Modifier.width(IntrinsicSize.Max), and Column.maxIntrinsicWidth measures every
+                // child at its max intrinsic *height* — so a heightIn(max = …) cap, which is not a
+                // fixed constraint, delegates the query straight into the LazyColumn's
+                // SubcomposeLayout and throws. Fixed sizes fast-return the queried value instead.
                 Box(modifier = Modifier.width(MenuWidth).height(340.dp)) {
                     LazyColumn(
                         state = listState,

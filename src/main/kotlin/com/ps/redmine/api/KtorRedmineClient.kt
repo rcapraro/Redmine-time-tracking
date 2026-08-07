@@ -305,7 +305,7 @@ class KtorRedmineClient(
     }
 
     override suspend fun getUserWeeklyHours(): Float? = try {
-        val value = fetchAccount().user.customFields.firstOrNull { it.id == 27 }?.value
+        val value = fetchAccount().user.customFields.firstOrNull { it.id == 27 }?.stringValue
         value?.toFloatOrNull()?.takeIf { it > 0f }
     } catch (e: CancellationException) {
         throw e

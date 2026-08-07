@@ -3,6 +3,9 @@ package com.ps.redmine.model
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Serializable data classes for Redmine API responses
@@ -209,5 +212,19 @@ data class RedmineUser(
 data class RedmineCustomField(
     val id: Int,
     val name: String = "",
-    val value: String? = null
-)
+    /**
+     * Redmine returns a bare string for single-valued custom fields but a JSON **array** for
+     * multi-valued ones (`"value": ["a", "b"]`), so this cannot be typed as `String`: one
+     * multi-valued field anywhere on the account makes the whole `/my/account.json` parse fail.
+     * Read it through [stringValue] rather than matching on the raw element.
+     */
+    val value: JsonElement? = null
+) {
+    /** The scalar text of this field — null when it is absent, JSON null, or multi-valued. */
+    val stringValue: String?
+        get() = (value as? JsonPrimitive)?.contentOrNull
+}
+
+/** Builds a single-valued custom field, the shape Redmine uses for scalar fields. */
+fun RedmineCustomField(id: Int, name: String = "", value: String?): RedmineCustomField =
+    RedmineCustomField(id, name, value?.let { JsonPrimitive(it) })

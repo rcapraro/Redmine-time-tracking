@@ -71,6 +71,47 @@ class KtorRedmineClientTest {
     }
 
     @Test
+    fun `account with a multi-valued custom field still resolves the current user`() = runTest {
+        // Redmine serializes a multi-valued custom field as a JSON array. Typing the value as
+        // String made the whole /my/account.json parse fail, so getCurrentUser() returned null
+        // and the top bar rendered no user chip and no impersonation switcher at all.
+        val body = """
+            {"user":{"id":7,"login":"jdoe","firstname":"Jane","lastname":"Doe",
+             "custom_fields":[
+               {"id":3,"name":"Teams","value":["ops","dev"]},
+               {"id":27,"name":"Weekly Hours","value":"37.5"},
+               {"id":9,"name":"Empty","value":null}
+             ]}}
+        """.trimIndent()
+
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond(
+                        content = body,
+                        status = HttpStatusCode.OK,
+                        headers = io.ktor.http.headersOf(
+                            HttpHeaders.ContentType,
+                            ContentType.Application.Json.toString()
+                        )
+                    )
+                }
+            }
+            defaultRequest {
+                header("X-Redmine-API-Key", "test-key")
+                accept(ContentType.Application.Json)
+            }
+        }
+
+        KtorRedmineClient("http://localhost", "test-key", client).use { api ->
+            val user = api.getCurrentUser()
+            assertEquals("jdoe", user?.login)
+            // The scalar field next to the array one is still readable.
+            assertEquals(37.5f, api.getUserWeeklyHours())
+        }
+    }
+
+    @Test
     fun `getTimeEntriesForMonth handles pagination and maps domain`() = runTest {
         // Prepare 150 time entries split across 2 pages (100 + 50)
         fun makeEntry(id: Int, day: Int) = com.ps.redmine.model.RedmineTimeEntry(
