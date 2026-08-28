@@ -885,10 +885,7 @@ fun App(
                                             },
                                             deletingEntryId = deletingEntryId,
                                             locale = currentLocale,
-                                            selectedWeekStart = selectedDate.minus(
-                                                selectedDate.dayOfWeek.isoDayNumber - 1,
-                                                DateTimeUnit.DAY
-                                            ),
+                                            selectedDate = selectedDate,
                                         )
                                     }
                                 }

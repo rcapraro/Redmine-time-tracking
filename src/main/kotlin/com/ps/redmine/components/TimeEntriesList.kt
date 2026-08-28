@@ -6,8 +6,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -33,6 +35,7 @@ import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import java.util.*
 import kotlin.math.abs
@@ -42,6 +45,61 @@ sealed interface DuplicateTarget {
     data object NextDay : DuplicateTarget
     data class Range(val from: LocalDate, val to: LocalDate) : DuplicateTarget
 }
+
+/**
+ * `LazyColumn` positions of interest inside one week's block of rows.
+ *
+ * @param lastItem the block's last row — the list is sorted by descending date, so it belongs to
+ *   the week's *first* day.
+ * @param selectedDayHeader the header of the newest day at or before the selected one, null when
+ *   every day of the block is newer than it.
+ * @param headerCount how many day headers span [selectedDayHeader]..[lastItem].
+ * @param entryCount how many entry rows span [selectedDayHeader]..[lastItem].
+ */
+internal class WeekAnchors(
+    val lastItem: Int,
+    val selectedDayHeader: Int?,
+    val headerCount: Int,
+    val entryCount: Int,
+)
+
+/**
+ * Locates the week starting at [weekStart] in a [entriesByDate] sorted by descending date, or null
+ * when that week holds no entry.
+ */
+internal fun weekAnchors(
+    entriesByDate: Map<LocalDate, List<TimeEntry>>,
+    weekStart: LocalDate,
+    selectedDate: LocalDate,
+): WeekAnchors? {
+    val weekEnd = weekStart.plus(6, DateTimeUnit.DAY)
+    var index = 0
+    var lastItem = -1
+    var selectedDayHeader: Int? = null
+    var headerCount = 0
+    var entryCount = 0
+    for ((date, entries) in entriesByDate) {
+        if (date < weekStart) break
+        if (date <= weekEnd) {
+            if (selectedDayHeader == null && date <= selectedDate) selectedDayHeader = index
+            if (selectedDayHeader != null) {
+                headerCount++
+                entryCount += entries.size
+            }
+            lastItem = index + entries.size
+        }
+        index += 1 + entries.size
+    }
+    if (lastItem < 0) return null
+    return WeekAnchors(lastItem, selectedDayHeader, headerCount, entryCount)
+}
+
+private fun LazyListLayoutInfo.contentBottom(): Int = viewportEndOffset - afterContentPadding
+
+/** Pixels left between the bottom of the item at [index] and the bottom edge, null when off-screen. */
+private fun LazyListLayoutInfo.gapBelow(index: Int): Int? =
+    visibleItemsInfo.firstOrNull { it.index == index }
+        ?.let { contentBottom() - (it.offset + it.size) }
 
 @Composable
 fun TimeEntriesList(
@@ -54,7 +112,7 @@ fun TimeEntriesList(
     onToggleSelect: (TimeEntry) -> Unit = {},
     deletingEntryId: Int? = null,
     locale: Locale = Locale.getDefault(),
-    selectedWeekStart: LocalDate? = null,
+    selectedDate: LocalDate? = null,
 ) {
     var pendingDelete by remember { mutableStateOf<TimeEntry?>(null) }
     var rangeDuplicateEntry by remember { mutableStateOf<TimeEntry?>(null) }
@@ -78,17 +136,36 @@ fun TimeEntriesList(
     Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         val listState = rememberLazyListState()
 
+        val selectedWeekStart = remember(selectedDate) {
+            selectedDate?.let { it.minus(it.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY) }
+        }
+
+        // Keyed on the week, not the day: selecting another entry of the same week must not scroll.
         LaunchedEffect(selectedWeekStart, entriesByDate) {
-            if (selectedWeekStart == null) return@LaunchedEffect
-            val weekEnd = selectedWeekStart.plus(6, DateTimeUnit.DAY)
-            var index = 0
-            for ((date, entries) in entriesByDate) {
-                if (date in selectedWeekStart..weekEnd) {
-                    listState.animateScrollToItem(index)
-                    break
-                }
-                index += 1 + entries.size
+            val weekStart = selectedWeekStart ?: return@LaunchedEffect
+            val day = selectedDate ?: return@LaunchedEffect
+            val anchors = weekAnchors(entriesByDate, weekStart, day) ?: return@LaunchedEffect
+
+            val layout = listState.layoutInfo
+            // Rows are uniform in height but only measured once laid out, so read the two heights
+            // off the visible rows — headers are keyed by string, entries by id.
+            val entryHeight = layout.visibleItemsInfo.lastOrNull { it.key is Int }?.size ?: 0
+            val headerHeight = layout.visibleItemsInfo.lastOrNull { it.key is String }?.size ?: 0
+            val spacing = layout.mainAxisItemSpacing
+            val spanHeight =
+                anchors.headerCount * (headerHeight + spacing) + anchors.entryCount * (entryHeight + spacing)
+
+            val selectedDayHeader = anchors.selectedDayHeader
+            if (selectedDayHeader != null && spanHeight > layout.contentBottom()) {
+                listState.animateScrollToItem(selectedDayHeader)
+                return@LaunchedEffect
             }
+
+            // Aim straight at the bottom edge so it takes a single animation, then absorb the
+            // rounding left over once the target row has been measured for real.
+            listState.animateScrollToItem(anchors.lastItem, entryHeight - layout.contentBottom())
+            val gapBelow = listState.layoutInfo.gapBelow(anchors.lastItem) ?: return@LaunchedEffect
+            if (gapBelow != 0) listState.animateScrollBy(-gapBelow.toFloat(), tween(durationMillis = 150))
         }
 
         LazyColumn(
