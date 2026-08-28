@@ -47,7 +47,8 @@ data class WeeklyProgress(
 fun calculateWeeklyProgress(
     timeEntries: List<TimeEntry>,
     yearMonth: YearMonth,
-    excludedIsoDays: Set<Int> = emptySet()
+    excludedIsoDays: Set<Int> = emptySet(),
+    dailyHours: Float = WorkHours.configuredDailyHours()
 ): List<WeeklyProgress> {
     val weeks = getWeeksInMonth(yearMonth.year, yearMonth.monthValue)
 
@@ -63,7 +64,7 @@ fun calculateWeeklyProgress(
         val rangeEndK = if (weekInfo.endDate > lastDayOfMonthK) lastDayOfMonthK else weekInfo.endDate
 
         val effectiveWorkingDaysInWeek = countWorkingDays(rangeStartK, rangeEndK, excludedIsoDays)
-        val expectedHours = effectiveWorkingDaysInWeek * WorkHours.configuredDailyHours()
+        val expectedHours = effectiveWorkingDaysInWeek * dailyHours
 
         val isNonWorkedWeek = rangeStartK <= rangeEndK && effectiveWorkingDaysInWeek == 0
 
@@ -91,12 +92,13 @@ fun WeeklyProgressBars(
     timeEntries: List<TimeEntry>,
     currentMonth: YearMonth,
     excludedIsoDays: Set<Int> = emptySet(),
+    dailyHours: Float = WorkHours.configuredDailyHours(),
     selectedDate: LocalDate? = null,
     modifier: Modifier = Modifier,
     onWeekClick: ((WeekInfo) -> Unit)? = null
 ) {
-    val weeklyProgress = remember(timeEntries, currentMonth, excludedIsoDays) {
-        calculateWeeklyProgress(timeEntries, currentMonth, excludedIsoDays).reversed()
+    val weeklyProgress = remember(timeEntries, currentMonth, excludedIsoDays, dailyHours) {
+        calculateWeeklyProgress(timeEntries, currentMonth, excludedIsoDays, dailyHours).reversed()
     }
 
     val today = today

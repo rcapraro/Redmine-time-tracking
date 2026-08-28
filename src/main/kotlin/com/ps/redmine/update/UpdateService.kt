@@ -12,7 +12,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Service responsible for checking for application updates from GitHub releases.
@@ -34,45 +33,41 @@ class UpdateService {
 
     /**
      * Checks if a new version is available on GitHub releases.
-     * @return UpdateInfo if an update is available, null otherwise
+     *
+     * Returns null only when the check succeeded and no newer version exists. A failed check
+     * throws, so the caller can tell "up to date" from "could not tell" and keep any update it
+     * already knows about.
+     *
+     * @return UpdateInfo if an update is available, null if already up to date
      */
     suspend fun checkForUpdates(): UpdateInfo? = withContext(Dispatchers.IO) {
-        try {
-            val response: HttpResponse =
-                httpClient.get("https://api.github.com/repos/rcapraro/Redmine-time-tracking/releases/latest") {
-                    header(HttpHeaders.Accept, "application/vnd.github.v3+json")
-                    header(HttpHeaders.UserAgent, "RedmineTime/${Version.VERSION}")
-                }
-
-            if (response.status == HttpStatusCode.OK) {
-                val releaseJson = response.bodyAsText()
-                val release = json.decodeFromString<GitHubRelease>(releaseJson)
-
-                val currentVersion = Version.VERSION
-                val latestVersion = release.tagName.removePrefix("v")
-
-                if (isNewerVersion(currentVersion, latestVersion)) {
-                    val platformAsset = getPlatformAsset(release.assets)
-                    UpdateInfo(
-                        version = latestVersion,
-                        downloadUrl = platformAsset?.browserDownloadUrl,
-                        releasePageUrl = release.htmlUrl,
-                        releaseNotes = release.body ?: "",
-                        publishedAt = release.publishedAt,
-                        fileSize = platformAsset?.size ?: -1L
-                    )
-                } else {
-                    null
-                }
-            } else {
-                null
+        val response: HttpResponse =
+            httpClient.get("https://api.github.com/repos/rcapraro/Redmine-time-tracking/releases/latest") {
+                header(HttpHeaders.Accept, "application/vnd.github.v3+json")
+                header(HttpHeaders.UserAgent, "RedmineTime/${Version.VERSION}")
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            System.err.println("Failed to check for updates: ${e.message}")
-            null
+
+        // expectSuccess is off on this client, so a 403 rate-limit would otherwise read as "up to date"
+        if (response.status != HttpStatusCode.OK) {
+            error("GitHub releases API returned ${response.status}")
         }
+
+        val release = json.decodeFromString<GitHubRelease>(response.bodyAsText())
+        val latestVersion = release.tagName.removePrefix("v")
+
+        if (!isNewerVersion(Version.VERSION, latestVersion)) {
+            return@withContext null
+        }
+
+        val platformAsset = getPlatformAsset(release.assets)
+        UpdateInfo(
+            version = latestVersion,
+            downloadUrl = platformAsset?.browserDownloadUrl,
+            releasePageUrl = release.htmlUrl,
+            releaseNotes = release.body ?: "",
+            publishedAt = release.publishedAt,
+            fileSize = platformAsset?.size ?: -1L
+        )
     }
 
 

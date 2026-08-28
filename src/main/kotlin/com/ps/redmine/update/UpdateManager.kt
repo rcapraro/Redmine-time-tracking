@@ -70,9 +70,11 @@ class UpdateManager(
             _updateState.value = _updateState.value.copy(isChecking = false)
             throw e
         } catch (e: Exception) {
+            // availableUpdate is deliberately untouched: a failed check must not erase an
+            // update a previous successful check already found.
             _updateState.value = _updateState.value.copy(
                 isChecking = false,
-                error = e.message
+                error = e.message ?: e::class.simpleName ?: "unknown error"
             )
         }
     }

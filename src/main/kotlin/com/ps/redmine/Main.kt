@@ -113,6 +113,7 @@ fun handleException(
 @Composable
 fun App(
     redmineClient: RedmineClientInterface,
+    onLanguageChanged: (String) -> Unit = {},
 ) {
     val updateManager: UpdateManager = koinInject()
 
@@ -196,18 +197,11 @@ fun App(
         }
     }
 
-    // Wall-clock state ticking once per second so the date/time/week shown in the
-    // top bar stay current without the user having to refresh anything.
-    var clockNow by remember { mutableStateOf(nowLocalDateTime()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            clockNow = nowLocalDateTime()
-        }
-    }
-
     // Non-working days (Mon–Fri) from configuration
     var nonWorkingIsoDays by remember { mutableStateOf(ConfigurationManager.loadConfig().nonWorkingIsoDays) }
+
+    // Configured daily hours, hoisted into state so a change repaints the bars and day headers
+    var dailyHours by remember { mutableStateOf(ConfigurationManager.loadConfig().dailyHours) }
 
     // Cleanup update manager when app is disposed
     DisposableEffect(Unit) {
@@ -229,14 +223,20 @@ fun App(
         )
         countWorkingDays(firstK, lastK, nonWorkingIsoDays)
     }
-    val expectedHours = effectiveDays * WorkHours.configuredDailyHours()
-    val isCompleted = expectedHours > 0 && totalHours >= expectedHours
+    val expectedHours = effectiveDays * dailyHours
+    // expectedHours is a Float product while totalHours accumulates Doubles, so a perfectly
+    // filled month can land just under the target — compare against the tolerated threshold.
+    val completionThreshold = expectedHours - WorkHours.HOURS_TOLERANCE
+    val isCompleted = expectedHours > 0 && totalHours >= completionThreshold
 
     // Confetti trigger key — incrementing fires a fresh burst.
     var confettiTrigger by remember { mutableStateOf(0) }
 
     // Selected calendar date used to initialize the date field when creating a new entry
     var selectedDate by remember { mutableStateOf(com.ps.redmine.util.today) }
+
+    // In-flight month load, cancelled whenever a new one starts
+    var loadJob by remember { mutableStateOf<Job?>(null) }
 
     // Compute the earliest non-complete working day in the given month
     fun computeFirstIncompleteDate(
@@ -263,7 +263,7 @@ fun App(
                     .filter { it.date == d }
                     .sumOf { it.hours.toDouble() }
                     .toFloat()
-                if (totalForDay < WorkHours.configuredDailyHours()) {
+                if (totalForDay < WorkHours.configuredDailyHours() - WorkHours.HOURS_TOLERANCE) {
                     return d
                 }
             }
@@ -273,7 +273,11 @@ fun App(
     }
 
     fun loadTimeEntries(yearMonth: YearMonth) {
-        scope.launch {
+        // The fetch runs in the composition scope, not in the caller's LaunchedEffect, so a
+        // month change never cancels it on its own — track and cancel the previous load
+        // explicitly, otherwise a late reply overwrites a newer month's entries.
+        loadJob?.cancel()
+        loadJob = scope.launch {
             isLoading = true
             try {
                 timeEntries = redmineClient.getTimeEntriesForMonth(
@@ -296,10 +300,13 @@ fun App(
                 timeEntries = emptyList()
                 // In case of error, keep selectedDate unchanged
             } finally {
-                isLoading = false
-                // If this was triggered by a config change, also update isGlobalLoading
-                if (isGlobalLoading) {
-                    isGlobalLoading = false
+                // A cancelled load must not clear the flags its successor just set
+                if (isActive) {
+                    isLoading = false
+                    // If this was triggered by a config change, also update isGlobalLoading
+                    if (isGlobalLoading) {
+                        isGlobalLoading = false
+                    }
                 }
             }
         }
@@ -354,7 +361,7 @@ fun App(
                 notifier.success(message)
 
                 val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
                     confettiTrigger++
                 }
             } catch (e: CancellationException) {
@@ -459,10 +466,13 @@ fun App(
                     currentMonth.year,
                     currentMonth.monthValue
                 )
+                // The detail pane keys on the entry object: re-point it at the refreshed one,
+                // otherwise a save from there would push the pre-edit payload back.
+                selectedTimeEntry = selectedTimeEntry?.id?.let { id -> timeEntries.firstOrNull { it.id == id } }
                 notifier.success(Strings["bulk_entries_updated"].format(targets.size))
 
                 val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
+                if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
                     confettiTrigger++
                 }
             } catch (e: CancellationException) {
@@ -559,9 +569,11 @@ fun App(
                         val newConfig = ConfigurationManager.loadConfig()
                         isDarkTheme = newConfig.isDarkTheme
                         nonWorkingIsoDays = newConfig.nonWorkingIsoDays
+                        dailyHours = newConfig.dailyHours
                         // Update the language state to trigger recomposition
                         currentLanguage = newConfig.language
-                        // No-op: removed onLanguageChanged behavior
+                        // Propagate to the window title, which lives above App
+                        onLanguageChanged(newConfig.language)
 
                         // Only reload data and increment configVersion if Redmine configuration changed
                         if (redmineConfigChanged) {
@@ -621,7 +633,6 @@ fun App(
                         impersonatedUser = impersonatedUser,
                         allUsers = allUsers,
                         onImpersonate = { target -> impersonatedUser = target },
-                        clockNow = clockNow,
                         locale = currentLocale,
                         languageKey = currentLanguage,
                     )
@@ -649,6 +660,7 @@ fun App(
                             timeEntries = timeEntries,
                             currentMonth = currentMonth,
                             excludedIsoDays = nonWorkingIsoDays,
+                            dailyHours = dailyHours,
                             selectedDate = selectedDate,
                             modifier = Modifier.padding(2.dp).focusProperties { canFocus = false },
                             onWeekClick = { weekInfo ->
@@ -866,7 +878,8 @@ fun App(
                                 if (showLoading) {
                                     TimeEntriesListSkeleton(modifier = Modifier.fillMaxSize())
                                 } else {
-                                    key(currentLanguage) {
+                                    // dailyHours is in the key because DateHeader reads it from config, not from a parameter
+                                    key(currentLanguage, dailyHours) {
                                         TimeEntriesList(
                                             timeEntries = timeEntries,
                                             selectedTimeEntry = selectedTimeEntry,
@@ -910,46 +923,44 @@ fun App(
                                 timeEntry = selectedTimeEntry,
                                 redmineClient = redmineClient,
                                 onSave = { updatedEntry ->
-                                    scope.launch {
-                                        try {
-                                            if (updatedEntry.id == null) {
-                                                redmineClient.createTimeEntry(updatedEntry)
-                                            } else {
-                                                redmineClient.updateTimeEntry(updatedEntry)
-                                            }
-                                            val previousTotal = totalHours
-                                            // Refresh the list
-                                            timeEntries = redmineClient.getTimeEntriesForMonth(
-                                                currentMonth.year,
-                                                currentMonth.monthValue
-                                            )
-                                            selectedTimeEntry = null
-
-                                            val message = if (updatedEntry.id == null)
-                                                Strings["entry_created"]
-                                            else
-                                                Strings["entry_updated"]
-                                            notifier.success(message)
-
-                                            // Fire confetti when this save flips the month from incomplete to complete
-                                            val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                                            if (expectedHours > 0 && previousTotal < expectedHours && newTotal >= expectedHours) {
-                                                confettiTrigger++
-                                            }
-
-                                            // Trigger focus back to Date field for next entry
-                                            focusRequestKey++
-                                        } catch (e: CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            handleException(
-                                                e,
-                                                notifier,
-                                                { errorDialogMessage = it },
-                                                { errorDialogDetails = it },
-                                                { showErrorDialog = it }
-                                            )
+                                    try {
+                                        if (updatedEntry.id == null) {
+                                            redmineClient.createTimeEntry(updatedEntry)
+                                        } else {
+                                            redmineClient.updateTimeEntry(updatedEntry)
                                         }
+                                        val previousTotal = totalHours
+                                        // Refresh the list
+                                        timeEntries = redmineClient.getTimeEntriesForMonth(
+                                            currentMonth.year,
+                                            currentMonth.monthValue
+                                        )
+                                        selectedTimeEntry = null
+
+                                        val message = if (updatedEntry.id == null)
+                                            Strings["entry_created"]
+                                        else
+                                            Strings["entry_updated"]
+                                        notifier.success(message)
+
+                                        // Fire confetti when this save flips the month from incomplete to complete
+                                        val newTotal = timeEntries.sumOf { it.hours.toDouble() }
+                                        if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
+                                            confettiTrigger++
+                                        }
+
+                                        // Trigger focus back to Date field for next entry
+                                        focusRequestKey++
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        handleException(
+                                            e,
+                                            notifier,
+                                            { errorDialogMessage = it },
+                                            { errorDialogDetails = it },
+                                            { showErrorDialog = it }
+                                        )
                                     }
                                 },
                                 onCancel = {
@@ -959,6 +970,7 @@ fun App(
                                 },
                                 locale = currentLocale,
                                 configVersion = configVersion,
+                                impersonationKey = impersonatedUser?.login,
                                 isGlobalLoading = isGlobalLoading,
                                 focusRequestKey = focusRequestKey,
                                 initialDate = selectedDate,
@@ -1064,23 +1076,29 @@ fun App(
 fun TimeEntryDetail(
     timeEntry: TimeEntry?,
     redmineClient: RedmineClientInterface,
-    onSave: (TimeEntry) -> Unit,
+    onSave: suspend (TimeEntry) -> Unit,
     onCancel: () -> Unit = {},
     locale: Locale = Locale.getDefault(),
     configVersion: Int = 0,
+    impersonationKey: String? = null,
     isGlobalLoading: Boolean = false,
     focusRequestKey: Int = 0,
     initialDate: kotlinx.datetime.LocalDate,
     onError: (String) -> Unit = {}
 ) {
-    var date by remember(timeEntry, initialDate) {
+    // initialDate is deliberately NOT a remember key: it is recomputed by every background
+    // reload, and re-keying would discard the user's own pick regardless of the guard below.
+    var date by remember(timeEntry) {
         mutableStateOf(
             timeEntry?.date ?: initialDate
         )
     }
+    // Also re-keyed on focusRequestKey, which the parent bumps after a save or a cancel:
+    // once the form is done, the date must follow the recomputed initialDate again.
+    var dateTouched by remember(timeEntry, focusRequestKey) { mutableStateOf(false) }
     // Keep date in sync with selected initialDate when creating a new entry
     LaunchedEffect(initialDate, timeEntry) {
-        if (timeEntry == null) {
+        if (timeEntry == null && !dateTouched) {
             date = initialDate
         }
     }
@@ -1143,34 +1161,34 @@ fun TimeEntryDetail(
             return
         }
 
-        selectedProject?.let { project ->
-            selectedActivity?.let { activity ->
-                selectedIssue?.let { issue ->
-                    scope.launch {
-                        isSaving = true
-                        try {
-                            val parsedHours = hours.replace(',', '.').toFloatOrNull() ?: 0f
-                            val timeEntryToSave = TimeEntry(
-                                id = timeEntry?.id,
-                                date = date,
-                                hours = parsedHours,
-                                project = project,
-                                issue = issue,
-                                activity = activity,
-                                comments = comments
-                            )
-                            onSave(timeEntryToSave)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            // onSave handles its own exceptions; this is a defensive
-                            // fallback for unexpected synchronous errors
-                            onError(e.message ?: Strings["error_dialog_message"])
-                        } finally {
-                            isSaving = false
-                        }
-                    }
-                }
+        val project = selectedProject ?: return
+        val activity = selectedActivity ?: return
+        val issue = selectedIssue ?: return
+
+        // Set synchronously: onSave suspends, so the flag must already be visible to the
+        // guards above by the time a second Ctrl+S is dispatched.
+        isSaving = true
+        scope.launch {
+            try {
+                val parsedHours = hours.replace(',', '.').toFloatOrNull() ?: 0f
+                val timeEntryToSave = TimeEntry(
+                    id = timeEntry?.id,
+                    date = date,
+                    hours = parsedHours,
+                    project = project,
+                    issue = issue,
+                    activity = activity,
+                    comments = comments
+                )
+                onSave(timeEntryToSave)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // onSave handles its own exceptions; this is a defensive
+                // fallback for unexpected synchronous errors
+                onError(e.message ?: Strings["error_dialog_message"])
+            } finally {
+                isSaving = false
             }
         }
     }
@@ -1181,6 +1199,7 @@ fun TimeEntryDetail(
         } else {
             // Reset all fields before canceling
             date = initialDate
+            dateTouched = false
             hours = ""
             comments = ""
             selectedProject = null
@@ -1191,8 +1210,9 @@ fun TimeEntryDetail(
     }
 
     // Load projects
-    // Use redmineClient and configVersion as dependencies to reload when configuration changes
-    LaunchedEffect(redmineClient, configVersion) {
+    // Reloads on a configuration change and on an impersonation change — project visibility
+    // differs per user, so the dropdowns must not keep the previous user's list.
+    LaunchedEffect(redmineClient, configVersion, impersonationKey) {
         isLoading = true
         try {
             // Get projects that have open issues only
@@ -1270,6 +1290,7 @@ fun TimeEntryDetail(
                         showCancelConfirmation = false
                         // Reset all fields before canceling
                         date = initialDate
+                        dateTouched = false
                         hours = ""
                         comments = ""
                         selectedProject = null
@@ -1356,13 +1377,13 @@ fun TimeEntryDetail(
             ) {
                 DatePicker(
                     selectedDate = date,
-                    onDateSelected = { date = it },
+                    onDateSelected = { date = it; dateTouched = true },
                     modifier = Modifier.width(200.dp).heightIn(min = 48.dp).focusRequester(dateFocusRequester),
                     locale = locale
                 )
 
                 TextButton(
-                    onClick = { date = today },
+                    onClick = { date = today; dateTouched = true },
                     enabled = !isLoading && !isSaving && !isGlobalLoading
                 ) {
                     Text(Strings["today"])
@@ -1693,18 +1714,23 @@ fun main() {
     // Update Strings with the configured language
     Strings.updateLanguage(config.language)
 
-    application {
-        startKoin {
-            properties(
-                mapOf(
-                    "redmine.uri" to config.redmineUri,
-                    "redmine.apiKey" to config.apiKey
-                )
+    // Started outside application { } so that recomposing it — which the observable window
+    // title below now causes on a language change — cannot re-enter startKoin.
+    startKoin {
+        properties(
+            mapOf(
+                "redmine.uri" to config.redmineUri,
+                "redmine.apiKey" to config.apiKey
             )
-            modules(appModule)
-        }
+        )
+        modules(appModule)
+    }
 
+    application {
         val redmineClient = koinInject<RedmineClientInterface>()
+
+        // The window title lives outside App, so it needs its own language state to follow
+        var language by remember { mutableStateOf(config.language) }
 
         Window(
             onCloseRequest = {
@@ -1712,12 +1738,12 @@ fun main() {
                 redmineClient.close()
                 exitApplication()
             },
-            title = Strings["window_title"],
+            title = remember(language) { Strings["window_title"] },
             icon = painterResource(Res.drawable.app_icon),
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
             state = rememberWindowState(width = 1100.dp, height = 900.dp),
         ) {
-            App(redmineClient)
+            App(redmineClient, onLanguageChanged = { language = it })
         }
     }
 }
@@ -1728,10 +1754,19 @@ private fun StatusPill(
     impersonatedUser: User?,
     allUsers: List<User>,
     onImpersonate: (User?) -> Unit,
-    clockNow: LocalDateTime,
     locale: Locale,
     languageKey: String,
 ) {
+    // Ticked here rather than in App: read from the Scaffold content lambda it would
+    // invalidate that whole scope. The pill only renders minutes, so tick on the minute.
+    var clockNow by remember { mutableStateOf(nowLocalDateTime()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L - (clockNow.second * 1000L + clockNow.nanosecond / 1_000_000L))
+            clockNow = nowLocalDateTime()
+        }
+    }
+
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,

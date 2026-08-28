@@ -2,7 +2,6 @@ package com.ps.redmine.util
 
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
-import kotlin.time.Duration.Companion.milliseconds
 
 // Extension utilities to work with kotlinx.datetime.YearMonth in an idiomatic way
 
@@ -24,9 +23,10 @@ fun YearMonth.plusMonths(months: Int): YearMonth {
 
 fun YearMonth.minusMonths(months: Int): YearMonth = plusMonths(-months)
 
+// Uses [today], which resolves in the system time zone — deriving the month from the raw
+// UTC epoch would land on the neighbouring month near midnight for non-UTC users.
 fun YearMonth.Companion.now(): YearMonth {
-    val epochDays = System.currentTimeMillis().milliseconds.inWholeDays.toInt()
-    val date = LocalDate.fromEpochDays(epochDays)
+    val date = today
     return YearMonth(date.year, date.month)
 }
 

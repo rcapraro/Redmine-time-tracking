@@ -18,8 +18,6 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.coroutines.cancellation.CancellationException
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
@@ -166,6 +164,9 @@ class KtorRedmineClient(
 
     private val projectIssuesCache = ConcurrentHashMap<Int, CachedValue<List<Issue>>>()
 
+    // Answers "does this project have any open issue" without paging its whole issue list
+    private val projectHasOpenIssuesCache = ConcurrentHashMap<Int, CachedValue<Boolean>>()
+
     private val issueCache = ConcurrentHashMap<Int, Issue>()
 
     // Cache timing
@@ -186,18 +187,6 @@ class KtorRedmineClient(
     }
 
     private fun createHttpClient(apiKey: String): HttpClient {
-        // Create a trust manager that does not validate certificate chains
-        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
-            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-        })
-
-        // Install the all-trusting trust manager
-        val sslContext = SSLContext.getInstance("TLS")
-        sslContext.init(null, trustAllCerts, java.security.SecureRandom())
-
-        // Create Ktor HttpClient
         return HttpClient(CIO) {
             // Configure timeout
             install(HttpTimeout) {
@@ -217,7 +206,6 @@ class KtorRedmineClient(
             // Configure engine to accept self-signed certificates
             engine {
                 https {
-                    // Use our custom SSLContext that trusts all certificates
                     trustManager = object : X509TrustManager {
                         override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
                         override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
@@ -239,9 +227,6 @@ class KtorRedmineClient(
     }
 
     override fun updateConfiguration(newUri: String, newApiKey: String) {
-        // Clear caches first — readers seeing the new state should not see stale data
-        clearAllCaches()
-
         if (httpClientOverride == null) {
             // Build a fully-formed new client, then swap atomically. In-flight
             // requests holding a reference to the old client continue against
@@ -259,13 +244,19 @@ class KtorRedmineClient(
             // Test path: keep the override but update uri/apiKey
             state = state.copy(uri = newUri, apiKey = newApiKey, impersonateAs = null)
         }
+
+        // Cleared after the swap so an in-flight request against the old server cannot
+        // repopulate the caches behind us.
+        clearAllCaches()
     }
 
     override fun setImpersonation(login: String?) {
         // Project/issue visibility differs per user, so transient caches must go.
         // The cached account stays — it describes the real authenticated user.
-        clearTransientCaches()
+        // Swap the state first: clearing before the swap lets a request still running as the
+        // previous user repopulate the caches with that user's data after the wipe.
         state = state.copy(impersonateAs = login)
+        clearTransientCaches()
     }
 
     private fun clearAllCaches() {
@@ -277,6 +268,7 @@ class KtorRedmineClient(
         projectCache.clear()
         projectActivitiesCache.clear()
         projectIssuesCache.clear()
+        projectHasOpenIssuesCache.clear()
         issueCache.clear()
         projectsFetchedAtMs = 0L
     }
@@ -649,6 +641,7 @@ class KtorRedmineClient(
                     .distinct()
                     .filter { !issueCache.containsKey(it) }
 
+                val resolvedIssues = HashMap<Int, Issue>(issueCache)
                 if (missingIssueIds.isNotEmpty()) {
                     // Batch-fetch them in parallel chunks rather than one GET per issue
                     val fetched = try {
@@ -656,18 +649,25 @@ class KtorRedmineClient(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
-                        emptyMap()
+                        null
+                    }
+                    // Only persist placeholders when the fetch actually succeeded: issueCache has
+                    // no TTL, so caching them on failure would freeze the ids as "Unknown Issue"
+                    // for the whole session.
+                    if (fetched != null) {
+                        for (issueId in missingIssueIds) {
+                            issueCache[issueId] = fetched[issueId] ?: Issue(issueId, "Unknown Issue")
+                        }
                     }
                     for (issueId in missingIssueIds) {
-                        val issue = fetched[issueId]
-                        issueCache[issueId] = issue ?: Issue(issueId, "Unknown Issue")
+                        resolvedIssues[issueId] = issueCache[issueId] ?: Issue(issueId, "Unknown Issue")
                     }
                 }
 
                 // Convert and return the time entries
                 allTimeEntries.mapNotNull { timeEntry ->
                     try {
-                        timeEntry.toDomainModel(issueCache)
+                        timeEntry.toDomainModel(resolvedIssues)
                     } catch (e: Exception) {
                         // Log the error but continue processing other time entries
                         // This allows us to return partial results even if some entries fail to convert
@@ -705,21 +705,24 @@ class KtorRedmineClient(
 
             // Ensure the issue is cached if it has a valid ID
             val timeEntryResponse = response.timeEntry
-            if (timeEntryResponse.issue.id > 0 && !issueCache.containsKey(timeEntryResponse.issue.id)) {
+            val resolvedIssues = HashMap<Int, Issue>(issueCache)
+            val issueId = timeEntryResponse.issue.id
+            if (issueId > 0 && !issueCache.containsKey(issueId)) {
                 try {
-                    val issueEndpoint = "/issues/${timeEntryResponse.issue.id}.json"
-                    val issueResponse = getAndParse<RedmineIssueResponse>(issueEndpoint)
+                    val issueResponse = getAndParse<RedmineIssueResponse>("/issues/${issueId}.json")
                     val issue = issueResponse.issue
                     issueCache[issue.id] = Issue(issue.id, issue.subject)
+                    resolvedIssues[issue.id] = Issue(issue.id, issue.subject)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    issueCache[timeEntryResponse.issue.id] = Issue(timeEntryResponse.issue.id, "Unknown Issue")
+                    // Render the placeholder without caching it — issueCache has no TTL
+                    resolvedIssues[issueId] = Issue(issueId, "Unknown Issue")
                 }
             }
 
             // Convert and return the time entry
-            timeEntryResponse.toDomainModel(issueCache)
+            timeEntryResponse.toDomainModel(resolvedIssues)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -886,25 +889,26 @@ class KtorRedmineClient(
 
             // Limit concurrency to avoid overwhelming the server
             val semaphore = kotlinx.coroutines.sync.Semaphore(permits = 4)
+            val failedProbes = ConcurrentHashMap.newKeySet<Int>()
             coroutineScope {
                 allProjects.map { project ->
                     async {
-                        val cached = projectIssuesCache[project.id]
+                        val cached = projectHasOpenIssuesCache[project.id]
                         if (isFresh(cached, ISSUES_TTL_MS, now)) return@async
 
                         semaphore.acquire()
                         try {
-                            val endpoint =
-                                "/issues.json?project_id=${project.id}&status_id=open&limit=100&sort=updated_on:desc"
-                            val response = getAndParse<RedmineIssuesResponse>(endpoint)
-                            val issues = response.issues
-                                .filter { it.id > 0 && it.subject.isNotEmpty() }
-                                .map { Issue(it.id, it.subject) }
-                            projectIssuesCache[project.id] = CachedValue(issues, System.currentTimeMillis())
+                            // A one-item probe: only total_count is needed here, and paging every
+                            // project's issue list at startup would be far more expensive.
+                            val probe = fetchOpenIssuesPage(project.id, limit = 1, offset = 0)
+                            projectHasOpenIssuesCache[project.id] =
+                                CachedValue(probe.totalCount > 0, System.currentTimeMillis())
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
-                            projectIssuesCache[project.id] = CachedValue(emptyList(), System.currentTimeMillis())
+                            // Deliberately not cached: a transient failure must not hide the
+                            // project from the picker until the TTL expires.
+                            failedProbes.add(project.id)
                         } finally {
                             semaphore.release()
                         }
@@ -913,7 +917,7 @@ class KtorRedmineClient(
             }
 
             allProjects.filter { project ->
-                projectIssuesCache[project.id]?.value?.isNotEmpty() == true
+                project.id in failedProbes || projectHasOpenIssuesCache[project.id]?.value == true
             }
         } catch (e: CancellationException) {
             throw e
@@ -934,19 +938,37 @@ class KtorRedmineClient(
             return@withContext cached!!.value
         }
         return@withContext try {
-            val endpoint = "/issues.json?project_id=${projectId}&status_id=open&limit=100&sort=updated_on:desc"
-            val response = getAndParse<RedmineIssuesResponse>(endpoint)
-            val issues = response.issues
-                .filter { it.id > 0 && it.subject.isNotEmpty() }
-                .map { Issue(it.id, it.subject) }
+            val issues = fetchAllOpenIssues(projectId)
             projectIssuesCache[projectId] = CachedValue(issues, System.currentTimeMillis())
             issues
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            val empty = emptyList<Issue>()
-            projectIssuesCache[projectId] = CachedValue(empty, System.currentTimeMillis())
-            empty
+            // Not cached: an empty result from a failed request would otherwise make the
+            // project look issue-less for the whole TTL.
+            emptyList()
         }
+    }
+
+    private suspend fun fetchOpenIssuesPage(projectId: Int, limit: Int, offset: Int): RedmineIssuesResponse =
+        getAndParse<RedmineIssuesResponse>(
+            "/issues.json?project_id=${projectId}&status_id=open&limit=${limit}&offset=${offset}&sort=updated_on:desc"
+        )
+
+    /** Fetches every open issue of a project — Redmine caps a page at 100, so follow total_count. */
+    private suspend fun fetchAllOpenIssues(projectId: Int): List<Issue> {
+        val limit = 100
+        val first = fetchOpenIssuesPage(projectId, limit, 0)
+        val pages = mutableListOf(first)
+        if (first.totalCount > limit) {
+            val offsets = (limit until first.totalCount step limit).toList()
+            pages += coroutineScope {
+                offsets.map { offset -> async { fetchOpenIssuesPage(projectId, limit, offset) } }.awaitAll()
+            }
+        }
+        return pages
+            .flatMap { it.issues }
+            .filter { it.id > 0 && it.subject.isNotEmpty() }
+            .map { Issue(it.id, it.subject) }
     }
 }

@@ -250,7 +250,11 @@ fun ConfigurationDialog(
                                 oldConfig.apiKey != config.apiKey
 
                         try {
-                            ConfigurationManager.saveConfig(config)
+                            // saveConfig reports a failed flush by returning false, it does not throw
+                            if (!ConfigurationManager.saveConfig(config)) {
+                                onError(Strings["error_saving_config"])
+                                return@Button
+                            }
                             if (redmineConfigChanged) {
                                 redmineClient.updateConfiguration(config.redmineUri, config.apiKey)
                             }
