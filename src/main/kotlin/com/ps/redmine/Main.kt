@@ -1807,6 +1807,9 @@ fun main() {
     }
 }
 
+// Shared by both top bar pills so they line up whatever their content: avatar, plain text or buttons.
+private val TopBarPillHeight = 40.dp
+
 @Composable
 private fun StatusPill(
     currentUser: User?,
@@ -1831,7 +1834,7 @@ private fun StatusPill(
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.height(TopBarPillHeight).padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -1915,7 +1918,7 @@ private fun ActionPill(
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.height(TopBarPillHeight).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
