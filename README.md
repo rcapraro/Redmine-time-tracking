@@ -58,7 +58,7 @@ Note: The application will automatically handle missing translations by falling 
 
 ## Prerequisites
 
-- Java Development Kit (JDK) 21 or later
+- JetBrains Runtime 21 with JCEF (pinned in `mise.toml` and the CI workflow), required to build the embedded Lucca login browser
 - Redmine server instance (with API access enabled)
 
 ## Configuration
@@ -108,13 +108,35 @@ Note: Language settings can only be changed through the configuration panel.
    ./gradlew run
    ```
 
+### Running from IntelliJ IDEA
+
+The Lucca login window embeds Chromium through JCEF, which only ships with JetBrains Runtime 21 with JCEF. Both compiling
+and running need it: with another JDK, the build fails on `org.cef` imports or the app reports that the embedded browser
+is not available.
+
+1. Install the JDK declared in `mise.toml`:
+   ```bash
+   mise install
+   ```
+2. Point IntelliJ's Gradle JVM at it, without registering a global SDK:
+   ```bash
+   echo "java.home=$(mise where java)" > .gradle/config.properties
+   ```
+   Then select `GRADLE_LOCAL_JAVA_HOME` in *Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JVM*
+   and reload the Gradle project. Run the command again after upgrading the JDK with mise.
+3. Run or debug the shared **RedmineTime** configuration (`.run/RedmineTime.run.xml`, Gradle `run` task).
+
+The ▶ gutter icon next to `main()` uses the Project SDK instead. To use it, and to get `org.cef` resolved in the editor,
+set *Project Structure → SDK* to the same JDK (*Add JDK from disk…* → the `mise where java` path).
+
 ### Native Installers
 
 The application can be packaged as a native installer for different platforms:
 
 - macOS (DMG)
 - Windows (MSI and portable ZIP)
-- Linux (DEB)
+- Linux (DEB): the Lucca absences feature is not supported yet. The build does not bundle the Chromium files the
+  embedded login browser needs on Linux, so signing in to Lucca reports that the embedded browser is unavailable.
 
 To create native installers:
 

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BeachAccess
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Schedule
@@ -41,6 +42,8 @@ import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.components.*
 import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.di.appModule
+import com.ps.redmine.lucca.JcefRuntime
+import com.ps.redmine.lucca.LuccaClient
 import com.ps.redmine.model.*
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.ui.RedmineTimeTheme
@@ -54,6 +57,7 @@ import kotlinx.datetime.*
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
+import java.awt.Desktop
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -116,6 +120,7 @@ fun App(
     onLanguageChanged: (String) -> Unit = {},
 ) {
     val updateManager: UpdateManager = koinInject()
+    val luccaClient: LuccaClient = koinInject()
 
     var selectedTimeEntry by remember { mutableStateOf<TimeEntry?>(null) }
     var timeEntries by remember { mutableStateOf<List<TimeEntry>>(emptyList()) }
@@ -127,6 +132,7 @@ fun App(
     var showBulkEditDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showAbsencesDialog by remember { mutableStateOf(false) }
     var configVersion by remember { mutableStateOf(0) }
 
     // Error dialog state
@@ -609,6 +615,18 @@ fun App(
             }
         }
 
+        if (showAbsencesDialog) {
+            AbsencesDialog(
+                luccaClient = luccaClient,
+                redmineClient = redmineClient,
+                month = currentMonth,
+                locale = currentLocale,
+                isImpersonating = impersonatedUser != null,
+                onTimeEntriesChanged = { loadTimeEntries(currentMonth) },
+                onDismiss = { showAbsencesDialog = false },
+            )
+        }
+
         Scaffold(
             snackbarHost = {
                 SnackbarHost(
@@ -644,6 +662,7 @@ fun App(
                                     updateManager.showUpdateDialog()
                                 }
                             },
+                            onAbsencesClick = { showAbsencesDialog = true },
                             onSettingsClick = { showConfigDialog = true },
                             onHelpClick = { showHelpDialog = true },
                         )
@@ -1728,16 +1747,35 @@ fun main() {
 
     application {
         val redmineClient = koinInject<RedmineClientInterface>()
+        val luccaClient = koinInject<LuccaClient>()
 
         // The window title lives outside App, so it needs its own language state to follow
         var language by remember { mutableStateOf(config.language) }
 
+        fun quit() {
+            // Close the RedmineClient to release resources
+            redmineClient.close()
+            luccaClient.close()
+            JcefRuntime.shutdown()
+            exitApplication()
+        }
+
+        // Without a handler, Cmd+Q on macOS exits the JVM directly and skips the cleanup above.
+        DisposableEffect(Unit) {
+            val desktop = if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().takeIf { it.isSupported(Desktop.Action.APP_QUIT_HANDLER) }
+            } else {
+                null
+            }
+            desktop?.setQuitHandler { _, response ->
+                response.cancelQuit()
+                quit()
+            }
+            onDispose { desktop?.setQuitHandler(null) }
+        }
+
         Window(
-            onCloseRequest = {
-                // Close the RedmineClient to release resources
-                redmineClient.close()
-                exitApplication()
-            },
+            onCloseRequest = ::quit,
             title = remember(language) { Strings["window_title"] },
             icon = painterResource(Res.drawable.app_icon),
             onKeyEvent = KeyShortcutManager::handleKeyEvent,
@@ -1847,6 +1885,7 @@ private fun StatusDivider() {
 private fun ActionPill(
     hasUpdate: Boolean,
     onUpdateClick: () -> Unit,
+    onAbsencesClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
 ) {
@@ -1869,6 +1908,13 @@ private fun ActionPill(
                 )
                 StatusDivider()
             }
+            ActionChip(
+                icon = Icons.Outlined.BeachAccess,
+                text = Strings["absences"],
+                contentDescription = Strings["absences"],
+                onClick = onAbsencesClick,
+            )
+            StatusDivider()
             ActionChip(
                 icon = Icons.Default.Settings,
                 text = Strings["settings"],

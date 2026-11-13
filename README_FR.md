@@ -61,7 +61,7 @@ Note : L'application gère automatiquement les traductions manquantes en utilisa
 
 ## Prérequis
 
-- Java Development Kit (JDK) 21 ou supérieur
+- JetBrains Runtime 21 avec JCEF (version épinglée dans `mise.toml` et le workflow CI), requis pour compiler le navigateur de connexion Lucca intégré
 - Instance serveur Redmine (avec accès API activé)
 
 ## Configuration
@@ -116,13 +116,36 @@ Note : Les paramètres de langue ne peuvent être modifiés que via le panneau d
    ./gradlew run
    ```
 
+### Lancer depuis IntelliJ IDEA
+
+La fenêtre de connexion Lucca embarque Chromium via JCEF, qui n'est fourni qu'avec JetBrains Runtime 21 avec JCEF. La
+compilation comme l'exécution en ont besoin : avec un autre JDK, le build échoue sur les imports `org.cef` ou l'application
+indique que le navigateur intégré n'est pas disponible.
+
+1. Installer le JDK déclaré dans `mise.toml` :
+   ```bash
+   mise install
+   ```
+2. Faire pointer la JVM Gradle d'IntelliJ dessus, sans déclarer de SDK global :
+   ```bash
+   echo "java.home=$(mise where java)" > .gradle/config.properties
+   ```
+   Puis choisir `GRADLE_LOCAL_JAVA_HOME` dans *Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle
+   JVM* et recharger le projet Gradle. Relancer la commande après une mise à jour du JDK avec mise.
+3. Lancer ou déboguer la configuration partagée **RedmineTime** (`.run/RedmineTime.run.xml`, tâche Gradle `run`).
+
+L'icône ▶ dans la gouttière à côté de `main()` utilise le SDK du projet. Pour l'utiliser, et pour que l'éditeur résolve
+`org.cef`, régler *Project Structure → SDK* sur le même JDK (*Add JDK from disk…* → le chemin donné par `mise where java`).
+
 ### Installateurs natifs
 
 L'application peut être empaquetée comme un installateur natif pour différentes plateformes :
 
 - macOS (DMG)
 - Windows (MSI and portable ZIP)
-- Linux (DEB)
+- Linux (DEB) : la fonctionnalité des absences Lucca n'y est pas encore prise en charge. Le build n'embarque pas les
+  fichiers Chromium dont le navigateur de connexion intégré a besoin sous Linux : la connexion à Lucca indique que le
+  navigateur intégré n'est pas disponible.
 
 Pour créer les installateurs natifs :
 

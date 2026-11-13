@@ -133,6 +133,12 @@ val WarningAccentDark = Color(0xFFFCD34D)
 val WarningOnAccentLight = Color(0xFFFFFFFF)
 val WarningOnAccentDark = Color(0xFF422006)
 
+/** Low-emphasis amber surface for warning badges, and the text that stays legible on it. */
+val WarningContainerLight = Color(0xFFFEF3C7)
+val WarningContainerDark = Color(0xFF4A3410)
+val OnWarningContainerLight = Color(0xFF92400E)
+val OnWarningContainerDark = Color(0xFFFCD34D)
+
 /**
  * Diverse confetti palette — violets, purples, pink, peach. Deliberately omits red/yellow/
  * green, which carry error/warning/in-progress semantics elsewhere in the app and clash

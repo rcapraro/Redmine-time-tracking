@@ -7,3 +7,12 @@
 -keep class io.ktor.client.engine.cio.** { *; }
 -dontwarn io.ktor.utils.io.jvm.javaio.PollersKt
 -keep class io.ktor.network.sockets.UnixSocketAddress { *; }
+
+# JNA (OS keychain backends) — native structures and library interfaces are bound by reflection.
+-keep class com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+-keep class com.github.javakeyring.** { *; }
+
+# Linux Secret Service backend — D-Bus proxies, struct marshalling and the transport ServiceLoader use reflection.
+-keep class org.freedesktop.** { *; }
+-keep class org.gnome.keyring.** { *; }

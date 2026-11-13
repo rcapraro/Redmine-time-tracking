@@ -2,6 +2,7 @@ package com.ps.redmine.di
 
 import com.ps.redmine.api.KtorRedmineClient
 import com.ps.redmine.api.RedmineClientInterface
+import com.ps.redmine.lucca.LuccaClient
 import com.ps.redmine.update.UpdateManager
 import com.ps.redmine.update.UpdateService
 import org.koin.dsl.module
@@ -14,6 +15,8 @@ val appModule = module {
             initialApiKey = getProperty("redmine.apiKey")
         )
     }
+
+    single { LuccaClient() }
 
     // Register update-related services
     single { UpdateService() }

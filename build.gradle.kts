@@ -1,6 +1,9 @@
 import nl.littlerobots.vcu.plugin.resolver.VersionSelectors
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+import javax.inject.Inject
 
 
 plugins {
@@ -48,6 +51,9 @@ dependencies {
 
     // Date/Time handling
     implementation(libs.datetime)
+
+    // OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+    implementation(libs.java.keyring)
 
     // Koin
     implementation(libs.koin.core)
@@ -139,7 +145,8 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
             // Slim the bundled JRE — only ship the JDK modules the app actually needs.
             // List produced by `./gradlew suggestRuntimeModules`; rerun if dependencies change.
-            modules("java.instrument", "java.management", "java.prefs", "jdk.unsupported")
+            // `jcef` only exists in JetBrains Runtime builds with JCEF.
+            modules("java.instrument", "java.management", "java.prefs", "jcef", "jdk.security.auth", "jdk.unsupported")
             packageName = "RedmineTime"
             val appVersionStr = project.findProperty("appVersion")?.toString() ?: "1.0.0"
             // jpackage requires a strict X.Y.Z numeric version — strip any pre-release suffix (e.g. "-beta").
@@ -168,6 +175,59 @@ compose.desktop {
                 iconFile.set(project.file("src/main/resources/app_icon.png"))
                 packageVersion = installerVersion
                 debPackageVersion = installerVersion
+            }
+        }
+    }
+}
+
+interface InjectedOps {
+    @get:Inject
+    val exec: ExecOperations
+
+    @get:Inject
+    val fs: FileSystemOperations
+}
+
+val injectedOps = objects.newInstance<InjectedOps>()
+val hostOs: String = System.getProperty("os.name")
+
+// JBR keeps the CEF framework and its helper apps in Contents/Frameworks, outside the jcef module, so jpackage
+// leaves them out. JCEF expects them at java.home/../Frameworks; the bundle is re-signed ad hoc after.
+// mise flattens Contents/Home into the install root, which moves Contents/Frameworks below java.home.
+if (hostOs.startsWith("Mac")) {
+    tasks.withType<AbstractJPackageTask>()
+        .matching { it.name == "createDistributable" || it.name == "createReleaseDistributable" }
+        .configureEach {
+            val jbrHome = javaHome
+            val appDir = destinationDir
+            val ops = injectedOps
+            doLast("copyJcefFrameworks") {
+                val frameworks = listOf("../Frameworks", "Contents/Frameworks")
+                    .map { File(jbrHome.get(), it).normalize() }
+                    .firstOrNull { File(it, "Chromium Embedded Framework.framework").isDirectory }
+                    ?: throw GradleException("No JCEF frameworks found in ${jbrHome.get()}: use a JBR with JCEF")
+                val app = appDir.get().asFile.listFiles { f -> f.name.endsWith(".app") }?.singleOrNull()
+                    ?: throw GradleException("No .app bundle found in ${appDir.get()}")
+                val target = File(app, "Contents/runtime/Contents/Frameworks")
+                ops.exec.exec { commandLine("ditto", frameworks.absolutePath, target.absolutePath) }
+                ops.exec.exec { commandLine("codesign", "--force", "--sign", "-", app.absolutePath) }
+            }
+        }
+}
+
+// On Windows the jcef module ships the CEF resources (paks, ICU data, helper, locales) in its bin section,
+// which jlink does not copy into the runtime image.
+if (hostOs.startsWith("Windows")) {
+    tasks.withType<AbstractJLinkTask>().configureEach {
+        val jbrBin = javaHome.map { File(it, "bin") }
+        val runtimeBin = destinationDir.map { it.dir("bin") }
+        val ops = injectedOps
+        doLast("copyJcefResources") {
+            ops.fs.copy {
+                from(jbrBin) {
+                    include("jcef_helper.exe", "icudtl.dat", "*.pak", "v8_context_snapshot.bin", "locales/**")
+                }
+                into(runtimeBin)
             }
         }
     }

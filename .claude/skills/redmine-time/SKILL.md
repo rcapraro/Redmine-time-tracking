@@ -71,7 +71,10 @@ Repository wrapper. Don't introduce these abstractions unless the user asks — 
   `KtorRedmineClient` rather than introducing `ContentNegotiation`.
 - Tests use JUnit 5 (`useJUnitPlatform()`), MockK, and `kotlinx-coroutines-test`. The `ktor-client-mock` engine is
   available for HTTP-level tests (see `KtorRedmineClientTest`).
-- Toolchain pinned to JDK 21 via `mise.toml` (`liberica-21.0.9+15`) and `jvmToolchain(21)` in `build.gradle.kts`.
+- Toolchain pinned to JetBrains Runtime 21 with JCEF via `mise.toml` (`jetbrains-jcef-21.0.11-b1163.125`, same build
+  in `.github/workflows/build.yml`) and `jvmToolchain(21)` in `build.gradle.kts`. JCEF (`org.cef.*`, `com.jetbrains.cef.*`)
+  only exists in that runtime; it powers the Lucca login window, and `build.gradle.kts` copies the CEF files the macOS
+  and Windows installers would otherwise miss. Linux is not handled yet: the DEB has no working Lucca login.
 
 ## Resource files
 
