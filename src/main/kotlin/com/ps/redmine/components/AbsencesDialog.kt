@@ -45,6 +45,9 @@ private sealed interface AbsencesState {
     data object Loading : AbsencesState
     data class SignedOut(val sessionExpired: Boolean) : AbsencesState
     data object SigningIn : AbsencesState
+
+    // The Lucca session is the signed-in user's own, so another user's absences cannot be read with it.
+    data object Impersonating : AbsencesState
     data class Loaded(val months: List<MonthAbsences>, val entries: List<TimeEntry>?) : AbsencesState
     data class Failed(val message: String) : AbsencesState
 }
@@ -74,7 +77,11 @@ fun AbsencesDialog(
     val dailyHours = remember { WorkHours.configuredDailyHours() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(month, reloadKey) {
+    LaunchedEffect(month, reloadKey, isImpersonating) {
+        if (isImpersonating) {
+            state = AbsencesState.Impersonating
+            return@LaunchedEffect
+        }
         state = AbsencesState.Loading
         state = loadAbsences(luccaClient, redmineClient, month)
     }
@@ -82,7 +89,7 @@ fun AbsencesDialog(
     val loaded = state as? AbsencesState.Loaded
     val canImport = loaded?.entries != null && !isImpersonating
     val plans = remember(loaded, targets, canImport) {
-        val comparable = if (canImport) loaded?.entries.orEmpty() else emptyList()
+        val comparable = if (canImport) loaded.entries.orEmpty() else emptyList()
         val entriesByMonth = comparable.groupBy { it.date.yearMonth }
         loaded?.months.orEmpty().map { m ->
             m.month to planAbsenceImport(m.days, entriesByMonth[m.month].orEmpty(), targets, dailyHours)
@@ -231,6 +238,17 @@ fun AbsencesDialog(
                             Button(onClick = { state = AbsencesState.SigningIn }) { Text(Strings["lucca_login"]) }
                         }
 
+                        AbsencesState.Impersonating -> CenteredState {
+                            Icon(
+                                Icons.Outlined.PersonOff,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(40.dp),
+                            )
+                            Text(Strings["absence_impersonating_title"], style = MaterialTheme.typography.titleMedium)
+                            StateText(Strings["absence_impersonating_message"])
+                        }
+
                         is AbsencesState.Failed -> Box(Modifier.padding(24.dp)) {
                             Banner(Icons.Outlined.ErrorOutline, current.message, Tone.Error)
                         }
@@ -246,18 +264,8 @@ fun AbsencesDialog(
                                 if (targetsSaveFailed) {
                                     Banner(Icons.Outlined.ErrorOutline, Strings["absence_targets_save_error"], Tone.Error)
                                 }
-                                when {
-                                    isImpersonating -> Banner(
-                                        Icons.Outlined.Info,
-                                        Strings["absence_import_impersonating"],
-                                        Tone.Neutral,
-                                    )
-
-                                    current.entries == null -> Banner(
-                                        Icons.Outlined.CloudOff,
-                                        Strings["absence_import_redmine_unavailable"],
-                                        Tone.Warning,
-                                    )
+                                if (current.entries == null) {
+                                    Banner(Icons.Outlined.CloudOff, Strings["absence_import_redmine_unavailable"], Tone.Warning)
                                 }
                                 val leaveTypes = current.months
                                     .flatMap { m -> m.days.flatMap { d -> d.slots.map { it.accountName } } }
