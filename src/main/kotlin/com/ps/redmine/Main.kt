@@ -621,7 +621,7 @@ fun App(
                 redmineClient = redmineClient,
                 month = currentMonth,
                 locale = currentLocale,
-                isImpersonating = impersonatedUser != null,
+                impersonatedUser = impersonatedUser,
                 onTimeEntriesChanged = { loadTimeEntries(currentMonth) },
                 onDismiss = { showAbsencesDialog = false },
             )

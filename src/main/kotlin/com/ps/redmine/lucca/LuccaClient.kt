@@ -14,7 +14,7 @@ const val LUCCA_BASE_URL = "https://packsolutions.ilucca.net"
 
 class LuccaSessionExpiredException : Exception("Lucca session expired")
 
-class LuccaApiException(statusCode: Int, responseBody: String) :
+class LuccaApiException(val statusCode: Int, responseBody: String) :
     Exception("Lucca API error: $statusCode - ${responseBody.take(200)}")
 
 class LuccaClient(
@@ -25,16 +25,36 @@ class LuccaClient(
     suspend fun currentUserId(cookies: List<LuccaCookie>): Int =
         get<LuccaDataResponse<LuccaUserDto>>(cookies, "/api/v3/users/me", mapOf("fields" to "id")).data.id
 
-    suspend fun leaves(session: LuccaSession, from: LocalDate, to: LocalDate): List<LuccaLeave> {
+    /** The people the signed-in user sees by default in the Lucca planning, whose absences that user can read. */
+    suspend fun planningPeople(cookies: List<LuccaCookie>): List<LuccaPerson> {
+        val people = mutableListOf<LuccaPerson>()
+        var page = 1
+        while (true) {
+            val params = mapOf(
+                "page" to page.toString(),
+                "limit" to PLANNING_PAGE_SIZE.toString(),
+                "fields.root" to "count",
+                "population.relativeUsers" to "0",
+            )
+            val response = get<LuccaPlanningUsersDto>(cookies, "/timmi-absences/api/planning/v1.0/users", params)
+            people += response.items.map { LuccaPerson(it.id, it.firstName, it.lastName) }
+            val complete = response.count?.let { people.size >= it } ?: false
+            if (response.items.size < PLANNING_PAGE_SIZE || complete) return people
+            page++
+        }
+    }
+
+    suspend fun leaves(cookies: List<LuccaCookie>, ownerId: Int, from: LocalDate, to: LocalDate): List<LuccaLeave> {
         val params = mapOf(
-            "leavePeriod.ownerId" to session.userId.toString(),
+            "leavePeriod.ownerId" to ownerId.toString(),
             "date" to "between,$from,$to",
             "paging" to "0,1000",
-            "fields" to "id,date,isAM,isActive,leaveAccount[id,name],leavePeriod[id,isConfirmed]",
+            "fields" to "id,date,isAM,isActive,isRealLeave,leaveAccount[id,name],leavePeriod[id,isConfirmed]",
         )
-        return get<LuccaDataResponse<LuccaItems<LuccaLeaveDto>>>(session.cookies, "/api/v3/leaves", params)
+        return get<LuccaDataResponse<LuccaItems<LuccaLeaveDto>>>(cookies, "/api/v3/leaves", params)
             .data.items
-            .filter { it.isActive }
+            // Remote work is booked in Lucca like a leave, but it is a working day.
+            .filter { it.isActive && it.isRealLeave }
             .map { dto ->
                 LuccaLeave(
                     // Lucca may return a date-time ("2026-11-03T00:00:00") where the docs promise a date.
@@ -70,6 +90,7 @@ class LuccaClient(
     override fun close() = httpClient.close()
 
     companion object {
+        private const val PLANNING_PAGE_SIZE = 500
         private val json = Json { ignoreUnknownKeys = true }
 
         private fun createHttpClient() = HttpClient(CIO) {

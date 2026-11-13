@@ -1,77 +1,65 @@
-# Test : lire les absences Lucca d'un autre utilisateur
+# Test : absences Lucca d'un utilisateur impersonné
 
-But : savoir si l'app peut importer les absences de l'utilisateur Redmine impersonné, avec la session Lucca de la
-personne connectée (admin ou manager). Le test est **en lecture seule** : il n'écrit rien, ni dans Lucca, ni dans
-Redmine.
+Quand un admin Redmine agit pour un autre utilisateur, la fenêtre Absences doit afficher les absences Lucca **de
+cette personne**, lues avec la session Lucca de l'admin. Ce document explique comment le vérifier dans l'app, puis
+comment diagnostiquer dans le navigateur si un cas ne marche pas. Tout est **en lecture seule**, sauf l'import
+lui-même.
 
-L'app identifie aujourd'hui l'utilisateur avec `/api/v3/users/me`. Elle lit ensuite ses absences avec
-`/api/v3/leaves?leavePeriod.ownerId=<son id>`. La question est de savoir si on peut remplacer cet id par celui d'un
-collègue.
+## Comment l'app procède
 
-## Avant de commencer
+1. Elle lit les personnes de ton planning Lucca, c'est-à-dire celles que tu vois par défaut sur la page Planning :
+   `/timmi-absences/api/planning/v1.0/users?population.relativeUsers=0`.
+2. Elle y cherche l'utilisateur Redmine impersonné :
+   - d'abord par prénom et nom, sans tenir compte de la casse, des accents, des espaces ni des tirets ;
+   - sinon avec la règle des e-mails Pack Solutions appliquée au login Redmine : initiale du prénom + nom
+     (`jdupont`).
 
-- Être connecté à Lucca dans le navigateur : https://packsolutions.ilucca.net. Les URL ci-dessous réutilisent cette
-  session.
-- Choisir **2 ou 3 collègues**, si possible dans des équipes différentes : les droits Lucca dépendent souvent de
-  l'équipe ou de l'établissement.
-- Pour chacun, connaître **au moins une absence** sur novembre ou décembre 2026. Sans ça, une réponse vide ne permet
-  pas de distinguer « aucune absence » de « pas le droit de voir ».
-- Firefox affiche le JSON de façon lisible. Dans Chrome, cocher « Impression élégante ».
+   En cas d'homonymes, l'app ne choisit pas au hasard : elle ne retient personne.
+3. Elle lit les absences de la personne trouvée : `/api/v3/leaves?leavePeriod.ownerId=<id>`. Les jours de télétravail
+   (`isRealLeave: false`) sont écartés.
 
-## Étape 1 — Ton propre identifiant Lucca (contrôle)
+## Test dans l'app
 
-```
-https://packsolutions.ilucca.net/api/v3/users/me?fields=id,firstName,lastName,mail
-```
+Prendre 2 ou 3 collègues, si possible dans des équipes différentes, dont tu connais au moins une absence en novembre
+ou décembre 2026.
 
-Attendu : ton `id`. C'est l'appel que fait l'app. S'il échoue, la session du navigateur n'est pas valide : se
-reconnecter.
+1. Impersonner le collègue, puis ouvrir Absences.
+2. Le bandeau doit indiquer « Absences Lucca de <Prénom Nom> », et ses absences connues doivent apparaître.
+3. Les jours de télétravail ne doivent pas apparaître.
+4. Pour un collègue **hors de ton planning**, la fenêtre doit afficher « <Prénom Nom> n'apparaît pas dans votre
+   planning Lucca… ».
+5. Optionnel : importer une absence, puis vérifier qu'elle apparaît dans **son** Redmine et pas dans le tien.
 
-## Étape 2 — Trouver le collègue dans Lucca
+## Si ça ne marche pas : diagnostic dans le navigateur
 
-L'app partirait de l'e-mail Redmine de l'utilisateur impersonné. Essayer dans l'ordre, et s'arrêter au premier qui
-renvoie la bonne personne :
+Se connecter à https://packsolutions.ilucca.net, puis ouvrir ces adresses. Firefox affiche le JSON de façon lisible.
 
-```
-https://packsolutions.ilucca.net/api/v3/users?mail=<email>&fields=id,firstName,lastName,mail
-https://packsolutions.ilucca.net/api/v3/users?lastName=<Nom>&fields=id,firstName,lastName,mail
-https://packsolutions.ilucca.net/api/v3/users?name=like,<nom>&fields=id,firstName,lastName,mail
-```
-
-Noter :
-- quelle variante fonctionne ;
-- le code HTTP ;
-- si `mail` dans Lucca est **exactement** l'e-mail du compte Redmine. Côté Redmine : Administration > Utilisateurs,
-  puis la fiche de la personne.
-
-## Étape 3 — Lire ses absences (la requête de l'app)
-
-Remplacer `<id>` par l'id trouvé à l'étape 2 :
+**A. Qui est dans ton planning ?**
 
 ```
-https://packsolutions.ilucca.net/api/v3/leaves?leavePeriod.ownerId=<id>&date=between,2026-11-01,2026-12-31&paging=0,1000&fields=id,date,isAM,isActive,leaveAccount[id,name],leavePeriod[id,isConfirmed]
+https://packsolutions.ilucca.net/timmi-absences/api/planning/v1.0/users?page=1&limit=500&fields.root=count&population.relativeUsers=0
 ```
 
-Faire aussi l'appel avec **ton propre id** (étape 1), pour comparer avec ce que l'app affiche aujourd'hui.
+Chercher le collègue, puis noter son `id`, son `firstName` et son `lastName` tels qu'écrits dans Lucca. Les comparer
+au prénom, au nom et au login de sa fiche Redmine : Administration > Utilisateurs.
 
-## Comment lire le résultat
+**B. Ses absences**
 
-| Réponse à l'étape 3                                         | Conclusion                                                                  |
-|-------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 200, et les absences connues du collègue sont là            | Faisable avec tes droits actuels                                            |
-| 200, liste vide alors que le collègue a des absences        | Lucca filtre selon tes droits sans erreur : pas faisable pour ce collègue  |
-| 401 ou 403                                                  | Pas le droit de lire ses absences                                           |
-| Redirection vers la page de connexion                       | Session expirée : se reconnecter et recommencer                             |
-| Tout fonctionne pour un collègue mais pas pour un autre     | Droits par équipe ou par établissement : à prévoir dans l'app               |
+```
+https://packsolutions.ilucca.net/api/v3/leaves?leavePeriod.ownerId=<id>&date=between,2026-11-01,2026-12-31&paging=0,1000&fields=id,date,isAM,isActive,isRealLeave,leaveAccount[id,name],leavePeriod[id,isConfirmed]
+```
 
-## À me renvoyer
+| Ce qu'on observe                                                    | Cause probable                                                                  |
+|---------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| Le collègue n'est pas dans la liste A                               | Hors de ton planning Lucca : l'app ne peut pas le voir                          |
+| Il est dans A, mais l'app dit qu'il n'apparaît pas                  | Nom et login différents des deux côtés : noter les deux écritures et me les envoyer |
+| B renvoie 403                                                       | Lucca refuse l'accès : l'app affiche « Lucca ne vous autorise pas… »            |
+| B renvoie une liste vide alors qu'il a des absences                 | Droits Lucca filtrés sans erreur : à me signaler                                |
+| B contient ses absences mais l'app ne les montre pas                | Bug de l'app : à me signaler                                                    |
 
-Pas besoin de noms ni de dates : juste, pour chaque collègue testé :
+## À me renvoyer en cas de problème
 
-1. la variante de l'étape 2 qui a fonctionné, et si l'e-mail Lucca = l'e-mail Redmine ;
-2. le code HTTP et le **nombre** d'absences renvoyées à l'étape 3 ;
-3. si ce nombre correspond à ce que tu sais de ses absences ;
-4. ton rôle dans Lucca (manager, RH, admin…), si tu le connais.
-
-Avec ça, on saura si l'import pour un autre utilisateur est possible, et pour qui. On saura aussi comment retrouver
-la personne dans Lucca : par e-mail ou par nom.
+Pas besoin des dates d'absence. Pour chaque cas qui coince :
+- la ligne du tableau qui correspond ;
+- l'écriture du prénom, du nom et du login côté Redmine, et du prénom et du nom côté Lucca, si la correspondance est
+  en cause.

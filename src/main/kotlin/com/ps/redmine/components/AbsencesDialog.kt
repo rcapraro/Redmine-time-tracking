@@ -23,12 +23,14 @@ import androidx.compose.ui.window.DialogProperties
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.lucca.*
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.User
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.atDay
 import com.ps.redmine.util.lengthOfMonth
 import com.ps.redmine.util.monthValue
 import com.ps.redmine.util.plusMonths
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -45,10 +47,14 @@ private sealed interface AbsencesState {
     data object Loading : AbsencesState
     data class SignedOut(val sessionExpired: Boolean) : AbsencesState
     data object SigningIn : AbsencesState
+    data class Hidden(val message: String) : AbsencesState
 
-    // The Lucca session is the signed-in user's own, so another user's absences cannot be read with it.
-    data object Impersonating : AbsencesState
-    data class Loaded(val months: List<MonthAbsences>, val entries: List<TimeEntry>?) : AbsencesState
+    // ownerName is set when the absences belong to the impersonated user rather than to the signed-in one.
+    data class Loaded(
+        val months: List<MonthAbsences>,
+        val entries: List<TimeEntry>?,
+        val ownerName: String? = null,
+    ) : AbsencesState
     data class Failed(val message: String) : AbsencesState
 }
 
@@ -62,7 +68,7 @@ fun AbsencesDialog(
     redmineClient: RedmineClientInterface,
     month: YearMonth,
     locale: Locale,
-    isImpersonating: Boolean,
+    impersonatedUser: User?,
     onTimeEntriesChanged: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -77,17 +83,13 @@ fun AbsencesDialog(
     val dailyHours = remember { WorkHours.configuredDailyHours() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(month, reloadKey, isImpersonating) {
-        if (isImpersonating) {
-            state = AbsencesState.Impersonating
-            return@LaunchedEffect
-        }
+    LaunchedEffect(month, reloadKey, impersonatedUser) {
         state = AbsencesState.Loading
-        state = loadAbsences(luccaClient, redmineClient, month)
+        state = loadAbsences(luccaClient, redmineClient, month, impersonatedUser)
     }
 
     val loaded = state as? AbsencesState.Loaded
-    val canImport = loaded?.entries != null && !isImpersonating
+    val canImport = loaded?.entries != null
     val plans = remember(loaded, targets, canImport) {
         val comparable = if (canImport) loaded.entries.orEmpty() else emptyList()
         val entriesByMonth = comparable.groupBy { it.date.yearMonth }
@@ -238,15 +240,15 @@ fun AbsencesDialog(
                             Button(onClick = { state = AbsencesState.SigningIn }) { Text(Strings["lucca_login"]) }
                         }
 
-                        AbsencesState.Impersonating -> CenteredState {
+                        is AbsencesState.Hidden -> CenteredState {
                             Icon(
                                 Icons.Outlined.PersonOff,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(40.dp),
                             )
-                            Text(Strings["absence_impersonating_title"], style = MaterialTheme.typography.titleMedium)
-                            StateText(Strings["absence_impersonating_message"])
+                            Text(Strings["absence_hidden_title"], style = MaterialTheme.typography.titleMedium)
+                            StateText(current.message)
                         }
 
                         is AbsencesState.Failed -> Box(Modifier.padding(24.dp)) {
@@ -260,6 +262,9 @@ fun AbsencesDialog(
                                     .padding(horizontal = 24.dp, vertical = 20.dp),
                                 verticalArrangement = Arrangement.spacedBy(20.dp),
                             ) {
+                                current.ownerName?.let { name ->
+                                    Banner(Icons.Outlined.SupervisorAccount, Strings["absence_for_user"].format(name), Tone.Neutral)
+                                }
                                 outcome?.let { OutcomeBanner(it) }
                                 if (targetsSaveFailed) {
                                     Banner(Icons.Outlined.ErrorOutline, Strings["absence_targets_save_error"], Tone.Error)
@@ -404,26 +409,40 @@ private suspend fun loadAbsences(
     luccaClient: LuccaClient,
     redmineClient: RedmineClientInterface,
     month: YearMonth,
+    impersonatedUser: User?,
 ): AbsencesState = try {
     val session = withContext(Dispatchers.IO) { LuccaSessionStore.load() }
-    if (session == null) {
-        AbsencesState.SignedOut(sessionExpired = false)
-    } else {
-        val months = listOf(month, month.plusMonths(1))
-        coroutineScope {
+    val ownerId = when {
+        session == null -> null
+        impersonatedUser == null -> session.userId
+        else -> findLuccaPerson(impersonatedUser, luccaClient.planningPeople(session.cookies))?.id
+    }
+    when {
+        session == null -> AbsencesState.SignedOut(sessionExpired = false)
+        ownerId == null -> AbsencesState.Hidden(Strings["absence_not_in_planning"].format(impersonatedUser?.displayName))
+        else -> coroutineScope {
+            val months = listOf(month, month.plusMonths(1))
             val entries = async { redmineEntries(redmineClient, months) }
-            val leaves = luccaClient.leaves(session, months.first().atDay(1), months.last().let { it.atDay(it.lengthOfMonth()) })
-            val days = groupAbsencesByDay(leaves)
+            val from = months.first().atDay(1)
+            val to = months.last().let { it.atDay(it.lengthOfMonth()) }
+            val days = groupAbsencesByDay(luccaClient.leaves(session.cookies, ownerId, from, to))
             AbsencesState.Loaded(
                 months = months.map { m ->
                     MonthAbsences(m, days.filter { it.date.yearMonth == m })
                 },
                 entries = entries.await(),
+                ownerName = impersonatedUser?.displayName,
             )
         }
     }
 } catch (e: CancellationException) {
     throw e
+} catch (e: LuccaApiException) {
+    if (impersonatedUser != null && e.statusCode == HttpStatusCode.Forbidden.value) {
+        AbsencesState.Hidden(Strings["absence_not_allowed"].format(impersonatedUser.displayName))
+    } else {
+        AbsencesState.Failed("${Strings["lucca_error"]}\n${e.message.orEmpty()}")
+    }
 } catch (_: LuccaSessionExpiredException) {
     clearSession()
     AbsencesState.SignedOut(sessionExpired = true)

@@ -16,6 +16,8 @@ data class LuccaLeave(
     val isConfirmed: Boolean,
 )
 
+data class LuccaPerson(val id: Int, val firstName: String, val lastName: String)
+
 enum class AbsencePeriod { FULL_DAY, MORNING, AFTERNOON }
 
 data class AbsenceSlot(val accountName: String, val period: AbsencePeriod, val isConfirmed: Boolean)
@@ -50,6 +52,12 @@ internal data class LuccaItems<T>(val items: List<T>)
 internal data class LuccaUserDto(val id: Int)
 
 @Serializable
+internal data class LuccaPlanningUsersDto(val items: List<LuccaPlanningUserDto>, val count: Int? = null)
+
+@Serializable
+internal data class LuccaPlanningUserDto(val id: Int, val firstName: String = "", val lastName: String = "")
+
+@Serializable
 internal data class LuccaNamedDto(val id: Int, val name: String)
 
 @Serializable
@@ -61,6 +69,7 @@ internal data class LuccaLeaveDto(
     val date: String,
     val isAM: Boolean,
     val isActive: Boolean = true,
+    val isRealLeave: Boolean = true,
     val leaveAccount: LuccaNamedDto? = null,
     val leavePeriod: LuccaLeavePeriodDto? = null,
 )
