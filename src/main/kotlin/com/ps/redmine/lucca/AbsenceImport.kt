@@ -104,8 +104,9 @@ fun planAbsenceImport(
     entries: List<TimeEntry>,
     targets: Map<String, AbsenceTarget>,
     dailyHours: Float = FULL_DAY_HOURS,
+    unreadTypes: Set<String> = emptySet(),
 ): List<AbsenceImportItem> {
-    val absenceIssues = AbsenceIssues(targets)
+    val absenceIssues = AbsenceIssues(targets, unreadTypes)
     val slotsByDate = days.associate { it.date to it.slots }
     val dates = (slotsByDate.keys + entries.filter { absenceIssues.importedTarget(it) != null }.map { it.date }).sorted()
     return dates.flatMap { date ->
@@ -113,7 +114,7 @@ fun planAbsenceImport(
     }
 }
 
-private class AbsenceIssues(private val targets: Map<String, AbsenceTarget>) {
+private class AbsenceIssues(private val targets: Map<String, AbsenceTarget>, private val unreadTypes: Set<String>) {
     private val activitiesByIssue = targets.values.distinctBy { it.issueId to it.activityId }
         .groupBy({ it.issueId }, { it.activityId })
 
@@ -126,10 +127,11 @@ private class AbsenceIssues(private val targets: Map<String, AbsenceTarget>) {
     fun hasUnmappedActivity(entry: TimeEntry) =
         activitiesByIssue[entry.issue.id].let { it != null && it.size > 1 && entry.activity.id !in it }
 
-    // Only an entry this import created can stand for a Lucca absence: a public holiday or hours logged by hand on
-    // the same issue have no Lucca counterpart and must never be offered for deletion.
+    // Only an entry this import created can stand for a Lucca absence: hours logged by hand on the same issue have no
+    // Lucca counterpart, and a type Lucca could not be read for proves nothing, so neither is offered for deletion.
     fun importedTarget(entry: TimeEntry): AbsenceTarget? = targets.entries.firstOrNull { (type, target) ->
-        target.issueId == entry.issue.id && entry.comments.orEmpty().startsWith(type + ABSENCE_COMMENT_SEPARATOR)
+        type !in unreadTypes && target.issueId == entry.issue.id &&
+                entry.comments.orEmpty().startsWith(type + ABSENCE_COMMENT_SEPARATOR)
     }?.value
 }
 

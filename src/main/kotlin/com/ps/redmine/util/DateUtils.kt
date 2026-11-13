@@ -15,6 +15,8 @@ fun nowLocalDateTime(): LocalDateTime {
 
 private val WEEKEND_ISO_DAYS: Set<Int> = setOf(6, 7) // Saturday=6, Sunday=7
 
+fun LocalDate.isWeekend(): Boolean = dayOfWeek.isoDayNumber in WEEKEND_ISO_DAYS
+
 private fun lastDayOfMonth(year: Int, month: Int): LocalDate {
     val firstOfNext = if (month == 12) LocalDate(year + 1, 1, 1) else LocalDate(year, month + 1, 1)
     return firstOfNext.minus(1, DateTimeUnit.DAY)

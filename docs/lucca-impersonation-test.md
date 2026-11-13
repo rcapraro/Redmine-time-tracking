@@ -1,4 +1,4 @@
-# Test : absences Lucca d'un utilisateur impersonné
+# Test : absences Lucca, jours fériés et impersonation
 
 Quand un admin Redmine agit pour un autre utilisateur, la fenêtre Absences doit afficher les absences Lucca **de
 cette personne**, lues avec la session Lucca de l'admin. Ce document explique comment le vérifier dans l'app, puis
@@ -17,6 +17,9 @@ lui-même.
    En cas d'homonymes, l'app ne choisit pas au hasard : elle ne retient personne.
 3. Elle lit les absences de la personne trouvée : `/api/v3/leaves?leavePeriod.ownerId=<id>`. Les jours de télétravail
    (`isRealLeave: false`) sont écartés.
+4. Elle lit ses jours fériés : `/timmi-absences/api/planning/v1.0/userDates`. Elle ne garde que les jours non
+   travaillés qui portent un nom (« Armistice ») et qui tombent en semaine. Ils apparaissent sous le type « Jour
+   férié », à associer à un ticket comme les autres types.
 
 ## Test dans l'app
 
@@ -26,9 +29,11 @@ ou décembre 2026.
 1. Impersonner le collègue, puis ouvrir Absences.
 2. Le bandeau doit indiquer « Absences Lucca de <Prénom Nom> », et ses absences connues doivent apparaître.
 3. Les jours de télétravail ne doivent pas apparaître.
-4. Pour un collègue **hors de ton planning**, la fenêtre doit afficher « <Prénom Nom> n'apparaît pas dans votre
+4. Les jours fériés de la période doivent apparaître sous le type « Jour férié », mais pas ceux qui tombent un
+   week-end.
+5. Pour un collègue **hors de ton planning**, la fenêtre doit afficher « <Prénom Nom> n'apparaît pas dans votre
    planning Lucca… ».
-5. Optionnel : importer une absence, puis vérifier qu'elle apparaît dans **son** Redmine et pas dans le tien.
+6. Optionnel : importer une absence, puis vérifier qu'elle apparaît dans **son** Redmine et pas dans le tien.
 
 ## Si ça ne marche pas : diagnostic dans le navigateur
 
@@ -48,6 +53,15 @@ au prénom, au nom et au login de sa fiche Redmine : Administration > Utilisateu
 ```
 https://packsolutions.ilucca.net/api/v3/leaves?leavePeriod.ownerId=<id>&date=between,2026-11-01,2026-12-31&paging=0,1000&fields=id,date,isAM,isActive,isRealLeave,leaveAccount[id,name],leavePeriod[id,isConfirmed]
 ```
+
+**C. Ses jours fériés**
+
+```
+https://packsolutions.ilucca.net/timmi-absences/api/planning/v1.0/userDates?owner.id=<id>&start=2026-11-01&end=2026-12-31&amOrPmIsOff=true
+```
+
+Les jours fériés doivent avoir un `name`. Si l'app affiche « Impossible de lire les jours fériés dans Lucca », noter
+le code HTTP de cette adresse.
 
 | Ce qu'on observe                                                    | Cause probable                                                                  |
 |---------------------------------------------------------------------|---------------------------------------------------------------------------------|

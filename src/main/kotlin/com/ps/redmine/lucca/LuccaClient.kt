@@ -1,5 +1,6 @@
 package com.ps.redmine.lucca
 
+import com.ps.redmine.util.isWeekend
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -63,6 +64,27 @@ class LuccaClient(
                     accountName = dto.leaveAccount?.name.orEmpty(),
                     // An unknown approval status is treated as pending, so the leave is never imported by default.
                     isConfirmed = dto.leavePeriod?.isConfirmed ?: false,
+                )
+            }
+    }
+
+    /** Public holidays of [ownerId] falling on weekdays, as half-day leaves of [PUBLIC_HOLIDAY_ACCOUNT]. */
+    suspend fun publicHolidays(cookies: List<LuccaCookie>, ownerId: Int, from: LocalDate, to: LocalDate): List<LuccaLeave> {
+        val params = mapOf(
+            "owner.id" to ownerId.toString(),
+            "start" to from.toString(),
+            "end" to to.toString(),
+            "amOrPmIsOff" to "true",
+        )
+        return get<List<LuccaUserDateDto>>(cookies, "/timmi-absences/api/planning/v1.0/userDates", params)
+            // Weekends and part-time days are off too, but only a public holiday has a name.
+            .filter { !it.name.isNullOrBlank() }
+            .map { it to LocalDate.parse(it.date.take(10)) }
+            .filterNot { (_, date) -> date.isWeekend() }
+            .flatMap { (dto, date) ->
+                listOfNotNull(
+                    LuccaLeave(date, isAM = true, PUBLIC_HOLIDAY_ACCOUNT, isConfirmed = true).takeIf { dto.am.isOff },
+                    LuccaLeave(date, isAM = false, PUBLIC_HOLIDAY_ACCOUNT, isConfirmed = true).takeIf { dto.pm.isOff },
                 )
             }
     }

@@ -121,6 +121,54 @@ class LuccaClientTest {
     }
 
     @Test
+    fun `public holidays on weekdays become confirmed half-day leaves`() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val api = client { request ->
+            requests += request
+            respond(
+                """
+                [
+                  {"date":"2026-11-01T00:00:00","name":"Toussaint","ownerId":77,"am":{"isOff":true},"pm":{"isOff":true}},
+                  {"date":"2026-11-11T00:00:00","name":"Armistice","ownerId":77,"am":{"isOff":true},"pm":{"isOff":true}},
+                  {"date":"2026-11-18T00:00:00","name":null,"ownerId":77,"am":{"isOff":false},"pm":{"isOff":true}}
+                ]
+                """.trimIndent(),
+                headers = jsonHeaders,
+            )
+        }
+
+        val holidays = api.publicHolidays(cookies, 77, LocalDate(2026, 11, 1), LocalDate(2026, 11, 30))
+
+        val armistice = LocalDate(2026, 11, 11)
+        assertEquals(
+            listOf(
+                LuccaLeave(armistice, isAM = true, PUBLIC_HOLIDAY_ACCOUNT, isConfirmed = true),
+                LuccaLeave(armistice, isAM = false, PUBLIC_HOLIDAY_ACCOUNT, isConfirmed = true),
+            ),
+            holidays,
+        )
+        val url = requests.single().url
+        assertEquals("/timmi-absences/api/planning/v1.0/userDates", url.encodedPath)
+        assertEquals("77", url.parameters["owner.id"])
+        assertEquals("2026-11-01", url.parameters["start"])
+        assertEquals("2026-11-30", url.parameters["end"])
+    }
+
+    @Test
+    fun `a public holiday on a half day only gives that half`() = runTest {
+        val api = client {
+            respond(
+                """[{"date":"2026-12-24T00:00:00","name":"Veille de Noël","ownerId":77,"am":{"isOff":false},"pm":{"isOff":true}}]""",
+                headers = jsonHeaders,
+            )
+        }
+
+        val holidays = api.publicHolidays(cookies, 77, LocalDate(2026, 12, 1), LocalDate(2026, 12, 31))
+
+        assertEquals(listOf(LuccaLeave(LocalDate(2026, 12, 24), isAM = false, PUBLIC_HOLIDAY_ACCOUNT, true)), holidays)
+    }
+
+    @Test
     fun `leave without an approval status is treated as pending`() = runTest {
         val api = client {
             respond(

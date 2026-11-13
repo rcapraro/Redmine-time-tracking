@@ -247,6 +247,22 @@ class AbsenceImportTest {
     }
 
     @Test
+    fun `an imported entry of a type Lucca could not be read for is not taken as cancelled`() {
+        val holidayTarget = AbsenceTarget(1, "Interne", 103, "Jours fériés", 9, "Absence")
+        val holiday = imported(PUBLIC_HOLIDAY_ACCOUNT, 103, 7.5f)
+        val withHolidays = targets + (PUBLIC_HOLIDAY_ACCOUNT to holidayTarget)
+
+        assertEquals(
+            emptyList<AbsenceImportItem>(),
+            planAbsenceImport(emptyList(), listOf(holiday), withHolidays, unreadTypes = setOf(PUBLIC_HOLIDAY_ACCOUNT)),
+        )
+        assertEquals(
+            AbsenceImportStatus.Cancelled(holiday),
+            planAbsenceImport(emptyList(), listOf(holiday), withHolidays).single().status,
+        )
+    }
+
+    @Test
     fun `an entry on an absence issue that the import did not create is never offered for deletion`() {
         val publicHoliday = entry(100, 7.5f, comments = "Jour férié")
 

@@ -18,6 +18,9 @@ data class LuccaLeave(
 
 data class LuccaPerson(val id: Int, val firstName: String, val lastName: String)
 
+/** Leave type public holidays are listed and imported under, next to the Lucca leave accounts. */
+const val PUBLIC_HOLIDAY_ACCOUNT = "Jour férié"
+
 enum class AbsencePeriod { FULL_DAY, MORNING, AFTERNOON }
 
 data class AbsenceSlot(val accountName: String, val period: AbsencePeriod, val isConfirmed: Boolean)
@@ -50,6 +53,17 @@ internal data class LuccaItems<T>(val items: List<T>)
 
 @Serializable
 internal data class LuccaUserDto(val id: Int)
+
+@Serializable
+internal data class LuccaHalfDayDto(val isOff: Boolean = false)
+
+@Serializable
+internal data class LuccaUserDateDto(
+    val date: String,
+    val name: String? = null,
+    val am: LuccaHalfDayDto = LuccaHalfDayDto(),
+    val pm: LuccaHalfDayDto = LuccaHalfDayDto(),
+)
 
 @Serializable
 internal data class LuccaPlanningUsersDto(val items: List<LuccaPlanningUserDto>, val count: Int? = null)

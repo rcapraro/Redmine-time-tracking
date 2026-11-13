@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ps.redmine.api.RedmineClientInterface
+import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.lucca.*
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.model.User
@@ -39,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
+import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.yearMonth
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
@@ -54,6 +56,7 @@ private sealed interface AbsencesState {
         val months: List<MonthAbsences>,
         val entries: List<TimeEntry>?,
         val ownerName: String? = null,
+        val holidaysUnavailable: Boolean = false,
     ) : AbsencesState
     data class Failed(val message: String) : AbsencesState
 }
@@ -81,11 +84,12 @@ fun AbsencesDialog(
     var outcome by remember { mutableStateOf<ImportOutcome?>(null) }
     var targetsSaveFailed by remember { mutableStateOf(false) }
     val dailyHours = remember { WorkHours.configuredDailyHours() }
+    val nonWorkingIsoDays = remember { ConfigurationManager.loadConfig().nonWorkingIsoDays }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(month, reloadKey, impersonatedUser) {
         state = AbsencesState.Loading
-        state = loadAbsences(luccaClient, redmineClient, month, impersonatedUser)
+        state = loadAbsences(luccaClient, redmineClient, month, impersonatedUser, nonWorkingIsoDays)
     }
 
     val loaded = state as? AbsencesState.Loaded
@@ -93,8 +97,9 @@ fun AbsencesDialog(
     val plans = remember(loaded, targets, canImport) {
         val comparable = if (canImport) loaded.entries.orEmpty() else emptyList()
         val entriesByMonth = comparable.groupBy { it.date.yearMonth }
+        val unreadTypes = if (loaded?.holidaysUnavailable == true) setOf(PUBLIC_HOLIDAY_ACCOUNT) else emptySet()
         loaded?.months.orEmpty().map { m ->
-            m.month to planAbsenceImport(m.days, entriesByMonth[m.month].orEmpty(), targets, dailyHours)
+            m.month to planAbsenceImport(m.days, entriesByMonth[m.month].orEmpty(), targets, dailyHours, unreadTypes)
         }
     }
     val allItems = plans.flatMap { it.second }
@@ -269,6 +274,9 @@ fun AbsencesDialog(
                                 if (targetsSaveFailed) {
                                     Banner(Icons.Outlined.ErrorOutline, Strings["absence_targets_save_error"], Tone.Error)
                                 }
+                                if (current.holidaysUnavailable) {
+                                    Banner(Icons.Outlined.EventBusy, Strings["absence_holidays_unavailable"], Tone.Warning)
+                                }
                                 if (current.entries == null) {
                                     Banner(Icons.Outlined.CloudOff, Strings["absence_import_redmine_unavailable"], Tone.Warning)
                                 }
@@ -410,6 +418,7 @@ private suspend fun loadAbsences(
     redmineClient: RedmineClientInterface,
     month: YearMonth,
     impersonatedUser: User?,
+    nonWorkingIsoDays: Set<Int>,
 ): AbsencesState = try {
     val session = withContext(Dispatchers.IO) { LuccaSessionStore.load() }
     val ownerId = when {
@@ -425,13 +434,20 @@ private suspend fun loadAbsences(
             val entries = async { redmineEntries(redmineClient, months) }
             val from = months.first().atDay(1)
             val to = months.last().let { it.atDay(it.lengthOfMonth()) }
-            val days = groupAbsencesByDay(luccaClient.leaves(session.cookies, ownerId, from, to))
+            val holidays = async { publicHolidaysOrNull(luccaClient, session.cookies, ownerId, from, to) }
+            val leaves = luccaClient.leaves(session.cookies, ownerId, from, to)
+            // The app's non-working days are the signed-in user's own; a colleague's part-time days are unknown here.
+            val holidayLeaves = holidays.await()?.filter {
+                impersonatedUser != null || it.date.dayOfWeek.isoDayNumber !in nonWorkingIsoDays
+            }
+            val days = groupAbsencesByDay(leaves + holidayLeaves.orEmpty())
             AbsencesState.Loaded(
                 months = months.map { m ->
                     MonthAbsences(m, days.filter { it.date.yearMonth == m })
                 },
                 entries = entries.await(),
                 ownerName = impersonatedUser?.displayName,
+                holidaysUnavailable = holidayLeaves == null,
             )
         }
     }
@@ -450,6 +466,22 @@ private suspend fun loadAbsences(
     AbsencesState.Failed("${Strings["lucca_keychain_error"]}\n${e.message.orEmpty()}")
 } catch (e: Exception) {
     AbsencesState.Failed("${Strings["lucca_error"]}\n${e.message.orEmpty()}")
+}
+
+// Null when Lucca does not answer this planning route, even with a redirect: the leaves alone are still worth showing,
+// and an expired session shows up on their own call.
+private suspend fun publicHolidaysOrNull(
+    luccaClient: LuccaClient,
+    cookies: List<LuccaCookie>,
+    ownerId: Int,
+    from: LocalDate,
+    to: LocalDate,
+): List<LuccaLeave>? = try {
+    luccaClient.publicHolidays(cookies, ownerId, from, to)
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    null
 }
 
 // Null when Redmine cannot be reached.
