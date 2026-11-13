@@ -993,6 +993,8 @@ fun App(
                                 isGlobalLoading = isGlobalLoading,
                                 focusRequestKey = focusRequestKey,
                                 initialDate = selectedDate,
+                                loggedEntries = timeEntries,
+                                dailyHours = dailyHours,
                                 onError = { notifier.error(it) }
                             )
                         }
@@ -1103,6 +1105,8 @@ fun TimeEntryDetail(
     isGlobalLoading: Boolean = false,
     focusRequestKey: Int = 0,
     initialDate: kotlinx.datetime.LocalDate,
+    loggedEntries: List<TimeEntry> = emptyList(),
+    dailyHours: Float = WorkHours.DAILY_STANDARD_HOURS,
     onError: (String) -> Unit = {}
 ) {
     // initialDate is deliberately NOT a remember key: it is recomputed by every background
@@ -1452,8 +1456,7 @@ fun TimeEntryDetail(
                             if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
                                 val normalized = input.replace(',', '.')
                                 val floatValue = normalized.toFloatOrNull()
-                                val maxHours = WorkHours.configuredDailyHours()
-                                if (floatValue == null || floatValue <= maxHours) {
+                                if (floatValue == null || floatValue <= dailyHours) {
                                     hours = input
                                 }
                             }
@@ -1462,7 +1465,7 @@ fun TimeEntryDetail(
                         label = { Text(Strings["hours_label"]) },
                         isError = hours.isNotEmpty() && run {
                             val normalized = hours.replace(',', '.')
-                            (normalized.toFloatOrNull() == null || normalized.toFloat() <= 0f || normalized.toFloat() > WorkHours.configuredDailyHours())
+                            (normalized.toFloatOrNull() == null || normalized.toFloat() <= 0f || normalized.toFloat() > dailyHours)
                         },
                         singleLine = true,
                         enabled = !isLoading && !isGlobalLoading,
@@ -1482,7 +1485,7 @@ fun TimeEntryDetail(
                     )
 
                     TextButton(
-                        onClick = { hours = Strings["total_hours_format"].format(WorkHours.configuredDailyHours()) },
+                        onClick = { hours = Strings["total_hours_format"].format(dailyHours) },
                         enabled = !isLoading && !isGlobalLoading
                     ) {
                         Text(Strings["full_day"])
@@ -1505,14 +1508,32 @@ fun TimeEntryDetail(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
-                    } else if (hours.isNotEmpty() && normalized.toFloat() > WorkHours.configuredDailyHours()) {
-                        val maxHours = WorkHours.configuredDailyHours()
+                    } else if (hours.isNotEmpty() && normalized.toFloat() > dailyHours) {
                         Text(
-                            text = Strings["hours_max_value"].format(maxHours),
+                            text = Strings["hours_max_value"].format(dailyHours),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
+                    } else if (hours.isNotEmpty()) {
+                        val entered = normalized.toFloat()
+                        val otherHours = loggedEntries
+                            .filter { it.date == date && it.id != timeEntry?.id }
+                            .sumOf { it.hours.toDouble() }.toFloat()
+                        val kept = WorkHours.hoursKept(entered, otherHours, dailyHours)
+                        if (kept < entered - WorkHours.HOURS_TOLERANCE) {
+                            Text(
+                                text = if (kept <= WorkHours.HOURS_TOLERANCE) {
+                                    Strings["hours_day_full"]
+                                } else {
+                                    Strings["hours_capped_by_day"]
+                                        .format(formatHours(kept, locale), formatHours(dailyHours, locale))
+                                },
+                                color = Tone.Warning.contentColor(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                            )
+                        }
                     }
                 }
             }

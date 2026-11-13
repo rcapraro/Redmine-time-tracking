@@ -9,11 +9,20 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import com.ps.redmine.model.RedmineProjectsWithActivitiesResponse
+import com.ps.redmine.model.RedmineTimeEntriesResponse
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.util.Collections
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class KtorRedmineClientTest {
@@ -522,5 +531,91 @@ class KtorRedmineClientTest {
             switchUserHeaders.all { it == null },
             "listUsers must bypass impersonation, saw $switchUserHeaders"
         )
+    }
+
+    @Test
+    fun `reading time entries waits for a write still in flight`() = runTest {
+        val deleteStarted = CompletableDeferred<Unit>()
+        val releaseDelete = CompletableDeferred<Unit>()
+        val served = Collections.synchronizedList(mutableListOf<String>())
+        val jsonHeaders = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { req ->
+                    val path = req.url.encodedPath
+                    when {
+                        req.method == HttpMethod.Delete -> {
+                            deleteStarted.complete(Unit)
+                            releaseDelete.await()
+                            served += "delete"
+                            respond("", HttpStatusCode.NoContent)
+                        }
+
+                        path.endsWith("/time_entries.json") -> {
+                            served += "read"
+                            respond(json.encodeToString(RedmineTimeEntriesResponse()), HttpStatusCode.OK, jsonHeaders)
+                        }
+
+                        path.endsWith("/projects.json") ->
+                            respond(json.encodeToString(RedmineProjectsWithActivitiesResponse()), HttpStatusCode.OK, jsonHeaders)
+
+                        else -> error("Unhandled request: ${req.method} ${req.url}")
+                    }
+                }
+            }
+        }
+        val api = KtorRedmineClient("http://localhost", "test-key", client)
+
+        val delete = launch { api.deleteTimeEntry(1) }
+        deleteStarted.await()
+        val read = async { api.getTimeEntriesForMonth(2024, 1) }
+        withContext(Dispatchers.Default) { delay(300) }
+        assertEquals(emptyList<String>(), served.toList())
+
+        releaseDelete.complete(Unit)
+        read.await()
+        delete.join()
+        assertEquals(listOf("delete", "read"), served.toList())
+    }
+
+    @Test
+    fun `a read already in flight when a write lands is done again`() = runTest {
+        val firstReadStarted = CompletableDeferred<Unit>()
+        val releaseFirstRead = CompletableDeferred<Unit>()
+        val served = Collections.synchronizedList(mutableListOf<String>())
+        val jsonHeaders = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { req ->
+                    val path = req.url.encodedPath
+                    when {
+                        req.method == HttpMethod.Delete -> {
+                            served += "delete"
+                            respond("", HttpStatusCode.NoContent)
+                        }
+
+                        path.endsWith("/time_entries.json") -> {
+                            if (firstReadStarted.complete(Unit)) releaseFirstRead.await()
+                            served += "read"
+                            respond(json.encodeToString(RedmineTimeEntriesResponse()), HttpStatusCode.OK, jsonHeaders)
+                        }
+
+                        path.endsWith("/projects.json") ->
+                            respond(json.encodeToString(RedmineProjectsWithActivitiesResponse()), HttpStatusCode.OK, jsonHeaders)
+
+                        else -> error("Unhandled request: ${req.method} ${req.url}")
+                    }
+                }
+            }
+        }
+        val api = KtorRedmineClient("http://localhost", "test-key", client)
+
+        val read = async { api.getTimeEntriesForMonth(2024, 1) }
+        firstReadStarted.await()
+        api.deleteTimeEntry(1)
+        releaseFirstRead.complete(Unit)
+        read.await()
+
+        assertEquals(listOf("delete", "read", "read"), served.toList())
     }
 }

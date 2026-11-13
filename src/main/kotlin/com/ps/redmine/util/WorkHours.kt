@@ -25,4 +25,11 @@ object WorkHours {
     } catch (_: Exception) {
         DAILY_STANDARD_HOURS
     }
+
+    /**
+     * Hours Redmine keeps of an entry of [hours] on a day already holding [otherHours]: the server silently
+     * truncates entries so that a day never goes past [dailyHours], and still answers the write with the hours sent.
+     */
+    fun hoursKept(hours: Float, otherHours: Float, dailyHours: Float): Float =
+        minOf(hours, (dailyHours - otherHours).coerceAtLeast(0f))
 }

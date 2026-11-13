@@ -24,6 +24,7 @@ import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.lucca.*
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
+import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.atDay
 import com.ps.redmine.util.lengthOfMonth
 import com.ps.redmine.util.monthValue
@@ -34,7 +35,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
+import kotlinx.datetime.yearMonth
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -48,7 +51,7 @@ private sealed interface AbsencesState {
 
 private data class MonthAbsences(val month: YearMonth, val days: List<AbsenceDay>)
 
-private data class ImportOutcome(val added: Int, val updated: Int, val failures: List<String>)
+private data class ImportOutcome(val added: Int, val updated: Int, val deleted: Int, val failures: List<String>)
 
 @Composable
 fun AbsencesDialog(
@@ -68,6 +71,7 @@ fun AbsencesDialog(
     var applying by remember { mutableStateOf(false) }
     var outcome by remember { mutableStateOf<ImportOutcome?>(null) }
     var targetsSaveFailed by remember { mutableStateOf(false) }
+    val dailyHours = remember { WorkHours.configuredDailyHours() }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(month, reloadKey) {
@@ -77,8 +81,12 @@ fun AbsencesDialog(
 
     val loaded = state as? AbsencesState.Loaded
     val canImport = loaded?.entries != null && !isImpersonating
-    val plans = remember(loaded, targets) {
-        loaded?.months.orEmpty().map { it.month to planAbsenceImport(it.days, loaded?.entries.orEmpty(), targets) }
+    val plans = remember(loaded, targets, canImport) {
+        val comparable = if (canImport) loaded?.entries.orEmpty() else emptyList()
+        val entriesByMonth = comparable.groupBy { it.date.yearMonth }
+        loaded?.months.orEmpty().map { m ->
+            m.month to planAbsenceImport(m.days, entriesByMonth[m.month].orEmpty(), targets, dailyHours)
+        }
     }
     val allItems = plans.flatMap { it.second }
     var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -89,7 +97,9 @@ fun AbsencesDialog(
     }
     val selectedItems = allItems.filter { it.isSelectable && it.key in selected }
     val replacedCount = selectedItems.count { it.status is AbsenceImportStatus.DifferentHours }
-    val exceedingDays = daysExceedingFullDay(selectedItems, loaded?.entries.orEmpty())
+    val (selectedDeletions, selectedWrites) = selectedItems.partition { it.isDeletion }
+    val deletedCount = selectedDeletions.size
+    val exceedingDays = daysExceedingFullDay(selectedItems, loaded?.entries.orEmpty(), dailyHours)
 
     fun apply() {
         applying = true
@@ -144,8 +154,9 @@ fun AbsencesDialog(
             title = Strings["absence_confirm_title"],
             message = buildList {
                 if (replacedCount > 0) add(Strings["absence_confirm_replaced"].format(replacedCount))
+                if (deletedCount > 0) add(Strings["absence_confirm_deleted"].format(deletedCount))
                 if (exceedingDays.isNotEmpty()) {
-                    add(Strings["absence_confirm_overbooked"].format(formatHours(FULL_DAY_HOURS, locale), exceedingDays.size))
+                    add(Strings["absence_confirm_overbooked"].format(formatHours(dailyHours, locale), exceedingDays.size))
                 }
             }.joinToString("\n"),
             confirmLabel = Strings["absence_confirm_action"],
@@ -265,6 +276,7 @@ fun AbsencesDialog(
                                             selected = selected,
                                             onSelectedChange = { selected = it },
                                             locale = locale,
+                                            dailyHours = dailyHours,
                                         )
                                     }
                                 }
@@ -285,11 +297,8 @@ fun AbsencesDialog(
                 ) {
                     val showImport = canImport && allItems.any { it.isSelectable }
                     if (showImport) {
-                        val totalHours = selectedItems.sumOf { it.hours.toDouble() }.toFloat()
                         Text(
-                            text = if (selectedItems.isEmpty()) Strings["absence_selection_empty"]
-                            else Strings["absence_selection_summary"]
-                                .format(selectedItems.size, formatHours(totalHours, locale)),
+                            text = selectionSummary(selectedWrites, selectedDeletions, locale),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -299,7 +308,13 @@ fun AbsencesDialog(
                         TextButton(onClick = onDismiss, enabled = !applying) { Text(Strings["close"]) }
                         Button(
                             enabled = selectedItems.isNotEmpty() && !applying,
-                            onClick = { if (replacedCount > 0 || exceedingDays.isNotEmpty()) confirmingConflicts = true else apply() },
+                            onClick = {
+                                if (replacedCount > 0 || deletedCount > 0 || exceedingDays.isNotEmpty()) {
+                                    confirmingConflicts = true
+                                } else {
+                                    apply()
+                                }
+                            },
                         ) {
                             if (applying) {
                                 CircularProgressIndicator(
@@ -393,7 +408,7 @@ private suspend fun loadAbsences(
             val days = groupAbsencesByDay(leaves)
             AbsencesState.Loaded(
                 months = months.map { m ->
-                    MonthAbsences(m, days.filter { it.date.year == m.year && it.date.month == m.month })
+                    MonthAbsences(m, days.filter { it.date.yearMonth == m })
                 },
                 entries = entries.await(),
             )
@@ -428,11 +443,24 @@ private suspend fun applyAbsenceImport(
 ): ImportOutcome {
     var added = 0
     var updated = 0
+    var deleted = 0
     val failures = mutableListOf<String>()
-    items.forEach { item ->
+    val failedDeletionDays = mutableSetOf<LocalDate>()
+    // Deleting first keeps a day from briefly holding both a cancelled absence and its replacement, which Redmine
+    // would truncate; a day whose deletion failed gets no new hours for the same reason.
+    items.sortedBy { !it.isDeletion }.forEach { item ->
         val target = item.target ?: return@forEach
+        if (!item.isDeletion && item.date in failedDeletionDays) {
+            failures += "${item.date} : ${Strings["absence_import_skipped_after_delete"]}"
+            return@forEach
+        }
         try {
             when (val status = item.status) {
+                is AbsenceImportStatus.Cancelled -> {
+                    redmineClient.deleteTimeEntry(checkNotNull(status.existing.id))
+                    deleted++
+                }
+
                 is AbsenceImportStatus.DifferentHours -> {
                     redmineClient.updateTimeEntry(status.existing.copy(hours = item.hours))
                     updated++
@@ -446,7 +474,9 @@ private suspend fun applyAbsenceImport(
                             activity = target.activity,
                             project = target.project,
                             issue = target.issue,
-                            comments = item.slots.joinToString(", ") { "${it.accountName} — ${periodLabel(it.period)}" },
+                            comments = item.slots.joinToString(", ") {
+                                it.accountName + ABSENCE_COMMENT_SEPARATOR + periodLabel(it.period)
+                            },
                         )
                     )
                     added++
@@ -456,9 +486,23 @@ private suspend fun applyAbsenceImport(
             throw e
         } catch (e: Exception) {
             failures += "${item.date} : ${e.message.orEmpty()}"
+            if (item.isDeletion) failedDeletionDays += item.date
         }
     }
-    return ImportOutcome(added, updated, failures)
+    return ImportOutcome(added, updated, deleted, failures)
+}
+
+private fun selectionSummary(
+    writes: List<AbsenceImportItem>,
+    deletions: List<AbsenceImportItem>,
+    locale: Locale,
+): String {
+    fun hoursOf(items: List<AbsenceImportItem>) = formatHours(items.sumOf { it.hours.toDouble() }.toFloat(), locale)
+    val parts = buildList {
+        if (writes.isNotEmpty()) add(Strings["absence_selection_summary"].format(writes.size, hoursOf(writes)))
+        if (deletions.isNotEmpty()) add(Strings["absence_selection_deletions"].format(deletions.size, hoursOf(deletions)))
+    }
+    return parts.joinToString(" · ").ifEmpty { Strings["absence_selection_empty"] }
 }
 
 private suspend fun clearSession(): Boolean = try {
@@ -476,7 +520,7 @@ private fun OutcomeBanner(outcome: ImportOutcome) {
     val hasFailures = outcome.failures.isNotEmpty()
     Banner(
         icon = if (hasFailures) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
-        text = Strings["absence_import_done"].format(outcome.added, outcome.updated) +
+        text = Strings["absence_import_done"].format(outcome.added, outcome.updated, outcome.deleted) +
                 if (hasFailures) " · " + Strings["absence_import_failed"].format(outcome.failures.size) else "",
         tone = if (hasFailures) Tone.Error else Tone.Primary,
         details = outcome.failures,

@@ -21,8 +21,11 @@ class AbsenceImportTest {
 
     private fun absence(vararg slots: AbsenceSlot) = listOf(AbsenceDay(day, slots.toList()))
 
-    private fun entry(issueId: Int, hours: Float, id: Int = issueId, activityId: Int = 9) =
-        TimeEntry(id, day, hours, Activity(activityId, "Absence"), Project(1, "Interne"), Issue(issueId, "x"))
+    private fun entry(issueId: Int, hours: Float, id: Int = issueId, activityId: Int = 9, comments: String? = null) =
+        TimeEntry(id, day, hours, Activity(activityId, "Absence"), Project(1, "Interne"), Issue(issueId, "x"), comments)
+
+    private fun imported(type: String, issueId: Int, hours: Float, id: Int = issueId, activityId: Int = 9) =
+        entry(issueId, hours, id, activityId, comments = "$type${ABSENCE_COMMENT_SEPARATOR}Journée")
 
     private fun planSingle(days: List<AbsenceDay>, entries: List<TimeEntry> = emptyList()) =
         planAbsenceImport(days, entries, targets).single()
@@ -182,6 +185,121 @@ class AbsenceImportTest {
         val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(existing, entry(500, 3.75f)))
 
         assertEquals(emptySet<LocalDate>(), daysExceedingFullDay(listOf(item), listOf(existing, entry(500, 3.75f))))
+    }
+
+    @Test
+    fun `an absence entry no longer backed by Lucca is offered for deletion, unticked`() {
+        val existing = imported("CP", 100, 7.5f)
+        val item = planSingle(emptyList(), listOf(existing, entry(500, 2f)))
+
+        assertEquals(AbsenceImportStatus.Cancelled(existing), item.status)
+        assertEquals(paidLeave, item.target)
+        assertTrue(item.isSelectable)
+        assertFalse(item.isSelectedByDefault())
+    }
+
+    @Test
+    fun `each cancelled entry of a day is its own item`() {
+        val items = planAbsenceImport(emptyList(), listOf(imported("CP", 100, 3.75f, id = 1), imported("CP", 100, 3.75f, id = 2)), targets)
+
+        assertEquals(2, items.map { it.key }.distinct().size)
+    }
+
+    @Test
+    fun `a leave whose type changed is not pre-selected while the old entry still fills the day`() {
+        val oldRtt = imported("RTT", 101, 7.5f)
+        val items = planAbsenceImport(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(oldRtt), targets)
+
+        assertEquals(
+            listOf(AbsenceImportStatus.Overbooked(7.5f, 0f, cancelledHours = 7.5f), AbsenceImportStatus.Cancelled(oldRtt)),
+            items.map { it.status },
+        )
+        assertFalse(items.first().isSelectedByDefault())
+        assertEquals(emptySet<LocalDate>(), daysExceedingFullDay(items, listOf(oldRtt)))
+        assertEquals(setOf(day), daysExceedingFullDay(items.take(1), listOf(oldRtt)))
+    }
+
+    @Test
+    fun `a leave whose type changed on a shared issue is told apart by its activity`() {
+        val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
+        val oldRtt = imported("RTT", 100, 7.5f, activityId = 9)
+        val items = planAbsenceImport(
+            absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
+            listOf(oldRtt),
+            mapOf("CP" to paidLeaveActivity, "RTT" to paidLeave),
+        )
+
+        assertEquals(
+            listOf(AbsenceImportStatus.Overbooked(7.5f, 0f, cancelledHours = 7.5f), AbsenceImportStatus.Cancelled(oldRtt)),
+            items.map { it.status },
+        )
+    }
+
+    @Test
+    fun `nothing is taken as cancelled on a day with an unmapped leave`() {
+        val items = planAbsenceImport(
+            absence(AbsenceSlot("CP 2026-2027", AbsencePeriod.FULL_DAY, true)),
+            listOf(imported("CP", 100, 7.5f)),
+            targets,
+        )
+
+        assertEquals(listOf(AbsenceImportStatus.Unmapped), items.map { it.status })
+    }
+
+    @Test
+    fun `an entry on an absence issue that the import did not create is never offered for deletion`() {
+        val publicHoliday = entry(100, 7.5f, comments = "Jour férié")
+
+        assertEquals(emptyList<AbsenceImportItem>(), planAbsenceImport(emptyList(), listOf(publicHoliday), targets))
+    }
+
+    @Test
+    fun `an entry on a shared issue under an unmapped activity still counts for the only absence of the day on it`() {
+        val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
+        val item = planAbsenceImport(
+            absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)),
+            listOf(entry(100, 3.75f, activityId = 12)),
+            mapOf("CP" to paidLeaveActivity, "RTT" to paidLeave),
+        ).single()
+
+        assertEquals(AbsenceImportStatus.AlreadyEntered, item.status)
+    }
+
+    @Test
+    fun `the day is capped at the configured daily hours`() {
+        val days = absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true))
+        val logged = listOf(entry(500, 4.25f))
+
+        assertEquals(AbsenceImportStatus.ToAdd, planAbsenceImport(days, logged, targets, dailyHours = 8f).single().status)
+        assertTrue(planAbsenceImport(days, logged, targets).single().status is AbsenceImportStatus.Overbooked)
+    }
+
+    @Test
+    fun `a cancelled entry on a shared issue under an unmapped activity is attributed by its comment`() {
+        val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
+        val existing = imported("RTT", 100, 7.5f, activityId = 11)
+        val item = planAbsenceImport(
+            emptyList(),
+            listOf(existing),
+            mapOf("CP" to paidLeaveActivity, "RTT" to paidLeave),
+        ).single()
+
+        assertEquals(AbsenceImportStatus.Cancelled(existing), item.status)
+        assertEquals(paidLeave, item.target)
+    }
+
+    @Test
+    fun `an absence overflowing the day tells how many hours Redmine will keep`() {
+        val overbooked = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(entry(500, 5f)))
+        val replaced = planSingle(
+            absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
+            listOf(entry(100, 3.75f), entry(500, 4f)),
+        )
+        val fitting = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(entry(500, 3.75f)))
+
+        assertEquals(2.5f, overbooked.keptHours)
+        assertEquals(3.5f, replaced.keptHours)
+        assertEquals(3.75f, fitting.keptHours)
     }
 
     @Test

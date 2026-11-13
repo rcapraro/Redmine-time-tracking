@@ -24,6 +24,7 @@ fun rememberInterFontFamily(): FontFamily = FontFamily(
  * at 10 sp, and there should be no raw `fontSize = X.sp` overrides anywhere else.
  *
  *   18 sp / SemiBold  → titleLarge, titleMedium, titleSmall  (titles, dialog headers)
+ *                       and headlineSmall, the default AlertDialog title
  *   14 sp / Normal    → bodyLarge, bodyMedium                (body text, list items, dropdowns)
  *   12 sp             → labelLarge (Medium), labelMedium (Medium), bodySmall (Normal)
  *                       (badges, buttons, status pills, captions, helpers, errors)
@@ -64,7 +65,7 @@ fun appTypography(): Typography {
         displaySmall = base.displaySmall.with(inter),
         headlineLarge = base.headlineLarge.with(inter),
         headlineMedium = base.headlineMedium.with(inter),
-        headlineSmall = base.headlineSmall.with(inter),
+        headlineSmall = title,
         titleLarge = title,
         titleMedium = title,
         titleSmall = title,

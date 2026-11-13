@@ -24,6 +24,7 @@ import com.ps.redmine.lucca.*
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.ui.*
 import com.ps.redmine.util.LocaleNames
+import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.isoDayNumber
@@ -222,6 +223,7 @@ fun AbsenceMonthSection(
     selected: Set<String>,
     onSelectedChange: (Set<String>) -> Unit,
     locale: Locale,
+    dailyHours: Float,
 ) {
     TableCard {
         MonthHeader(month, items, canImport, selected, onSelectedChange, locale)
@@ -257,6 +259,7 @@ fun AbsenceMonthSection(
                 checked = item.key in selected,
                 onCheckedChange = { on -> onSelectedChange(if (on) selected + item.key else selected - item.key) },
                 locale = locale,
+                dailyHours = dailyHours,
             )
         }
     }
@@ -334,7 +337,7 @@ private data class StatusPresentation(
     val detail: String? = null,
 )
 
-private fun AbsenceImportItem.presentation(locale: Locale): StatusPresentation = when (val s = status) {
+private fun AbsenceImportItem.presentation(locale: Locale, dailyHours: Float): StatusPresentation = when (val s = status) {
     AbsenceImportStatus.ToAdd ->
         if (slots.all { it.isConfirmed }) {
             StatusPresentation(Strings["absence_badge_to_add"], Tone.Primary, Icons.Outlined.AddCircleOutline)
@@ -350,11 +353,18 @@ private fun AbsenceImportItem.presentation(locale: Locale): StatusPresentation =
 
     is AbsenceImportStatus.Overbooked -> StatusPresentation(
         Strings["absence_badge_overbooked"], Tone.Warning, Icons.Outlined.WarningAmber,
-        if (s.otherAbsenceHours > 0f) {
-            Strings["absence_status_overbooked_with_absences"]
-                .format(formatHours(s.otherHours, locale), formatHours(s.otherAbsenceHours, locale))
-        } else {
-            Strings["absence_status_overbooked"].format(formatHours(s.otherHours, locale))
+        when {
+            s.cancelledHours > 0f -> Strings["absence_status_overbooked_by_cancelled"]
+                .format(formatHours(s.cancelledHours, locale), formatHours(keptHours, locale))
+
+            s.otherAbsenceHours > 0f -> Strings["absence_status_overbooked_with_absences"].format(
+                formatHours(s.otherHours, locale),
+                formatHours(s.otherAbsenceHours, locale),
+                formatHours(dailyHours, locale),
+            )
+
+            else ->
+                Strings["absence_status_overbooked"].format(formatHours(s.otherHours, locale), formatHours(keptHours, locale))
         },
     )
 
@@ -363,10 +373,13 @@ private fun AbsenceImportItem.presentation(locale: Locale): StatusPresentation =
             .format(formatHours(s.existing.hours, locale), formatHours(hours, locale))
         StatusPresentation(
             Strings["absence_badge_different"], Tone.Warning, Icons.Outlined.SwapHoriz,
-            if (s.exceedsDay) {
-                "$detail ${Strings["absence_status_exceeds_day"].format(formatHours(FULL_DAY_HOURS, locale))}"
-            } else {
-                detail
+            when {
+                !s.exceedsDay -> detail
+                keptHours < hours - WorkHours.HOURS_TOLERANCE -> "$detail. " +
+                        Strings["absence_status_exceeds_day"]
+                            .format(formatHours(keptHours, locale), formatHours(dailyHours, locale))
+
+                else -> "$detail. ${Strings["absence_status_capped"].format(formatHours(dailyHours, locale))}"
             },
         )
     }
@@ -374,6 +387,11 @@ private fun AbsenceImportItem.presentation(locale: Locale): StatusPresentation =
     is AbsenceImportStatus.Ambiguous -> StatusPresentation(
         Strings["absence_badge_ambiguous"], Tone.Error, Icons.Outlined.ErrorOutline,
         Strings["absence_status_ambiguous"].format(formatHours(s.existingHours, locale)),
+    )
+
+    is AbsenceImportStatus.Cancelled -> StatusPresentation(
+        Strings["absence_badge_cancelled"], Tone.Error, Icons.Outlined.EventBusy,
+        Strings["absence_status_cancelled"],
     )
 
     AbsenceImportStatus.Unmapped -> StatusPresentation(
@@ -389,9 +407,10 @@ private fun AbsenceImportRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     locale: Locale,
+    dailyHours: Float,
 ) {
     val selectable = canImport && item.isSelectable
-    val presentation = item.presentation(locale)
+    val presentation = item.presentation(locale, dailyHours)
     val dimmed = canImport && item.status == AbsenceImportStatus.AlreadyEntered
     val textColor = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     val rowModifier = if (selectable) {
@@ -416,7 +435,7 @@ private fun AbsenceImportRow(
         )
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                item.slots.joinToString(" + ") { "${it.accountName} · ${periodLabel(it.period)}" },
+                item.label(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = textColor,
             )
@@ -432,7 +451,7 @@ private fun AbsenceImportRow(
             }
         }
         Text(
-            formatHours(item.hours, locale),
+            (if (item.isDeletion) "−" else "") + formatHours(item.hours, locale),
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = textColor,
             textAlign = TextAlign.End,
@@ -457,6 +476,13 @@ private fun StatusBadge(presentation: StatusPresentation) {
             Text(presentation.badge, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
+}
+
+private fun AbsenceImportItem.label(): String = when (val s = status) {
+    is AbsenceImportStatus.Cancelled -> s.existing.comments?.takeIf { it.isNotBlank() }
+        ?: "#${s.existing.issue.id} ${s.existing.issue.subject}"
+
+    else -> slots.joinToString(" + ") { "${it.accountName} · ${periodLabel(it.period)}" }
 }
 
 private fun shortDate(date: LocalDate, locale: Locale): String =

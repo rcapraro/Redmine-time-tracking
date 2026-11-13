@@ -8,6 +8,9 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
@@ -18,6 +21,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.X509TrustManager
 import kotlin.coroutines.cancellation.CancellationException
 import com.ps.redmine.model.TimeEntry as AppTimeEntry
@@ -168,6 +172,20 @@ class KtorRedmineClient(
     private val projectHasOpenIssuesCache = ConcurrentHashMap<Int, CachedValue<Boolean>>()
 
     private val issueCache = ConcurrentHashMap<Int, Issue>()
+
+    // A time entry read served while a write is in flight would return the pre-write state.
+    private val pendingWrites = MutableStateFlow(0)
+    private val writesStarted = AtomicLong()
+
+    private suspend fun <T> writeOnIo(write: suspend CoroutineScope.() -> T): T {
+        writesStarted.incrementAndGet()
+        pendingWrites.update { it + 1 }
+        try {
+            return withContext(Dispatchers.IO, write)
+        } finally {
+            pendingWrites.update { it - 1 }
+        }
+    }
 
     // Cache timing
     private val PROJECTS_TTL_MS = 10 * 60 * 1000L // 10 minutes
@@ -622,7 +640,17 @@ class KtorRedmineClient(
         return allTimeEntries
     }
 
-    override suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> =
+    override suspend fun getTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> {
+        var entries: List<AppTimeEntry>
+        do {
+            pendingWrites.first { it == 0 }
+            val writesBefore = writesStarted.get()
+            entries = fetchTimeEntriesForMonth(year, month)
+        } while (writesStarted.get() != writesBefore)
+        return entries
+    }
+
+    private suspend fun fetchTimeEntriesForMonth(year: Int, month: Int): List<AppTimeEntry> =
         withContext(Dispatchers.IO) {
             // Calculate date range for the month
             val startDate = LocalDate(year, month, 1)
@@ -692,7 +720,7 @@ class KtorRedmineClient(
             }
         }
 
-    override suspend fun createTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
+    override suspend fun createTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = writeOnIo {
         try {
             // Build the request payload using the typed envelope
             val requestJson = json.encodeToString(
@@ -740,7 +768,7 @@ class KtorRedmineClient(
         }
     }
 
-    override suspend fun updateTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = withContext(Dispatchers.IO) {
+    override suspend fun updateTimeEntry(timeEntry: AppTimeEntry): AppTimeEntry = writeOnIo {
         require(timeEntry.id != null) { "Time entry ID cannot be null for update operation" }
 
         try {
@@ -780,7 +808,7 @@ class KtorRedmineClient(
         }
     }
 
-    override suspend fun deleteTimeEntry(timeEntryId: Int) = withContext(Dispatchers.IO) {
+    override suspend fun deleteTimeEntry(timeEntryId: Int) = writeOnIo {
         try {
             // Make the API request
             delete("/time_entries/$timeEntryId.json")
