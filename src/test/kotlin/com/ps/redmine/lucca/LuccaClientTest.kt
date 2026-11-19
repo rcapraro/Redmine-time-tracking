@@ -1,5 +1,6 @@
 package com.ps.redmine.lucca
 
+import com.ps.redmine.model.User
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
@@ -7,6 +8,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -118,6 +120,118 @@ class LuccaClientTest {
         assertEquals(listOf("1", "2"), pages)
         assertEquals(502, people.size)
         assertEquals(LuccaPerson(501, "P501", "N501"), people[500])
+    }
+
+    private fun directoryPage(ids: Iterable<Int>): String {
+        val items = ids.joinToString(",") { """{"id":$it,"firstName":"P$it","lastName":"N$it"}""" }
+        return """{"data":{"items":[$items]}}"""
+    }
+
+    @Test
+    fun `directory people are read by offset until a page brings nobody new`() = runTest {
+        val pagings = mutableListOf<String?>()
+        val api = client { request ->
+            assertEquals("/api/v3/users", request.url.encodedPath)
+            assertEquals("id,firstName,lastName", request.url.parameters["fields"])
+            assertEquals("id,asc", request.url.parameters["orderBy"])
+            val paging = request.url.parameters["paging"]
+            pagings += paging
+            val ids = when (paging) {
+                "0,1000" -> 1..1000
+                "1000,1000" -> 1001..1002
+                else -> IntRange.EMPTY
+            }
+            respond(directoryPage(ids), headers = jsonHeaders)
+        }
+
+        val people = api.directoryPeople(cookies)
+
+        assertEquals(listOf("0,1000", "1000,1000", "1002,1000"), pagings)
+        assertEquals(1002, people.size)
+        assertEquals(LuccaPerson(1001, "P1001", "N1001"), people[1000])
+    }
+
+    @Test
+    fun `a directory capped below the asked page size is still read to the end`() = runTest {
+        val api = client { request ->
+            val offset = request.url.parameters["paging"].orEmpty().substringBefore(',').toInt()
+            respond(directoryPage((offset + 1..250).take(100)), headers = jsonHeaders)
+        }
+
+        assertEquals(250, api.directoryPeople(cookies).size)
+    }
+
+    @Test
+    fun `a directory repeating the same page is read once`() = runTest {
+        var calls = 0
+        val api = client {
+            calls++
+            respond(directoryPage(1..1000), headers = jsonHeaders)
+        }
+
+        assertEquals(1000, api.directoryPeople(cookies).size)
+        assertEquals(2, calls)
+    }
+
+    private val jeanJson = """{"id":1,"firstName":"Jean","lastName":"Dupont"}"""
+    private val paulJson = """{"id":2,"firstName":"Paul","lastName":"Durand"}"""
+    private val jean = LuccaPerson(1, "Jean", "Dupont")
+    private val paul = LuccaPerson(2, "Paul", "Durand")
+    private val jeanUser = User(10, "Jean", "Dupont", "jdupont")
+    private val paulUser = User(11, "Paul", "Durand", "pdurand")
+
+    // A null list stands for one Lucca refuses to give.
+    private fun planningAndDirectory(planning: String?, directory: String?) = client { request ->
+        val isPlanning = request.url.encodedPath == "/timmi-absences/api/planning/v1.0/users"
+        val people = if (isPlanning) planning else directory
+        when {
+            people == null -> respond("", HttpStatusCode.Forbidden)
+            isPlanning -> respond("""{"items":[$people]}""", headers = jsonHeaders)
+            else -> respond("""{"data":{"items":[$people]}}""", headers = jsonHeaders)
+        }
+    }
+
+    @Test
+    fun `someone outside the planning is found in the directory`() = runTest {
+        val api = planningAndDirectory(planning = jeanJson, directory = "$jeanJson,$paulJson")
+
+        assertEquals(LuccaMatch(paul, inPlanning = false), api.findPerson(cookies, paulUser))
+    }
+
+    @Test
+    fun `someone of the planning is told to be in it`() = runTest {
+        val api = planningAndDirectory(planning = jeanJson, directory = "$jeanJson,$paulJson")
+
+        assertEquals(LuccaMatch(jean, inPlanning = true), api.findPerson(cookies, jeanUser))
+    }
+
+    @Test
+    fun `a homonym outside the planning leaves nobody picked`() = runTest {
+        val homonym = """{"id":9,"firstName":"JEAN","lastName":"DUPONT"}"""
+        val api = planningAndDirectory(planning = jeanJson, directory = "$jeanJson,$homonym")
+
+        assertNull(api.findPerson(cookies, jeanUser))
+    }
+
+    @Test
+    fun `a refused directory still lets a planning colleague be found`() = runTest {
+        val api = planningAndDirectory(planning = jeanJson, directory = null)
+
+        assertEquals(LuccaMatch(jean, inPlanning = true), api.findPerson(cookies, jeanUser))
+    }
+
+    @Test
+    fun `a refused planning still lets someone of the directory be found`() = runTest {
+        val api = planningAndDirectory(planning = null, directory = jeanJson)
+
+        assertEquals(LuccaMatch(jean, inPlanning = false), api.findPerson(cookies, jeanUser))
+    }
+
+    @Test
+    fun `nobody is declared missing from a list Lucca refused`() = runTest {
+        val api = planningAndDirectory(planning = jeanJson, directory = null)
+
+        assertThrows<LuccaPeopleUnreadableException> { api.findPerson(cookies, paulUser) }
     }
 
     @Test

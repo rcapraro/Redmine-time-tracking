@@ -9,20 +9,33 @@ class LuccaPeopleTest {
 
     private val helene = LuccaPerson(1, "Hélène", "DUPONT-MARTIN")
     private val jean = LuccaPerson(2, "Jean", "DUPONT")
-    private val julie = LuccaPerson(3, "Julie", "DUPONT")
 
     @Test
-    fun `the same name matches whatever the case, accents and hyphens`() {
-        val user = User(10, "Helene", "Dupont Martin", "hdupont-martin")
+    fun `the same name matches whatever the case`() {
+        val user = User(10, "hélène", "Dupont-Martin", "hdupont-martin")
 
         assertEquals(helene, findLuccaPerson(user, listOf(jean, helene)))
     }
 
     @Test
-    fun `a name written differently is found through the login rule`() {
+    fun `a name without its accent is another name`() {
+        val user = User(10, "Helene", "Dupont-Martin", "hdupont-martin")
+
+        assertNull(findLuccaPerson(user, listOf(jean, helene)))
+    }
+
+    @Test
+    fun `a name without its hyphen is another name`() {
+        val user = User(10, "Hélène", "Dupont Martin", "hdupont-martin")
+
+        assertNull(findLuccaPerson(user, listOf(jean, helene)))
+    }
+
+    @Test
+    fun `the login never stands in for a name written differently`() {
         val user = User(10, "Juju", "Dupont", "jdupont")
 
-        assertEquals(jean, findLuccaPerson(user, listOf(jean, helene)))
+        assertNull(findLuccaPerson(user, listOf(jean, helene)))
     }
 
     @Test
@@ -33,23 +46,9 @@ class LuccaPeopleTest {
     }
 
     @Test
-    fun `a login written as an e-mail address works too`() {
-        val user = User(10, "Johnny", "Dupont", "jdupont@pack-solutions.com")
+    fun `a user without a last name matches nobody`() {
+        val nameless = LuccaPerson(5, "Jean", "")
 
-        assertEquals(jean, findLuccaPerson(user, listOf(jean, helene)))
-    }
-
-    @Test
-    fun `nobody is picked when the login rule is ambiguous`() {
-        val user = User(10, "J", "Dupont", "jdupont")
-
-        assertNull(findLuccaPerson(user, listOf(jean, julie)))
-    }
-
-    @Test
-    fun `someone outside the planning is not found`() {
-        val user = User(10, "Paul", "Durand", "pdurand")
-
-        assertNull(findLuccaPerson(user, listOf(jean, helene)))
+        assertNull(findLuccaPerson(User(10, "Jean", "", "jean"), listOf(nameless)))
     }
 }

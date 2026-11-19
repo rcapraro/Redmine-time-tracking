@@ -66,10 +66,12 @@ internal data class LuccaUserDateDto(
 )
 
 @Serializable
-internal data class LuccaPlanningUsersDto(val items: List<LuccaPlanningUserDto>, val count: Int? = null)
+internal data class LuccaPlanningUsersDto(val items: List<LuccaPersonDto>, val count: Int? = null)
 
 @Serializable
-internal data class LuccaPlanningUserDto(val id: Int, val firstName: String = "", val lastName: String = "")
+internal data class LuccaPersonDto(val id: Int, val firstName: String = "", val lastName: String = "") {
+    fun toPerson() = LuccaPerson(id, firstName, lastName)
+}
 
 @Serializable
 internal data class LuccaNamedDto(val id: Int, val name: String)

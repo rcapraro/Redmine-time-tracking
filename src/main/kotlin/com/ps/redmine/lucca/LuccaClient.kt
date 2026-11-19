@@ -38,10 +38,29 @@ class LuccaClient(
                 "population.relativeUsers" to "0",
             )
             val response = get<LuccaPlanningUsersDto>(cookies, "/timmi-absences/api/planning/v1.0/users", params)
-            people += response.items.map { LuccaPerson(it.id, it.firstName, it.lastName) }
+            people += response.items.map { it.toPerson() }
             val complete = response.count?.let { people.size >= it } ?: false
             if (response.items.size < PLANNING_PAGE_SIZE || complete) return people
             page++
+        }
+    }
+
+    /** Every current employee of the Lucca directory; being listed does not grant the right to read their absences. */
+    suspend fun directoryPeople(cookies: List<LuccaCookie>): List<LuccaPerson> {
+        val people = LinkedHashMap<Int, LuccaPerson>()
+        var offset = 0
+        while (true) {
+            val params = mapOf(
+                "fields" to "id,firstName,lastName",
+                "orderBy" to "id,asc",
+                "paging" to "$offset,$DIRECTORY_PAGE_SIZE",
+            )
+            val items = get<LuccaDataResponse<LuccaItems<LuccaPersonDto>>>(cookies, "/api/v3/users", params).data.items
+            val alreadyRead = people.size
+            items.forEach { people[it.id] = it.toPerson() }
+            // A short page is no proof of the end, as Lucca may cap pages lower than asked; a page with nobody new is.
+            if (people.size == alreadyRead) return people.values.toList()
+            offset += items.size
         }
     }
 
@@ -113,6 +132,7 @@ class LuccaClient(
 
     companion object {
         private const val PLANNING_PAGE_SIZE = 500
+        private const val DIRECTORY_PAGE_SIZE = 1000
         private val json = Json { ignoreUnknownKeys = true }
 
         private fun createHttpClient() = HttpClient(CIO) {

@@ -57,6 +57,7 @@ private sealed interface AbsencesState {
         val entries: List<TimeEntry>?,
         val ownerName: String? = null,
         val holidaysUnavailable: Boolean = false,
+        val leavesUnverified: Boolean = false,
     ) : AbsencesState
     data class Failed(val message: String) : AbsencesState
 }
@@ -85,11 +86,12 @@ fun AbsencesDialog(
     var targetsSaveFailed by remember { mutableStateOf(false) }
     val dailyHours = remember { WorkHours.configuredDailyHours() }
     val nonWorkingIsoDays = remember { ConfigurationManager.loadConfig().nonWorkingIsoDays }
+    val luccaMatches = remember { mutableMapOf<Pair<Int, Int>, LuccaMatch>() }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(month, reloadKey, impersonatedUser) {
         state = AbsencesState.Loading
-        state = loadAbsences(luccaClient, redmineClient, month, impersonatedUser, nonWorkingIsoDays)
+        state = loadAbsences(luccaClient, redmineClient, month, impersonatedUser, nonWorkingIsoDays, luccaMatches)
     }
 
     val loaded = state as? AbsencesState.Loaded
@@ -97,7 +99,10 @@ fun AbsencesDialog(
     val plans = remember(loaded, targets, canImport) {
         val comparable = if (canImport) loaded.entries.orEmpty() else emptyList()
         val entriesByMonth = comparable.groupBy { it.date.yearMonth }
-        val unreadTypes = if (loaded?.holidaysUnavailable == true) setOf(PUBLIC_HOLIDAY_ACCOUNT) else emptySet()
+        val unreadTypes = buildSet {
+            if (loaded?.leavesUnverified == true) addAll(targets.keys - PUBLIC_HOLIDAY_ACCOUNT)
+            if (loaded?.holidaysUnavailable == true) add(PUBLIC_HOLIDAY_ACCOUNT)
+        }
         loaded?.months.orEmpty().map { m ->
             m.month to planAbsenceImport(m.days, entriesByMonth[m.month].orEmpty(), targets, dailyHours, unreadTypes)
         }
@@ -277,6 +282,13 @@ fun AbsencesDialog(
                                 if (current.holidaysUnavailable) {
                                     Banner(Icons.Outlined.EventBusy, Strings["absence_holidays_unavailable"], Tone.Warning)
                                 }
+                                if (current.leavesUnverified) {
+                                    Banner(
+                                        Icons.Outlined.VisibilityOff,
+                                        Strings["absence_leaves_unverified"].format(current.ownerName),
+                                        Tone.Warning,
+                                    )
+                                }
                                 if (current.entries == null) {
                                     Banner(Icons.Outlined.CloudOff, Strings["absence_import_redmine_unavailable"], Tone.Warning)
                                 }
@@ -419,40 +431,50 @@ private suspend fun loadAbsences(
     month: YearMonth,
     impersonatedUser: User?,
     nonWorkingIsoDays: Set<Int>,
+    luccaMatches: MutableMap<Pair<Int, Int>, LuccaMatch>,
 ): AbsencesState = try {
     val session = withContext(Dispatchers.IO) { LuccaSessionStore.load() }
-    val ownerId = when {
-        session == null -> null
-        impersonatedUser == null -> session.userId
-        else -> findLuccaPerson(impersonatedUser, luccaClient.planningPeople(session.cookies))?.id
-    }
-    when {
-        session == null -> AbsencesState.SignedOut(sessionExpired = false)
-        ownerId == null -> AbsencesState.Hidden(Strings["absence_not_in_planning"].format(impersonatedUser?.displayName))
-        else -> coroutineScope {
-            val months = listOf(month, month.plusMonths(1))
-            val entries = async { redmineEntries(redmineClient, months) }
-            val from = months.first().atDay(1)
-            val to = months.last().let { it.atDay(it.lengthOfMonth()) }
-            val holidays = async { publicHolidaysOrNull(luccaClient, session.cookies, ownerId, from, to) }
-            val leaves = luccaClient.leaves(session.cookies, ownerId, from, to)
-            // The app's non-working days are the signed-in user's own; a colleague's part-time days are unknown here.
-            val holidayLeaves = holidays.await()?.filter {
-                impersonatedUser != null || it.date.dayOfWeek.isoDayNumber !in nonWorkingIsoDays
-            }
-            val days = groupAbsencesByDay(leaves + holidayLeaves.orEmpty())
-            AbsencesState.Loaded(
-                months = months.map { m ->
-                    MonthAbsences(m, days.filter { it.date.yearMonth == m })
-                },
-                entries = entries.await(),
-                ownerName = impersonatedUser?.displayName,
-                holidaysUnavailable = holidayLeaves == null,
-            )
+    if (session == null) {
+        AbsencesState.SignedOut(sessionExpired = false)
+    } else coroutineScope {
+        val months = listOf(month, month.plusMonths(1))
+        val entries = async { redmineEntries(redmineClient, months) }
+        val match = impersonatedUser?.let { user ->
+            // Whether someone is in the planning depends on who is signed in to Lucca.
+            val key = session.userId to user.id
+            luccaMatches[key] ?: luccaClient.findPerson(session.cookies, user)?.also { luccaMatches[key] = it }
         }
+        if (impersonatedUser != null && match == null) {
+            entries.cancel()
+            val explanation = Strings["absence_not_in_lucca"].format(impersonatedUser.displayName)
+            return@coroutineScope AbsencesState.Hidden(explanation)
+        }
+        val ownerId = match?.person?.id ?: session.userId
+        val from = months.first().atDay(1)
+        val to = months.last().let { it.atDay(it.lengthOfMonth()) }
+        val holidays = async { publicHolidaysOrNull(luccaClient, session.cookies, ownerId, from, to) }
+        val leaves = luccaClient.leaves(session.cookies, ownerId, from, to)
+        // The app's non-working days are the signed-in user's own; a colleague's part-time days are unknown here.
+        val holidayLeaves = holidays.await()?.filter {
+            impersonatedUser != null || it.date.dayOfWeek.isoDayNumber !in nonWorkingIsoDays
+        }
+        val days = groupAbsencesByDay(leaves + holidayLeaves.orEmpty())
+        AbsencesState.Loaded(
+            months = months.map { m ->
+                MonthAbsences(m, days.filter { it.date.yearMonth == m })
+            },
+            entries = entries.await(),
+            ownerName = impersonatedUser?.displayName,
+            holidaysUnavailable = holidayLeaves == null,
+            // Outside the planning, an empty answer may be a silent refusal: only a leave proves the right to read.
+            leavesUnverified = match?.inPlanning == false && leaves.isEmpty(),
+        )
     }
 } catch (e: CancellationException) {
     throw e
+} catch (e: LuccaPeopleUnreadableException) {
+    val explanation = Strings["absence_people_unreadable"].format(impersonatedUser?.displayName)
+    AbsencesState.Failed("$explanation\n${e.message.orEmpty()}")
 } catch (e: LuccaApiException) {
     if (impersonatedUser != null && e.statusCode == HttpStatusCode.Forbidden.value) {
         AbsencesState.Hidden(Strings["absence_not_allowed"].format(impersonatedUser.displayName))

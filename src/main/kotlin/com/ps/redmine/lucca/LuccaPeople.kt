@@ -1,26 +1,43 @@
 package com.ps.redmine.lucca
 
 import com.ps.redmine.model.User
-import java.text.Normalizer
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+
+/** [inPlanning]: the signed-in user has that person, and so their absences, in their own Lucca planning. */
+data class LuccaMatch(val person: LuccaPerson, val inPlanning: Boolean)
+
+/** Nobody matched, but Lucca refused a list of people the person may well be in. */
+class LuccaPeopleUnreadableException(cause: LuccaApiException) : Exception(cause.message, cause)
 
 /**
- * The Lucca person a Redmine user stands for: same first and last name, ignoring case, accents, spaces and hyphens.
- * A name written differently in each tool falls back on the rule Redmine logins follow at Pack Solutions, as e-mail
- * addresses do: first letter of the first name, then the last name ("jdupont"). Homonyms, or a login matching several
- * people, give no match rather than a guess.
+ * The Lucca person a Redmine user stands for: same first and last name, whatever the case. Homonyms give no match
+ * rather than a guess.
  */
-fun findLuccaPerson(user: User, people: List<LuccaPerson>): LuccaPerson? {
-    val byName = if (nameKey(user.lastName).isEmpty()) emptyList() else people.filter {
-        nameKey(it.firstName) == nameKey(user.firstName) && nameKey(it.lastName) == nameKey(user.lastName)
+fun findLuccaPerson(user: User, people: List<LuccaPerson>): LuccaPerson? =
+    if (user.lastName.isBlank()) null else people.singleOrNull {
+        it.firstName.equals(user.firstName, ignoreCase = true) && it.lastName.equals(user.lastName, ignoreCase = true)
     }
-    if (byName.size == 1) return byName.single()
-    val login = user.login.substringBefore('@').lowercase()
-    return byName.ifEmpty { people }.singleOrNull { loginKey(it) == login }
+
+/**
+ * Looks among the whole directory and the signed-in user's planning together, so that homonyms are told apart across
+ * the company. Lucca may refuse either list: the other one is enough to find someone, not to say nobody matches.
+ */
+suspend fun LuccaClient.findPerson(cookies: List<LuccaCookie>, user: User): LuccaMatch? = coroutineScope {
+    val directoryRead = async { readPeople { directoryPeople(cookies) } }
+    val planningRead = async { readPeople { planningPeople(cookies) } }
+    val directory = directoryRead.await()
+    val planning = planningRead.await()
+    val person = findLuccaPerson(user, (directory.people + planning.people).distinctBy { it.id })
+    if (person == null) (directory.refusal ?: planning.refusal)?.let { throw LuccaPeopleUnreadableException(it) }
+    person?.let { LuccaMatch(it, inPlanning = planning.people.any { colleague -> colleague.id == it.id }) }
 }
 
-private val combiningMarks = Regex("\\p{M}")
+private class PeopleRead(val people: List<LuccaPerson>, val refusal: LuccaApiException? = null)
 
-private fun nameKey(name: String): String =
-    Normalizer.normalize(name, Normalizer.Form.NFD).replace(combiningMarks, "").lowercase().filter { it.isLetter() }
-
-private fun loginKey(person: LuccaPerson) = nameKey(person.firstName).take(1) + nameKey(person.lastName)
+private inline fun readPeople(read: () -> List<LuccaPerson>): PeopleRead =
+    try {
+        PeopleRead(read())
+    } catch (e: LuccaApiException) {
+        PeopleRead(emptyList(), e)
+    }
