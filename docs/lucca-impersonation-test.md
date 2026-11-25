@@ -13,11 +13,14 @@ lui-même.
      `/timmi-absences/api/planning/v1.0/users?population.relativeUsers=0`.
 
    Si Lucca refuse l'une des deux, l'autre suffit pour trouver quelqu'un.
-2. Elle y cherche l'utilisateur Redmine impersonné par prénom et nom **exacts**, à la casse près : « Hélène » n'est
-   pas « Helene », « Dupont-Martin » n'est pas « Dupont Martin ». Le login ne sert pas.
+2. Elle y cherche l'utilisateur Redmine impersonné par prénom et nom, en ne comparant que les lettres : la casse,
+   les accents, les tirets, les apostrophes et les espaces ne comptent pas. « Hélène DUPONT-MARTIN » correspond à
+   « Helene Dupont Martin », « N'Diaye » à « Ndiaye », « Lebœuf » à « Leboeuf ». Une lettre différente fait un
+   autre nom : « Dupont » n'est pas « Dupond ». Le login ne sert pas.
 
-   En cas d'homonymes dans l'entreprise, l'app ne choisit pas au hasard : elle ne retient personne. Figurer dans
-   l'annuaire ne donne pas le droit de lire les absences : c'est l'étape suivante qui le dit.
+   En cas d'homonymes dans l'entreprise, même distingués par un seul accent, l'app ne choisit pas au hasard : elle
+   ne retient personne. Figurer dans l'annuaire ne donne pas le droit de lire les absences : c'est l'étape suivante
+   qui le dit.
 3. Elle lit les absences de la personne trouvée : `/api/v3/leaves?leavePeriod.ownerId=<id>`. Les jours de télétravail
    (`isRealLeave: false`) sont écartés.
 
@@ -82,7 +85,7 @@ le code HTTP de cette adresse.
 | Ce qu'on observe                                                    | Cause probable                                                                  |
 |---------------------------------------------------------------------|---------------------------------------------------------------------------------|
 | Le collègue n'est dans aucune des deux listes A                     | Absent de Lucca : l'app affiche « … est introuvable dans Lucca… »               |
-| Il est dans une liste A, mais l'app dit « introuvable »             | Prénom ou nom écrits différemment des deux côtés, ou homonyme : corriger la fiche Redmine |
+| Il est dans une liste A, mais l'app dit « introuvable »             | Prénom ou nom écrits avec d'autres lettres des deux côtés, ou homonyme : corriger la fiche Redmine |
 | Une adresse A renvoie une erreur et l'app dit « Lucca n'a pas laissé lire la liste des collaborateurs » | Noter le code HTTP et l'adresse, et me les envoyer |
 | B renvoie 403                                                       | Lucca refuse l'accès : l'app affiche « Lucca ne vous autorise pas… »            |
 | B renvoie une liste vide alors qu'il a des absences                 | Droits Lucca filtrés sans erreur : hors de ton planning, l'app le signale par un bandeau |
