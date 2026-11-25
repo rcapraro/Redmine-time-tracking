@@ -21,10 +21,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ps.redmine.lucca.*
+import com.ps.redmine.model.Hours
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.ui.*
 import com.ps.redmine.util.LocaleNames
-import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.isoDayNumber
@@ -58,8 +58,8 @@ fun Tone.contentColor(): Color = when (this) {
     Tone.Error -> MaterialTheme.colorScheme.onErrorContainer
 }
 
-fun formatHours(hours: Float, locale: Locale): String =
-    NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 2 }.format(hours) + " h"
+fun formatHours(hours: Hours, locale: Locale): String =
+    NumberFormat.getNumberInstance(locale).apply { maximumFractionDigits = 2 }.format(hours.toBigDecimal()) + " h"
 
 fun periodLabel(period: AbsencePeriod): String = when (period) {
     AbsencePeriod.FULL_DAY -> Strings["absence_full_day"]
@@ -223,7 +223,7 @@ fun AbsenceMonthSection(
     selected: Set<String>,
     onSelectedChange: (Set<String>) -> Unit,
     locale: Locale,
-    dailyHours: Float,
+    dailyHours: Hours,
 ) {
     TableCard {
         MonthHeader(month, items, canImport, selected, onSelectedChange, locale)
@@ -337,7 +337,7 @@ private data class StatusPresentation(
     val detail: String? = null,
 )
 
-private fun AbsenceImportItem.presentation(locale: Locale, dailyHours: Float): StatusPresentation = when (val s = status) {
+private fun AbsenceImportItem.presentation(locale: Locale, dailyHours: Hours): StatusPresentation = when (val s = status) {
     AbsenceImportStatus.ToAdd ->
         if (slots.all { it.isConfirmed }) {
             StatusPresentation(Strings["absence_badge_to_add"], Tone.Primary, Icons.Outlined.AddCircleOutline)
@@ -354,10 +354,10 @@ private fun AbsenceImportItem.presentation(locale: Locale, dailyHours: Float): S
     is AbsenceImportStatus.Overbooked -> StatusPresentation(
         Strings["absence_badge_overbooked"], Tone.Warning, Icons.Outlined.WarningAmber,
         when {
-            s.cancelledHours > 0f -> Strings["absence_status_overbooked_by_cancelled"]
+            s.cancelledHours > Hours.ZERO -> Strings["absence_status_overbooked_by_cancelled"]
                 .format(formatHours(s.cancelledHours, locale), formatHours(keptHours, locale))
 
-            s.otherAbsenceHours > 0f -> Strings["absence_status_overbooked_with_absences"].format(
+            s.otherAbsenceHours > Hours.ZERO -> Strings["absence_status_overbooked_with_absences"].format(
                 formatHours(s.otherHours, locale),
                 formatHours(s.otherAbsenceHours, locale),
                 formatHours(dailyHours, locale),
@@ -375,7 +375,7 @@ private fun AbsenceImportItem.presentation(locale: Locale, dailyHours: Float): S
             Strings["absence_badge_different"], Tone.Warning, Icons.Outlined.SwapHoriz,
             when {
                 !s.exceedsDay -> detail
-                keptHours < hours - WorkHours.HOURS_TOLERANCE -> "$detail. " +
+                keptHours < hours -> "$detail. " +
                         Strings["absence_status_exceeds_day"]
                             .format(formatHours(keptHours, locale), formatHours(dailyHours, locale))
 
@@ -407,7 +407,7 @@ private fun AbsenceImportRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     locale: Locale,
-    dailyHours: Float,
+    dailyHours: Hours,
 ) {
     val selectable = canImport && item.isSelectable
     val presentation = item.presentation(locale, dailyHours)

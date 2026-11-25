@@ -1,28 +1,28 @@
 package com.ps.redmine.components
 
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.sumOfHours
 import com.ps.redmine.util.isoWeekNumber
 import kotlinx.datetime.*
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class WeeklyProgressBarsTest {
 
-    private fun totalExpectedWorkingDays(progress: List<WeeklyProgress>): Int {
+    private fun totalExpectedWorkingDays(progress: List<WeeklyProgress>): Int =
         // Sum expected hours and convert back to days using configured daily hours
-        val totalHours = progress.sumOf { it.expectedHours.toDouble() }
-        val daily = com.ps.redmine.util.WorkHours.configuredDailyHours().toDouble()
-        return if (daily > 0.0) (totalHours / daily).toInt() else 0
-    }
+        (progress.sumOfHours { it.expectedHours } / com.ps.redmine.util.WorkHours.configuredDailyHours()).toInt()
 
     private fun monthPercentage(progress: List<WeeklyProgress>): Float {
-        val totalExpected = progress.sumOf { it.expectedHours.toDouble() }.toFloat()
-        val totalActual = progress.sumOf { it.actualHours.toDouble() }.toFloat()
-        return if (totalExpected > 0f) ((totalActual / totalExpected) * 100f).coerceAtMost(100f) else 0f
+        val totalExpected = progress.sumOfHours { it.expectedHours }
+        val totalActual = progress.sumOfHours { it.actualHours }
+        return if (totalExpected > Hours.ZERO) totalActual.percentOf(totalExpected).coerceAtMost(100f) else 0f
     }
 
     private val testActivity = Activity(1, "Development")
@@ -44,12 +44,11 @@ class WeeklyProgressBarsTest {
 
         // For each week: actual=0, percentages=0, expected computed from working days
         weeklyProgress.forEach { progress ->
-            assertEquals(0f, progress.actualHours, "Actual hours should be 0 for empty entries")
+            assertEquals(Hours.ZERO, progress.actualHours, "Actual hours should be 0 for empty entries")
             val daily = com.ps.redmine.util.WorkHours.configuredDailyHours()
             assertEquals(
-                progress.weekInfo.workingDays * daily,
+                daily * progress.weekInfo.workingDays,
                 progress.expectedHours,
-                0.0001f,
                 "Expected hours should be working days * dailyHours"
             )
             assertEquals(0f, progress.progressPercentage, "Progress percentage should be 0 for empty entries")
@@ -83,7 +82,7 @@ class WeeklyProgressBarsTest {
             TimeEntry(
                 id = 3,
                 date = LocalDate(2024, 1, 8), // Monday, second week
-                hours = 15f, // More than expected for one day
+                hours = Hours.of(15.0), // More than expected for one day
                 activity = testActivity,
                 project = testProject,
                 issue = testIssue
@@ -101,7 +100,7 @@ class WeeklyProgressBarsTest {
         // For each week, assert computed percentage equals actual/expected (capped)
         weeklyProgress.forEach { p ->
             val expectedPct =
-                if (p.expectedHours > 0f) (p.actualHours / p.expectedHours * 100f).coerceAtMost(100f) else 0f
+                if (p.expectedHours > Hours.ZERO) p.actualHours.percentOf(p.expectedHours).coerceAtMost(100f) else 0f
             assertEquals(expectedPct, p.progressPercentage, 0.0001f)
         }
 
@@ -111,16 +110,16 @@ class WeeklyProgressBarsTest {
 
         // Specific checks retained from previous assertions
         val firstWeek = weeklyProgress.first()
-        assertTrue(firstWeek.actualHours > 0f, "First week should have actual hours")
+        assertTrue(firstWeek.actualHours > Hours.ZERO, "First week should have actual hours")
         val daily = com.ps.redmine.util.WorkHours.configuredDailyHours()
-        assertEquals(2 * daily, firstWeek.actualHours, 0.0001f, "First week should have 2*daily hours")
+        assertEquals(daily * 2, firstWeek.actualHours, "First week should have 2*daily hours")
 
         val secondWeek = weeklyProgress.find { progress ->
             val jan8 = LocalDate(2024, 1, 8)
             jan8 >= progress.weekInfo.startDate && jan8 <= progress.weekInfo.endDate
         }
         assertTrue(secondWeek != null, "Should find week containing January 8th")
-        assertEquals(15f, secondWeek!!.actualHours, "Second week should have 15 hours")
+        assertEquals(Hours.of(15.0), secondWeek!!.actualHours, "Second week should have 15 hours")
     }
 
     @Test
@@ -131,7 +130,7 @@ class WeeklyProgressBarsTest {
             TimeEntry(
                 id = 1,
                 date = LocalDate(2024, 1, 2), // Tuesday, first week
-                hours = (5 * com.ps.redmine.util.WorkHours.configuredDailyHours()), // Exactly 5 working days * daily hours
+                hours = (com.ps.redmine.util.WorkHours.configuredDailyHours() * 5), // Exactly 5 working days * daily hours
                 activity = testActivity,
                 project = testProject,
                 issue = testIssue
@@ -143,14 +142,14 @@ class WeeklyProgressBarsTest {
 
         // First week of January 2024 should have 5 working days (Jan 1 is Monday)
         val daily2 = com.ps.redmine.util.WorkHours.configuredDailyHours()
-        assertEquals(5 * daily2, firstWeek.expectedHours, 0.0001f, "First week should expect 5*daily hours")
-        assertEquals(5 * daily2, firstWeek.actualHours, 0.0001f, "First week should have 5*daily actual hours")
+        assertEquals(daily2 * 5, firstWeek.expectedHours, "First week should expect 5*daily hours")
+        assertEquals(daily2 * 5, firstWeek.actualHours, "First week should have 5*daily actual hours")
         assertEquals(100f, firstWeek.progressPercentage, "Progress should be 100%")
 
         // For all weeks, computed percentage should match formula
         weeklyProgress.forEach { p ->
             val expectedPct =
-                if (p.expectedHours > 0f) (p.actualHours / p.expectedHours * 100f).coerceAtMost(100f) else 0f
+                if (p.expectedHours > Hours.ZERO) p.actualHours.percentOf(p.expectedHours).coerceAtMost(100f) else 0f
             assertEquals(expectedPct, p.progressPercentage, 0.0001f)
         }
 
@@ -167,7 +166,7 @@ class WeeklyProgressBarsTest {
             TimeEntry(
                 id = 1,
                 date = LocalDate(2024, 1, 2), // Tuesday, first week
-                hours = 50f, // More than expected
+                hours = Hours.of(50.0), // More than expected
                 activity = testActivity,
                 project = testProject,
                 issue = testIssue
@@ -177,13 +176,13 @@ class WeeklyProgressBarsTest {
         val weeklyProgress = calculateWeeklyProgress(timeEntries, yearMonth, excluded)
         val firstWeek = weeklyProgress.first()
 
-        assertEquals(50f, firstWeek.actualHours, "Should have 50 actual hours")
+        assertEquals(Hours.of(50.0), firstWeek.actualHours, "Should have 50 actual hours")
         assertEquals(100f, firstWeek.progressPercentage, "Progress should be capped at 100%")
 
         // For each week, ensure cap at 100% is respected
         weeklyProgress.forEach { p ->
             val expectedPct =
-                if (p.expectedHours > 0f) (p.actualHours / p.expectedHours * 100f).coerceAtMost(100f) else 0f
+                if (p.expectedHours > Hours.ZERO) p.actualHours.percentOf(p.expectedHours).coerceAtMost(100f) else 0f
             assertEquals(expectedPct, p.progressPercentage, 0.0001f)
         }
 
@@ -224,18 +223,17 @@ class WeeklyProgressBarsTest {
 
         // Weekend hours should still be counted in actual hours
         assertEquals(
-            2 * com.ps.redmine.util.WorkHours.configuredDailyHours(),
+            com.ps.redmine.util.WorkHours.configuredDailyHours() * 2,
             firstWeek.actualHours,
-            0.0001f,
             "Weekend hours should be included in actual hours"
         )
         // But expected hours should only count working days
-        assertTrue(firstWeek.expectedHours > 0f, "Expected hours should be based on working days only")
+        assertTrue(firstWeek.expectedHours > Hours.ZERO, "Expected hours should be based on working days only")
 
         // Per-week percentages follow formula
         weeklyProgress.forEach { p ->
             val expectedPct =
-                if (p.expectedHours > 0f) (p.actualHours / p.expectedHours * 100f).coerceAtMost(100f) else 0f
+                if (p.expectedHours > Hours.ZERO) p.actualHours.percentOf(p.expectedHours).coerceAtMost(100f) else 0f
             assertEquals(expectedPct, p.progressPercentage, 0.0001f)
         }
 
@@ -282,7 +280,7 @@ class WeeklyProgressBarsTest {
                         TimeEntry(
                             id = size + 1,
                             date = d,
-                            hours = 7.5f,
+                            hours = Hours.of(7.5),
                             activity = testActivity,
                             project = testProject,
                             issue = testIssue
@@ -293,12 +291,12 @@ class WeeklyProgressBarsTest {
             }
         }
         val p0Full = calculateWeeklyProgress(fullMonthEntries, ym, excludedIsoDays = emptySet())
-        val totalExpectedHoursNoExcl = 23 * 7.5f
-        val totalActualHoursNoExcl = p0Full.sumOf { it.actualHours.toDouble() }.toFloat()
-        assertEquals(totalExpectedHoursNoExcl, totalActualHoursNoExcl, 0.0001f)
+        val totalExpectedHoursNoExcl = Hours.of(7.5) * 23
+        val totalActualHoursNoExcl = p0Full.sumOfHours { it.actualHours }
+        assertEquals(totalExpectedHoursNoExcl, totalActualHoursNoExcl)
         // Every week's progress should read 100%
         p0Full.forEach { wp ->
-            if (wp.expectedHours > 0f) {
+            if (wp.expectedHours > Hours.ZERO) {
                 assertEquals(100f, wp.progressPercentage, 0.0001f)
             }
         }
@@ -332,7 +330,7 @@ class WeeklyProgressBarsTest {
 
         assertEquals(0, totalExpectedWorkingDays(progress))
         progress.forEach { wp ->
-            assertEquals(0f, wp.expectedHours, 0.0001f, "Week ${wp.weekInfo.startDate} should have 0 expected hours")
+            assertEquals(Hours.ZERO, wp.expectedHours, "Week ${wp.weekInfo.startDate} should have 0 expected hours")
         }
     }
 
@@ -355,7 +353,7 @@ class WeeklyProgressBarsTest {
         // Find the week whose start is 2025-06-30 and end is 2025-07-06 (ISO week crossing months)
         val weekSpanningStart = progress.first { it.weekInfo.startDate == kotlinx.datetime.LocalDate(2025, 6, 30) }
         // Inside July for that week we only have Tue-Fri => 4 working days; excluding Monday shouldn't change it
-        assertEquals(4 * com.ps.redmine.util.WorkHours.configuredDailyHours(), weekSpanningStart.expectedHours, 0.0001f)
+        assertEquals(com.ps.redmine.util.WorkHours.configuredDailyHours() * 4, weekSpanningStart.expectedHours)
 
         // Last week spans into August up to 2025-08-03; ensure only July weekdays counted
         val weekSpanningEnd = progress.last { it.weekInfo.endDate == kotlinx.datetime.LocalDate(2025, 8, 3) }
@@ -367,9 +365,8 @@ class WeeklyProgressBarsTest {
             LocalDate(2025, 7, 31)
         )
         assertEquals(
-            expectedDaysEnd.size * com.ps.redmine.util.WorkHours.configuredDailyHours(),
-            weekSpanningEnd.expectedHours,
-            0.0001f
+            com.ps.redmine.util.WorkHours.configuredDailyHours() * expectedDaysEnd.size,
+            weekSpanningEnd.expectedHours
         )
     }
 
@@ -390,7 +387,7 @@ class WeeklyProgressBarsTest {
         // For each week, assert progress percentage equals 100 / expectedDays (since actual is 7.5h on Tuesday only)
         progress.forEach { p ->
             val expectedDaysInWeek =
-                if (p.expectedHours > 0f) p.expectedHours / com.ps.redmine.util.WorkHours.configuredDailyHours() else 0f
+                (p.expectedHours / com.ps.redmine.util.WorkHours.configuredDailyHours()).toFloat()
             val expectedPct = if (expectedDaysInWeek > 0f) 100f / expectedDaysInWeek else 0f
             assertEquals(expectedPct, p.progressPercentage, 0.2f)
         }
@@ -403,8 +400,8 @@ class WeeklyProgressBarsTest {
         )
 
         // Actual hours total should be 5 * daily
-        val totalActualHours = progress.sumOf { it.actualHours.toDouble() }.toFloat()
-        assertEquals(5 * daily3, totalActualHours, 0.0001f)
+        val totalActualHours = progress.sumOfHours { it.actualHours }
+        assertEquals(daily3 * 5, totalActualHours)
 
         // Check specific weeks:
         // Week containing 2025-07-01 (spans June 30 - July 6): expected 3 days (Tue-Thu) => 22.5h, progress 7.5/22.5 = 33.33%
@@ -412,7 +409,7 @@ class WeeklyProgressBarsTest {
             val d = LocalDate(2025, 7, 1)
             d >= p.weekInfo.startDate && d <= p.weekInfo.endDate
         }
-        assertEquals(3 * daily3, weekWithJuly1.expectedHours, 0.0001f)
+        assertEquals(daily3 * 3, weekWithJuly1.expectedHours)
         assertEquals(33.3333f, weekWithJuly1.progressPercentage, 0.2f)
 
         // Week containing 2025-07-08 (fully within July Mon-Fri): expected 4 days (Mon,Wed,Thu,Fri) => 30h, progress 25%
@@ -420,13 +417,27 @@ class WeeklyProgressBarsTest {
             val d = LocalDate(2025, 7, 8)
             d >= p.weekInfo.startDate && d <= p.weekInfo.endDate
         }
-        assertEquals(4 * daily3, weekWithJuly8.expectedHours, 0.0001f)
+        assertEquals(daily3 * 4, weekWithJuly8.expectedHours)
         assertEquals(25f, weekWithJuly8.progressPercentage, 0.0001f)
 
         // Month percentage = total actual / total expected
         val expectedMonthPct =
-            if (totalExpectedDays > 0) (totalActualHours / (totalExpectedDays * daily3)) * 100f else 0f
+            if (totalExpectedDays > 0) totalActualHours.percentOf(daily3 * totalExpectedDays) else 0f
         assertEquals(expectedMonthPct, monthPercentage(progress), 0.0001f)
+    }
+
+    @Test
+    fun `a week is complete exactly when its hours are all logged`() {
+        val ym = YearMonth(2024, 1)
+        val days = (1..5).map { LocalDate(2024, 1, it) }
+        fun firstWeek(hours: (Int) -> Hours) = calculateWeeklyProgress(
+            days.mapIndexed { i, d -> TimeEntry(i + 1, d, hours(i), testActivity, testProject, testIssue) },
+            ym,
+            dailyHours = Hours.of(7.5),
+        ).first()
+
+        assertTrue(firstWeek { if (it % 2 == 0) Hours.of(3.7) + Hours.of(3.8) else Hours.of(7.5) }.isComplete)
+        assertFalse(firstWeek { if (it == 0) Hours.of(7.49) else Hours.of(7.5) }.isComplete)
     }
 
     @Test
@@ -436,7 +447,7 @@ class WeeklyProgressBarsTest {
         val progress = calculateWeeklyProgress(emptyList(), ym, excludedIsoDays = emptySet())
 
         // Find weeks with zero expected hours (i.e., no working days within month) — should be treated as 100% non-worked
-        val zeroExpectedWeeks = progress.filter { it.expectedHours == 0f }
+        val zeroExpectedWeeks = progress.filter { it.expectedHours == Hours.ZERO }
         assertTrue(
             zeroExpectedWeeks.isNotEmpty(),
             "There should be at least one week with zero expected hours in Feb 2025"

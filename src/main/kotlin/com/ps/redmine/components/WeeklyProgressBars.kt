@@ -24,7 +24,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.sumOfHours
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.*
 import kotlinx.datetime.LocalDate
@@ -35,11 +37,14 @@ import kotlinx.datetime.YearMonth
  */
 data class WeeklyProgress(
     val weekInfo: WeekInfo,
-    val actualHours: Float,
-    val expectedHours: Float,
+    val actualHours: Hours,
+    val expectedHours: Hours,
     val progressPercentage: Float,
     val isNonWorkedWeek: Boolean
-)
+) {
+    val isComplete: Boolean
+        get() = isNonWorkedWeek || (expectedHours > Hours.ZERO && actualHours >= expectedHours)
+}
 
 /**
  * Calculates weekly progress for all weeks in a month.
@@ -48,15 +53,14 @@ fun calculateWeeklyProgress(
     timeEntries: List<TimeEntry>,
     yearMonth: YearMonth,
     excludedIsoDays: Set<Int> = emptySet(),
-    dailyHours: Float = WorkHours.configuredDailyHours()
+    dailyHours: Hours = WorkHours.configuredDailyHours()
 ): List<WeeklyProgress> {
     val weeks = getWeeksInMonth(yearMonth.year, yearMonth.monthValue)
 
     return weeks.map { weekInfo ->
         val actualHours = timeEntries
             .filter { entry -> entry.date >= weekInfo.startDate && entry.date <= weekInfo.endDate }
-            .sumOf { it.hours.toDouble() }
-            .toFloat()
+            .sumOfHours { it.hours }
 
         val firstDayOfMonthK = yearMonth.atDay(1)
         val lastDayOfMonthK = yearMonth.atDay(yearMonth.lengthOfMonth())
@@ -64,12 +68,12 @@ fun calculateWeeklyProgress(
         val rangeEndK = if (weekInfo.endDate > lastDayOfMonthK) lastDayOfMonthK else weekInfo.endDate
 
         val effectiveWorkingDaysInWeek = countWorkingDays(rangeStartK, rangeEndK, excludedIsoDays)
-        val expectedHours = effectiveWorkingDaysInWeek * dailyHours
+        val expectedHours = dailyHours * effectiveWorkingDaysInWeek
 
         val isNonWorkedWeek = rangeStartK <= rangeEndK && effectiveWorkingDaysInWeek == 0
 
-        val progressPercentage = if (expectedHours > 0) {
-            (actualHours / expectedHours * 100).coerceAtMost(100f)
+        val progressPercentage = if (expectedHours > Hours.ZERO) {
+            actualHours.percentOf(expectedHours).coerceAtMost(100f)
         } else {
             if (isNonWorkedWeek) 100f else 0f
         }
@@ -92,7 +96,7 @@ fun WeeklyProgressBars(
     timeEntries: List<TimeEntry>,
     currentMonth: YearMonth,
     excludedIsoDays: Set<Int> = emptySet(),
-    dailyHours: Float = WorkHours.configuredDailyHours(),
+    dailyHours: Hours = WorkHours.configuredDailyHours(),
     selectedDate: LocalDate? = null,
     modifier: Modifier = Modifier,
     onWeekClick: ((WeekInfo) -> Unit)? = null
@@ -151,7 +155,7 @@ private fun WeekTooltip(progress: WeeklyProgress, isCurrentWeek: Boolean) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = Strings["week_tooltip_hours"].format(progress.actualHours, progress.expectedHours),
+                text = Strings["week_tooltip_hours"].format(progress.actualHours.format(), progress.expectedHours.format()),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -183,8 +187,7 @@ private fun WeekProgressBar(
 ) {
     // In-progress weeks get primary (Violet); complete weeks switch to secondary (Emerald)
     // so a glance at the bar column tells which weeks are done vs still owed.
-    val isComplete = progress.progressPercentage >= 100f
-    val fillColor = if (isComplete) MaterialTheme.colorScheme.secondary
+    val fillColor = if (progress.isComplete) MaterialTheme.colorScheme.secondary
     else MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
     // High-contrast neutral (near-black in light theme, near-white in dark) — guarantees

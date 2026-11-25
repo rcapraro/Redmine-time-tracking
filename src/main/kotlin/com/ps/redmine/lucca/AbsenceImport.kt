@@ -1,21 +1,22 @@
 package com.ps.redmine.lucca
 
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.sumOfHours
 import com.ps.redmine.util.WorkHours
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
-import kotlin.math.abs
 
-const val HALF_DAY_HOURS = 3.75f
-const val FULL_DAY_HOURS = 2 * HALF_DAY_HOURS
+val HALF_DAY_HOURS = Hours.of(3.75)
+val FULL_DAY_HOURS = HALF_DAY_HOURS * 2
 
 /** Separates the leave type from the period in the comment of an imported absence: "RTT — Morning". */
 const val ABSENCE_COMMENT_SEPARATOR = " — "
 
-val AbsencePeriod.hours: Float
+val AbsencePeriod.hours: Hours
     get() = when (this) {
         AbsencePeriod.FULL_DAY -> FULL_DAY_HOURS
         AbsencePeriod.MORNING, AbsencePeriod.AFTERNOON -> HALF_DAY_HOURS
@@ -46,9 +47,9 @@ sealed interface AbsenceImportStatus {
      * other absences of that day not imported yet.
      */
     data class Overbooked(
-        val otherHours: Float,
-        val otherAbsenceHours: Float,
-        val cancelledHours: Float = 0f,
+        val otherHours: Hours,
+        val otherAbsenceHours: Hours,
+        val cancelledHours: Hours = Hours.ZERO,
     ) : AbsenceImportStatus
 
     /**
@@ -58,7 +59,7 @@ sealed interface AbsenceImportStatus {
     data class DifferentHours(val existing: TimeEntry, val exceedsDay: Boolean) : AbsenceImportStatus
 
     /** Several entries already exist on the issue that day; only a person can tell which one is right. */
-    data class Ambiguous(val existingHours: Float) : AbsenceImportStatus
+    data class Ambiguous(val existingHours: Hours) : AbsenceImportStatus
 
     /**
      * The entry is on an absence issue but Lucca no longer has that absence (cancelled or refused); importing
@@ -74,9 +75,9 @@ data class AbsenceImportItem(
     val date: LocalDate,
     val slots: List<AbsenceSlot>,
     val target: AbsenceTarget?,
-    val hours: Float,
+    val hours: Hours,
     val status: AbsenceImportStatus,
-    val keptHours: Float = hours,
+    val keptHours: Hours = hours,
 ) {
     val key: String = "$date|" + when {
         status is AbsenceImportStatus.Cancelled -> "entry:${status.existing.id}"
@@ -103,7 +104,7 @@ fun planAbsenceImport(
     days: List<AbsenceDay>,
     entries: List<TimeEntry>,
     targets: Map<String, AbsenceTarget>,
-    dailyHours: Float = FULL_DAY_HOURS,
+    dailyHours: Hours = FULL_DAY_HOURS,
     unreadTypes: Set<String> = emptySet(),
 ): List<AbsenceImportItem> {
     val absenceIssues = AbsenceIssues(targets, unreadTypes)
@@ -141,7 +142,7 @@ private fun planDay(
     dayEntries: List<TimeEntry>,
     targets: Map<String, AbsenceTarget>,
     absenceIssues: AbsenceIssues,
-    dailyHours: Float,
+    dailyHours: Hours,
 ): List<AbsenceImportItem> {
     val (mapped, unmapped) = daySlots.partition { it.accountName in targets }
     // Grouped by ids only: two leave types mapped to the same issue and activity at different times may carry
@@ -159,19 +160,19 @@ private fun planDay(
     val cancelled = if (unmapped.isNotEmpty()) emptyList() else dayEntries.filter { entry ->
         absenceIssues.importedTarget(entry) != null && groups.keys.none { it.owns(entry) }
     }
-    val cancelledHours = cancelled.sumOf { it.hours.toDouble() }.toFloat()
-    val hoursByTarget = groups.mapValues { (_, slots) -> slots.sumOf { it.period.hours.toDouble() }.toFloat() }
+    val cancelledHours = cancelled.sumOfHours { it.hours }
+    val hoursByTarget = groups.mapValues { (_, slots) -> slots.sumOfHours { it.period.hours } }
     val pendingHoursByTarget = hoursByTarget.filterKeys { target -> dayEntries.none { target.owns(it) } }
 
     val mappedItems = groups.map { (target, slots) ->
         val hours = hoursByTarget.getValue(target)
         val owned = dayEntries.filter { target.owns(it) }
-        val ownedHours = owned.sumOf { it.hours.toDouble() }.toFloat()
-        val otherHours = dayEntries.filterNot { target.owns(it) }.sumOf { it.hours.toDouble() }.toFloat()
-        val otherPending = pendingHoursByTarget.filterKeys { it != target }.values.sum()
-        val exceedsDay = otherHours + otherPending + hours > dailyHours + WorkHours.HOURS_TOLERANCE
+        val ownedHours = owned.sumOfHours { it.hours }
+        val otherHours = dayEntries.filterNot { target.owns(it) }.sumOfHours { it.hours }
+        val otherPending = pendingHoursByTarget.filterKeys { it != target }.values.sumOfHours { it }
+        val exceedsDay = otherHours + otherPending + hours > dailyHours
         val status = when {
-            owned.isNotEmpty() && sameHours(ownedHours, hours) -> AbsenceImportStatus.AlreadyEntered
+            owned.isNotEmpty() && ownedHours == hours -> AbsenceImportStatus.AlreadyEntered
             owned.size == 1 -> AbsenceImportStatus.DifferentHours(owned.single(), exceedsDay)
             owned.size > 1 -> AbsenceImportStatus.Ambiguous(ownedHours)
             exceedsDay -> AbsenceImportStatus.Overbooked(otherHours, otherPending, cancelledHours)
@@ -214,19 +215,17 @@ fun reconcileSelection(
 fun daysExceedingFullDay(
     selected: List<AbsenceImportItem>,
     entries: List<TimeEntry>,
-    dailyHours: Float = FULL_DAY_HOURS,
+    dailyHours: Hours = FULL_DAY_HOURS,
 ): Set<LocalDate> =
     selected.groupBy { it.date }.filter { (date, items) ->
-        val logged = entries.filter { it.date == date }.sumOf { it.hours.toDouble() }
-        val removed = items.sumOf { item ->
+        val logged = entries.filter { it.date == date }.sumOfHours { it.hours }
+        val removed = items.sumOfHours { item ->
             when (val status = item.status) {
-                is AbsenceImportStatus.DifferentHours -> status.existing.hours.toDouble()
-                is AbsenceImportStatus.Cancelled -> status.existing.hours.toDouble()
-                else -> 0.0
+                is AbsenceImportStatus.DifferentHours -> status.existing.hours
+                is AbsenceImportStatus.Cancelled -> status.existing.hours
+                else -> Hours.ZERO
             }
         }
-        val added = items.filterNot { it.isDeletion }.sumOf { it.hours.toDouble() }
-        logged - removed + added > dailyHours + WorkHours.HOURS_TOLERANCE
+        val added = items.filterNot { it.isDeletion }.sumOfHours { it.hours }
+        logged - removed + added > dailyHours
     }.keys
-
-private fun sameHours(a: Float, b: Float) = abs(a - b) <= WorkHours.HOURS_TOLERANCE

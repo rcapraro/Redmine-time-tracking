@@ -28,7 +28,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.TimeEntry
+import com.ps.redmine.model.sumOfHours
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.DateFormatter
 import com.ps.redmine.util.WorkHours
@@ -38,7 +40,6 @@ import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import java.util.*
-import kotlin.math.abs
 
 sealed interface DuplicateTarget {
     data object SameDay : DuplicateTarget
@@ -124,7 +125,7 @@ fun TimeEntriesList(
 
     val dailyTotals = remember(entriesByDate) {
         entriesByDate.mapValues { (_, entries) ->
-            entries.sumOf { it.hours.toDouble() }.toFloat()
+            entries.sumOfHours { it.hours }
         }
     }
 
@@ -178,7 +179,7 @@ fun TimeEntriesList(
                 item(key = "header-$date") {
                     DateHeader(
                         date = date,
-                        totalHours = dailyTotals[date] ?: 0f,
+                        totalHours = dailyTotals[date] ?: Hours.ZERO,
                         locale = locale,
                         modifier = Modifier.animateItem()
                     )
@@ -358,15 +359,11 @@ private fun EmptyEntriesPlaceholder(modifier: Modifier = Modifier) {
 @Composable
 fun DateHeader(
     date: LocalDate,
-    totalHours: Float,
+    totalHours: Hours,
     locale: Locale = Locale.getDefault(),
     modifier: Modifier = Modifier,
 ) {
     val targetDaily = WorkHours.configuredDailyHours()
-    val hoursDelta = totalHours - targetDaily
-    val missingHours = if (hoursDelta <= -WorkHours.HOURS_TOLERANCE) -hoursDelta else 0f
-    val excessHours = if (hoursDelta >= WorkHours.HOURS_TOLERANCE) hoursDelta else 0f
-    val isPerfectHours = abs(hoursDelta) < WorkHours.HOURS_TOLERANCE
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -400,7 +397,7 @@ fun DateHeader(
                     shape = MaterialTheme.shapes.small,
                 ) {
                     Text(
-                        text = Strings["hours_format"].format(totalHours),
+                        text = Strings["hours_format"].format(totalHours.format()),
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -410,23 +407,23 @@ fun DateHeader(
             Spacer(modifier = Modifier.height(4.dp))
 
             when {
-                isPerfectHours -> StatusRow(
+                totalHours == targetDaily -> StatusRow(
                     icon = Icons.Outlined.CheckCircle,
-                    text = Strings["perfect_hours"].format(targetDaily),
+                    text = Strings["perfect_hours"].format(targetDaily.format()),
                     container = MaterialTheme.colorScheme.secondaryContainer,
                     onContainer = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
 
-                missingHours > 0 -> StatusRow(
+                totalHours < targetDaily -> StatusRow(
                     icon = Icons.Outlined.WarningAmber,
-                    text = Strings["missing_hours"].format(missingHours, targetDaily),
+                    text = Strings["missing_hours"].format((targetDaily - totalHours).format(), targetDaily.format()),
                     container = MaterialTheme.colorScheme.errorContainer,
                     onContainer = MaterialTheme.colorScheme.onErrorContainer,
                 )
 
-                excessHours > 0 -> StatusRow(
+                else -> StatusRow(
                     icon = Icons.Outlined.WarningAmber,
-                    text = Strings["excess_hours"].format(excessHours, targetDaily),
+                    text = Strings["excess_hours"].format((totalHours - targetDaily).format(), targetDaily.format()),
                     container = MaterialTheme.colorScheme.errorContainer,
                     onContainer = MaterialTheme.colorScheme.onErrorContainer,
                 )
@@ -571,7 +568,7 @@ fun TimeEntryItem(
                         shape = MaterialTheme.shapes.small,
                     ) {
                         Text(
-                            text = Strings["hours_format"].format(timeEntry.hours),
+                            text = Strings["hours_format"].format(timeEntry.hours.format()),
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )

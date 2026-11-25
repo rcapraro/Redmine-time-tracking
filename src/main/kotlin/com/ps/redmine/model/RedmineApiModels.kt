@@ -109,7 +109,7 @@ fun RedmineTimeEntry.toDomainModel(issueCache: Map<Int, Issue> = emptyMap()): Ti
     return TimeEntry(
         id = id,
         date = date,
-        hours = hours,
+        hours = Hours.of(hours.toDouble()),
         activity = activity.toDomainModel(),
         project = project.toDomainModel(),
         issue = domainIssue,
@@ -148,7 +148,7 @@ fun TimeEntry.toApiModel(): RedmineTimeEntry {
     val apiModel = RedmineTimeEntry(
         id = id,
         spentOn = date.toString(),
-        hours = hours,
+        hours = hours.toFloat(),
         activity = activity.toApiModel(),
         project = project.toApiModel(),
         issue = issue.toApiModel(),
@@ -166,7 +166,7 @@ fun TimeEntry.toApiRequest(): RedmineTimeEntryRequest {
     val apiRequest = RedmineTimeEntryRequest(
         id = id,
         spentOn = date.toString(),
-        hours = hours,
+        hours = hours.toFloat(),
         activityId = activity.id,
         projectId = project.id,
         issueId = issue.id,

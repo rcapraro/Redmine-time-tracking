@@ -1,6 +1,8 @@
 package com.ps.redmine.config
 
+import com.ps.redmine.model.Hours
 import java.util.prefs.BackingStoreException
+import kotlin.math.roundToInt
 
 data class Config(
     val redmineUri: String = "",
@@ -8,7 +10,7 @@ data class Config(
     val isDarkTheme: Boolean = false,
     val language: String = "fr", // Default to French
     val nonWorkingIsoDays: Set<Int> = emptySet(), // Allowed: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri
-    val dailyHours: Float = 7.5f // Configurable daily hours (6.0 .. 7.5, step 0.5)
+    val dailyHours: Hours = Hours.of(7.5) // Configurable daily hours (6.0 .. 7.5, step 0.5)
 )
 
 object ConfigurationManager {
@@ -20,16 +22,17 @@ object ConfigurationManager {
     private const val KEY_NON_WORKING_ISO_DAYS = "redmine.nonWorkingIsoDays"
     private const val KEY_DAILY_HOURS = "redmine.dailyHours"
 
-    private const val DAILY_HOURS_MIN = 6.0f
-    private const val DAILY_HOURS_MAX = 7.5f
+    private val DAILY_HOURS_MIN = Hours.of(6.0)
+    private val DAILY_HOURS_MAX = Hours.of(7.5)
+    private val DAILY_HOURS_STEP = Hours.of(0.5)
     private const val MAX_NON_WORKING_DAYS = 4
 
     private val preferences = java.util.prefs.Preferences.userRoot().node(PREFERENCES_NODE)
 
     /** Clamps to [DAILY_HOURS_MIN, DAILY_HOURS_MAX] and rounds to the nearest 0.5. */
-    private fun normalizeDailyHours(value: Float): Float {
+    private fun normalizeDailyHours(value: Hours): Hours {
         val clamped = value.coerceIn(DAILY_HOURS_MIN, DAILY_HOURS_MAX)
-        return Math.round(clamped * 2) / 2.0f
+        return DAILY_HOURS_STEP * (clamped / DAILY_HOURS_STEP).roundToInt()
     }
 
     private fun parseNonWorkingDays(csv: String): Set<Int> =
@@ -55,7 +58,7 @@ object ConfigurationManager {
         language = preferences.get(KEY_LANGUAGE, "fr"), // Default to French if not set
         nonWorkingIsoDays = parseNonWorkingDays(preferences.get(KEY_NON_WORKING_ISO_DAYS, "")),
         dailyHours = normalizeDailyHours(
-            preferences.get(KEY_DAILY_HOURS, null)?.toFloatOrNull() ?: DAILY_HOURS_MAX
+            preferences.get(KEY_DAILY_HOURS, null)?.let(Hours::parse) ?: DAILY_HOURS_MAX
         )
     )
 

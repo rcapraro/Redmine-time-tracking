@@ -5,7 +5,7 @@ import kotlinx.datetime.LocalDate
 data class TimeEntry(
     val id: Int? = null,
     val date: LocalDate,
-    val hours: Float,
+    val hours: Hours,
     val activity: Activity,
     val project: Project,
     val issue: Issue,

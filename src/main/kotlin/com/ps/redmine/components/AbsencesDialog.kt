@@ -25,6 +25,7 @@ import com.ps.redmine.config.ConfigurationManager
 import com.ps.redmine.lucca.*
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.model.User
+import com.ps.redmine.model.sumOfHours
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.WorkHours
 import com.ps.redmine.util.atDay
@@ -578,7 +579,7 @@ private fun selectionSummary(
     deletions: List<AbsenceImportItem>,
     locale: Locale,
 ): String {
-    fun hoursOf(items: List<AbsenceImportItem>) = formatHours(items.sumOf { it.hours.toDouble() }.toFloat(), locale)
+    fun hoursOf(items: List<AbsenceImportItem>) = formatHours(items.sumOfHours { it.hours }, locale)
     val parts = buildList {
         if (writes.isNotEmpty()) add(Strings["absence_selection_summary"].format(writes.size, hoursOf(writes)))
         if (deletions.isNotEmpty()) add(Strings["absence_selection_deletions"].format(deletions.size, hoursOf(deletions)))

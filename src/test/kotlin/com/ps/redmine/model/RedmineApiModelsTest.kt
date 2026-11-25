@@ -31,7 +31,7 @@ class RedmineApiModelsTest {
         assertEquals(123, domainTimeEntry.issue.id)
         assertEquals("Fix critical bug in authentication system", domainTimeEntry.issue.subject)
         assertEquals(LocalDate(2024, 1, 15), domainTimeEntry.date)
-        assertEquals(8.0f, domainTimeEntry.hours)
+        assertEquals(Hours.of(8.0), domainTimeEntry.hours)
         assertEquals("Test comment", domainTimeEntry.comments)
     }
 

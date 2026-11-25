@@ -17,14 +17,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
 import com.ps.redmine.resources.Strings
 import com.ps.redmine.util.WorkHours
 import kotlinx.coroutines.CancellationException
-
-private val HOURS_INPUT_REGEX = Regex("^\\d*([\\.,]\\d{0,1})?$")
 
 @Composable
 fun BulkActionBar(
@@ -100,7 +99,7 @@ fun BulkEditDialog(
         newProject: Project?,
         newActivity: Activity?,
         newIssue: Issue?,
-        newHours: Float?,
+        newHours: Hours?,
         newComments: String?,
     ) -> Unit,
 ) {
@@ -173,13 +172,13 @@ fun BulkEditDialog(
     }
 
     val maxHours = WorkHours.configuredDailyHours()
-    val parsedHours = hoursText.replace(',', '.').toFloatOrNull()
+    val parsedHours = Hours.parse(hoursText)
     val hoursError: String? = when {
         !modifyHours -> null
         hoursText.isEmpty() -> Strings["hours_must_be_positive"]
         parsedHours == null -> Strings["invalid_number"]
-        parsedHours <= 0f -> Strings["hours_must_be_positive"]
-        parsedHours > maxHours -> Strings["hours_max_value"].format(maxHours)
+        parsedHours <= Hours.ZERO -> Strings["hours_must_be_positive"]
+        parsedHours > maxHours -> Strings["hours_max_value"].format(maxHours.format())
         else -> null
     }
     val hoursValid = hoursError == null
@@ -286,8 +285,8 @@ fun BulkEditDialog(
                             OutlinedTextField(
                                 value = hoursText,
                                 onValueChange = { input ->
-                                    if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
-                                        val candidate = input.replace(',', '.').toFloatOrNull()
+                                    if (input.isEmpty() || input.matches(Hours.INPUT_REGEX)) {
+                                        val candidate = Hours.parse(input)
                                         if (candidate == null || candidate <= maxHours) {
                                             hoursText = input
                                         }
@@ -299,7 +298,7 @@ fun BulkEditDialog(
                                 isError = modifyHours && !hoursValid,
                             )
                             TextButton(
-                                onClick = { hoursText = Strings["total_hours_format"].format(maxHours) },
+                                onClick = { hoursText = maxHours.format() },
                             ) {
                                 Text(Strings["full_day"])
                             }

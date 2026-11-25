@@ -1,6 +1,7 @@
 package com.ps.redmine.lucca
 
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
@@ -21,10 +22,10 @@ class AbsenceImportTest {
 
     private fun absence(vararg slots: AbsenceSlot) = listOf(AbsenceDay(day, slots.toList()))
 
-    private fun entry(issueId: Int, hours: Float, id: Int = issueId, activityId: Int = 9, comments: String? = null) =
+    private fun entry(issueId: Int, hours: Hours, id: Int = issueId, activityId: Int = 9, comments: String? = null) =
         TimeEntry(id, day, hours, Activity(activityId, "Absence"), Project(1, "Interne"), Issue(issueId, "x"), comments)
 
-    private fun imported(type: String, issueId: Int, hours: Float, id: Int = issueId, activityId: Int = 9) =
+    private fun imported(type: String, issueId: Int, hours: Hours, id: Int = issueId, activityId: Int = 9) =
         entry(issueId, hours, id, activityId, comments = "$type${ABSENCE_COMMENT_SEPARATOR}Journée")
 
     private fun planSingle(days: List<AbsenceDay>, entries: List<TimeEntry> = emptyList()) =
@@ -32,9 +33,9 @@ class AbsenceImportTest {
 
     @Test
     fun `a half day is 3,75 h whether morning or afternoon`() {
-        assertEquals(3.75f, planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true))).hours)
-        assertEquals(3.75f, planSingle(absence(AbsenceSlot("CP", AbsencePeriod.AFTERNOON, true))).hours)
-        assertEquals(7.5f, planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true))).hours)
+        assertEquals(Hours.of(3.75), planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true))).hours)
+        assertEquals(Hours.of(3.75), planSingle(absence(AbsenceSlot("CP", AbsencePeriod.AFTERNOON, true))).hours)
+        assertEquals(Hours.of(7.5), planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true))).hours)
     }
 
     @Test
@@ -48,7 +49,7 @@ class AbsenceImportTest {
 
     @Test
     fun `absence already logged with the same hours is not proposed again`() {
-        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(entry(100, 3.75f)))
+        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(entry(100, Hours.of(3.75))))
 
         assertEquals(AbsenceImportStatus.AlreadyEntered, item.status)
         assertFalse(item.isSelectable)
@@ -56,7 +57,7 @@ class AbsenceImportTest {
 
     @Test
     fun `absence logged with other hours is a replaceable conflict`() {
-        val existing = entry(100, 7.5f)
+        val existing = entry(100, Hours.of(7.5))
         val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(existing))
 
         assertEquals(AbsenceImportStatus.DifferentHours(existing, exceedsDay = false), item.status)
@@ -65,10 +66,10 @@ class AbsenceImportTest {
 
     @Test
     fun `replacing an absence flags a day that would then exceed a full day`() {
-        val existing = entry(100, 3.75f)
+        val existing = entry(100, Hours.of(3.75))
         val item = planSingle(
             absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
-            listOf(existing, entry(500, 4f)),
+            listOf(existing, entry(500, Hours.of(4.0))),
         )
 
         assertEquals(AbsenceImportStatus.DifferentHours(existing, exceedsDay = true), item.status)
@@ -78,25 +79,25 @@ class AbsenceImportTest {
     fun `several entries on the absence issue cannot be resolved automatically`() {
         val item = planSingle(
             absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
-            listOf(entry(100, 2f, id = 1), entry(100, 3f, id = 2)),
+            listOf(entry(100, Hours.of(2.0), id = 1), entry(100, Hours.of(3.0), id = 2)),
         )
 
-        assertEquals(AbsenceImportStatus.Ambiguous(5f), item.status)
+        assertEquals(AbsenceImportStatus.Ambiguous(Hours.of(5.0)), item.status)
         assertFalse(item.isSelectable)
     }
 
     @Test
     fun `half-day absence next to a half day of work fits`() {
-        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.AFTERNOON, true)), listOf(entry(500, 3.75f)))
+        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.AFTERNOON, true)), listOf(entry(500, Hours.of(3.75))))
 
         assertEquals(AbsenceImportStatus.ToAdd, item.status)
     }
 
     @Test
     fun `absence that would exceed a full day is an overbooking conflict`() {
-        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(entry(500, 4f)))
+        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(entry(500, Hours.of(4.0))))
 
-        assertEquals(AbsenceImportStatus.Overbooked(otherHours = 4f, otherAbsenceHours = 0f), item.status)
+        assertEquals(AbsenceImportStatus.Overbooked(otherHours = Hours.of(4.0), otherAbsenceHours = Hours.ZERO), item.status)
         assertTrue(item.isSelectable)
     }
 
@@ -109,7 +110,7 @@ class AbsenceImportTest {
         )
 
         assertEquals(listOf(AbsenceImportStatus.ToAdd, AbsenceImportStatus.ToAdd), items.map { it.status })
-        assertEquals(listOf(3.75f, 3.75f), items.map { it.hours })
+        assertEquals(listOf(Hours.of(3.75), Hours.of(3.75)), items.map { it.hours })
     }
 
     @Test
@@ -117,7 +118,7 @@ class AbsenceImportTest {
         val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
         val items = planAbsenceImport(
             absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true), AbsenceSlot("RTT", AbsencePeriod.AFTERNOON, true)),
-            listOf(entry(100, 3.75f, activityId = 10)),
+            listOf(entry(100, Hours.of(3.75), activityId = 10)),
             mapOf("CP" to paidLeaveActivity, "RTT" to paidLeave),
         )
 
@@ -134,7 +135,7 @@ class AbsenceImportTest {
             mapOf("CP" to paidLeave, "RTT" to paidLeave),
         )
 
-        assertEquals(7.5f, items.single().hours)
+        assertEquals(Hours.of(7.5), items.single().hours)
         assertEquals(2, items.single().slots.size)
     }
 
@@ -147,7 +148,7 @@ class AbsenceImportTest {
             mapOf("CP" to paidLeave, "RTT" to renamed),
         )
 
-        assertEquals(7.5f, items.single().hours)
+        assertEquals(Hours.of(7.5), items.single().hours)
         assertEquals(AbsenceImportStatus.ToAdd, items.single().status)
     }
 
@@ -161,7 +162,7 @@ class AbsenceImportTest {
         )
 
         assertEquals(
-            AbsenceImportStatus.Overbooked(otherHours = 0f, otherAbsenceHours = 3.75f),
+            AbsenceImportStatus.Overbooked(otherHours = Hours.ZERO, otherAbsenceHours = Hours.of(3.75)),
             items.first { it.target == paidLeave }.status,
         )
     }
@@ -181,16 +182,16 @@ class AbsenceImportTest {
 
     @Test
     fun `a replacement only counts its new hours towards the day`() {
-        val existing = entry(100, 7.5f)
-        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(existing, entry(500, 3.75f)))
+        val existing = entry(100, Hours.of(7.5))
+        val item = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(existing, entry(500, Hours.of(3.75))))
 
-        assertEquals(emptySet<LocalDate>(), daysExceedingFullDay(listOf(item), listOf(existing, entry(500, 3.75f))))
+        assertEquals(emptySet<LocalDate>(), daysExceedingFullDay(listOf(item), listOf(existing, entry(500, Hours.of(3.75)))))
     }
 
     @Test
     fun `an absence entry no longer backed by Lucca is offered for deletion, unticked`() {
-        val existing = imported("CP", 100, 7.5f)
-        val item = planSingle(emptyList(), listOf(existing, entry(500, 2f)))
+        val existing = imported("CP", 100, Hours.of(7.5))
+        val item = planSingle(emptyList(), listOf(existing, entry(500, Hours.of(2.0))))
 
         assertEquals(AbsenceImportStatus.Cancelled(existing), item.status)
         assertEquals(paidLeave, item.target)
@@ -200,18 +201,18 @@ class AbsenceImportTest {
 
     @Test
     fun `each cancelled entry of a day is its own item`() {
-        val items = planAbsenceImport(emptyList(), listOf(imported("CP", 100, 3.75f, id = 1), imported("CP", 100, 3.75f, id = 2)), targets)
+        val items = planAbsenceImport(emptyList(), listOf(imported("CP", 100, Hours.of(3.75), id = 1), imported("CP", 100, Hours.of(3.75), id = 2)), targets)
 
         assertEquals(2, items.map { it.key }.distinct().size)
     }
 
     @Test
     fun `a leave whose type changed is not pre-selected while the old entry still fills the day`() {
-        val oldRtt = imported("RTT", 101, 7.5f)
+        val oldRtt = imported("RTT", 101, Hours.of(7.5))
         val items = planAbsenceImport(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(oldRtt), targets)
 
         assertEquals(
-            listOf(AbsenceImportStatus.Overbooked(7.5f, 0f, cancelledHours = 7.5f), AbsenceImportStatus.Cancelled(oldRtt)),
+            listOf(AbsenceImportStatus.Overbooked(Hours.of(7.5), Hours.ZERO, cancelledHours = Hours.of(7.5)), AbsenceImportStatus.Cancelled(oldRtt)),
             items.map { it.status },
         )
         assertFalse(items.first().isSelectedByDefault())
@@ -222,7 +223,7 @@ class AbsenceImportTest {
     @Test
     fun `a leave whose type changed on a shared issue is told apart by its activity`() {
         val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
-        val oldRtt = imported("RTT", 100, 7.5f, activityId = 9)
+        val oldRtt = imported("RTT", 100, Hours.of(7.5), activityId = 9)
         val items = planAbsenceImport(
             absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
             listOf(oldRtt),
@@ -230,7 +231,7 @@ class AbsenceImportTest {
         )
 
         assertEquals(
-            listOf(AbsenceImportStatus.Overbooked(7.5f, 0f, cancelledHours = 7.5f), AbsenceImportStatus.Cancelled(oldRtt)),
+            listOf(AbsenceImportStatus.Overbooked(Hours.of(7.5), Hours.ZERO, cancelledHours = Hours.of(7.5)), AbsenceImportStatus.Cancelled(oldRtt)),
             items.map { it.status },
         )
     }
@@ -239,7 +240,7 @@ class AbsenceImportTest {
     fun `nothing is taken as cancelled on a day with an unmapped leave`() {
         val items = planAbsenceImport(
             absence(AbsenceSlot("CP 2026-2027", AbsencePeriod.FULL_DAY, true)),
-            listOf(imported("CP", 100, 7.5f)),
+            listOf(imported("CP", 100, Hours.of(7.5))),
             targets,
         )
 
@@ -249,7 +250,7 @@ class AbsenceImportTest {
     @Test
     fun `an imported entry of a type Lucca could not be read for is not taken as cancelled`() {
         val holidayTarget = AbsenceTarget(1, "Interne", 103, "Jours fériés", 9, "Absence")
-        val holiday = imported(PUBLIC_HOLIDAY_ACCOUNT, 103, 7.5f)
+        val holiday = imported(PUBLIC_HOLIDAY_ACCOUNT, 103, Hours.of(7.5))
         val withHolidays = targets + (PUBLIC_HOLIDAY_ACCOUNT to holidayTarget)
 
         assertEquals(
@@ -264,7 +265,7 @@ class AbsenceImportTest {
 
     @Test
     fun `an entry on an absence issue that the import did not create is never offered for deletion`() {
-        val publicHoliday = entry(100, 7.5f, comments = "Jour férié")
+        val publicHoliday = entry(100, Hours.of(7.5), comments = "Jour férié")
 
         assertEquals(emptyList<AbsenceImportItem>(), planAbsenceImport(emptyList(), listOf(publicHoliday), targets))
     }
@@ -274,7 +275,7 @@ class AbsenceImportTest {
         val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
         val item = planAbsenceImport(
             absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)),
-            listOf(entry(100, 3.75f, activityId = 12)),
+            listOf(entry(100, Hours.of(3.75), activityId = 12)),
             mapOf("CP" to paidLeaveActivity, "RTT" to paidLeave),
         ).single()
 
@@ -284,16 +285,16 @@ class AbsenceImportTest {
     @Test
     fun `the day is capped at the configured daily hours`() {
         val days = absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true))
-        val logged = listOf(entry(500, 4.25f))
+        val logged = listOf(entry(500, Hours.of(4.25)))
 
-        assertEquals(AbsenceImportStatus.ToAdd, planAbsenceImport(days, logged, targets, dailyHours = 8f).single().status)
+        assertEquals(AbsenceImportStatus.ToAdd, planAbsenceImport(days, logged, targets, dailyHours = Hours.of(8.0)).single().status)
         assertTrue(planAbsenceImport(days, logged, targets).single().status is AbsenceImportStatus.Overbooked)
     }
 
     @Test
     fun `a cancelled entry on a shared issue under an unmapped activity is attributed by its comment`() {
         val paidLeaveActivity = paidLeave.copy(activityId = 10, activityName = "Congés")
-        val existing = imported("RTT", 100, 7.5f, activityId = 11)
+        val existing = imported("RTT", 100, Hours.of(7.5), activityId = 11)
         val item = planAbsenceImport(
             emptyList(),
             listOf(existing),
@@ -306,16 +307,16 @@ class AbsenceImportTest {
 
     @Test
     fun `an absence overflowing the day tells how many hours Redmine will keep`() {
-        val overbooked = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(entry(500, 5f)))
+        val overbooked = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)), listOf(entry(500, Hours.of(5.0))))
         val replaced = planSingle(
             absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true)),
-            listOf(entry(100, 3.75f), entry(500, 4f)),
+            listOf(entry(100, Hours.of(3.75)), entry(500, Hours.of(4.0))),
         )
-        val fitting = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(entry(500, 3.75f)))
+        val fitting = planSingle(absence(AbsenceSlot("CP", AbsencePeriod.MORNING, true)), listOf(entry(500, Hours.of(3.75))))
 
-        assertEquals(2.5f, overbooked.keptHours)
-        assertEquals(3.5f, replaced.keptHours)
-        assertEquals(3.75f, fitting.keptHours)
+        assertEquals(Hours.of(2.5), overbooked.keptHours)
+        assertEquals(Hours.of(3.5), replaced.keptHours)
+        assertEquals(Hours.of(3.75), fitting.keptHours)
     }
 
     @Test
@@ -356,7 +357,7 @@ class AbsenceImportTest {
     fun `a selected item whose status changed falls back to its default`() {
         val days = absence(AbsenceSlot("CP", AbsencePeriod.FULL_DAY, true))
         val before = planAbsenceImport(days, emptyList(), targets)
-        val after = planAbsenceImport(days, listOf(entry(500, 4f)), targets)
+        val after = planAbsenceImport(days, listOf(entry(500, Hours.of(4.0))), targets)
 
         val reconciled = reconcileSelection(after, before.associate { it.key to it.status }, setOf(before.single().key))
 

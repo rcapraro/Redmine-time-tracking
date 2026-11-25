@@ -1,6 +1,7 @@
 package com.ps.redmine.api
 
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
@@ -231,7 +232,7 @@ class KtorRedmineClientTest {
         assertEquals(150, entries.size)
         // Check a few mapped fields
         val sample = entries.first()
-        assertEquals(7.5f, sample.hours)
+        assertEquals(Hours.of(7.5), sample.hours)
         assertEquals(1, sample.activity.id)
         assertEquals("Dev", sample.activity.name)
         assertEquals(1, sample.project.id)
@@ -294,7 +295,7 @@ class KtorRedmineClientTest {
         val timeEntry = TimeEntry(
             id = null,
             date = kotlinx.datetime.LocalDate(2024, 1, 10),
-            hours = 8.0f,
+            hours = Hours.of(8.0),
             activity = Activity(1, "Dev"),
             project = Project(1, "Proj"),
             issue = Issue(200, "Issue 200"),
@@ -331,7 +332,7 @@ class KtorRedmineClientTest {
         val timeEntry = TimeEntry(
             id = null,
             date = kotlinx.datetime.LocalDate(2024, 1, 10),
-            hours = 0.0f,
+            hours = Hours.ZERO,
             activity = Activity(1, "Dev"),
             project = Project(1, "Proj"),
             issue = Issue(0, ""),
@@ -409,7 +410,7 @@ class KtorRedmineClientTest {
             TimeEntry(
                 id = null,
                 date = kotlinx.datetime.LocalDate(2024, 1, 10),
-                hours = 8.0f,
+                hours = Hours.of(8.0),
                 activity = Activity(1, "Dev"),
                 project = Project(1, "Proj"),
                 issue = Issue(200, "Issue 200"),

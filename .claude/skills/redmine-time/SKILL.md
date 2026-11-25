@@ -47,6 +47,9 @@ Repository wrapper. Don't introduce these abstractions unless the user asks — 
   via `Config.nonWorkingIsoDays`. Saturday/Sunday are always weekend.
 - **Daily hours:** the legacy default is 7.5h (`WorkHours.DAILY_STANDARD_HOURS`), but actual computations should use
   `WorkHours.configuredDailyHours()` so user overrides apply.
+- **Hours are `model/Hours`** (whole seconds), never `Float`/`Double`: sums (`sumOfHours`) and comparisons are
+  exact, so day/week/month completeness is a plain `==`/`>=` with no tolerance. `Float` only appears in the Redmine
+  DTOs (`RedmineApiModels.kt`) and in percentages (`Hours.percentOf`).
 - **Weeks-in-month logic** (`getWeeksInMonth`, `isoWeekNumber` in `util/DateUtils.kt`) is ISO-8601 (Monday-start,
   Thursday-anchored). Treat these as the source of truth for week math — don't roll your own.
 - **Connection-error classification:** `Main.kt::isConnectionError` distinguishes network/IO failures (and non-422

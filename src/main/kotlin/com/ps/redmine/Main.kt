@@ -64,12 +64,6 @@ import java.io.PrintWriter
 import java.util.*
 import kotlin.coroutines.cancellation.CancellationException
 
-/**
- * Validates that a string is a valid hours input (digits, optional . or , decimal, max 1 fractional digit).
- * Hoisted out of the onValueChange lambda so it isn't recompiled on every keystroke.
- */
-private val HOURS_INPUT_REGEX = Regex("^\\d*([\\.,]\\d{0,1})?$")
-
 private val UserMenuWidth = 300.dp
 
 /**
@@ -217,7 +211,7 @@ fun App(
     }
 
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
-    val totalHours = remember(timeEntries) { timeEntries.sumOf { it.hours.toDouble() } }
+    val totalHours = remember(timeEntries) { timeEntries.sumOfHours { it.hours } }
 
     // Working-day arithmetic for the current month — lifted so onSave can detect a completion transition.
     val effectiveDays = remember(currentMonth, nonWorkingIsoDays) {
@@ -229,14 +223,15 @@ fun App(
         )
         countWorkingDays(firstK, lastK, nonWorkingIsoDays)
     }
-    val expectedHours = effectiveDays * dailyHours
-    // expectedHours is a Float product while totalHours accumulates Doubles, so a perfectly
-    // filled month can land just under the target — compare against the tolerated threshold.
-    val completionThreshold = expectedHours - WorkHours.HOURS_TOLERANCE
-    val isCompleted = expectedHours > 0 && totalHours >= completionThreshold
+    val expectedHours = dailyHours * effectiveDays
+    val isCompleted = expectedHours > Hours.ZERO && totalHours >= expectedHours
 
     // Confetti trigger key — incrementing fires a fresh burst.
     var confettiTrigger by remember { mutableStateOf(0) }
+
+    fun celebrateIfMonthJustCompleted(previousTotal: Hours) {
+        if (previousTotal < expectedHours && timeEntries.sumOfHours { it.hours } >= expectedHours) confettiTrigger++
+    }
 
     // Selected calendar date used to initialize the date field when creating a new entry
     var selectedDate by remember { mutableStateOf(com.ps.redmine.util.today) }
@@ -264,12 +259,7 @@ fun App(
             val iso = d.dayOfWeek.isoDayNumber
             if (iso in 1..5 && !excludedIsoDays.contains(iso)) {
                 if (firstWorkingDay == null) firstWorkingDay = d
-                val totalForDay = entries
-                    .asSequence()
-                    .filter { it.date == d }
-                    .sumOf { it.hours.toDouble() }
-                    .toFloat()
-                if (totalForDay < WorkHours.configuredDailyHours() - WorkHours.HOURS_TOLERANCE) {
+                if (entries.sumOfHours { if (it.date == d) it.hours else Hours.ZERO } < dailyHours) {
                     return d
                 }
             }
@@ -366,10 +356,7 @@ fun App(
                 }
                 notifier.success(message)
 
-                val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
-                    confettiTrigger++
-                }
+                celebrateIfMonthJustCompleted(previousTotal)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -445,7 +432,7 @@ fun App(
         newProject: Project?,
         newActivity: Activity?,
         newIssue: Issue?,
-        newHours: Float?,
+        newHours: Hours?,
         newComments: String?,
     ) {
         val targets = timeEntries.filter { it.id != null && it.id in selectedEntryIds }
@@ -477,10 +464,7 @@ fun App(
                 selectedTimeEntry = selectedTimeEntry?.id?.let { id -> timeEntries.firstOrNull { it.id == id } }
                 notifier.success(Strings["bulk_entries_updated"].format(targets.size))
 
-                val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
-                    confettiTrigger++
-                }
+                celebrateIfMonthJustCompleted(previousTotal)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -805,17 +789,18 @@ fun App(
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                     Text(
-                                        text = Strings["total_hours_format"].format(totalHours),
+                                        text = totalHours.format(),
                                         style = MaterialTheme.typography.titleLarge,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
 
                                 // Monthly progress indicator
-                                val completionPercentage = if (expectedHours > 0) {
-                                    (totalHours / expectedHours * 100).coerceAtMost(100.0)
-                                } else {
-                                    0.0
+                                // Capped below 100 so an unfinished month never reads as complete.
+                                val completionPercentage = when {
+                                    isCompleted -> 100f
+                                    expectedHours > Hours.ZERO -> totalHours.percentOf(expectedHours).coerceAtMost(99.9f)
+                                    else -> 0f
                                 }
 
                                 Column(
@@ -842,7 +827,7 @@ fun App(
                                     }
 
                                     LinearProgressIndicator(
-                                        progress = { (completionPercentage / 100).toFloat() },
+                                        progress = { completionPercentage / 100 },
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).height(6.dp),
                                         color = if (isCompleted) MaterialTheme.colorScheme.secondary
                                         else MaterialTheme.colorScheme.primary,
@@ -860,20 +845,16 @@ fun App(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = "${Strings["expected_hours"]} ${
-                                                Strings["total_hours_format"].format(
-                                                    expectedHours
-                                                )
-                                            }",
+                                            text = "${Strings["expected_hours"]} ${expectedHours.format()}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
 
-                                    if (!isCompleted && expectedHours > totalHours) {
+                                    if (expectedHours > totalHours) {
                                         val remainingHours = expectedHours - totalHours
                                         Text(
-                                            text = Strings["hours_remaining"].format(remainingHours),
+                                            text = Strings["hours_remaining"].format(remainingHours.format()),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(top = 2.dp)
@@ -963,10 +944,7 @@ fun App(
                                         notifier.success(message)
 
                                         // Fire confetti when this save flips the month from incomplete to complete
-                                        val newTotal = timeEntries.sumOf { it.hours.toDouble() }
-                                        if (expectedHours > 0 && previousTotal < completionThreshold && newTotal >= completionThreshold) {
-                                            confettiTrigger++
-                                        }
+                                        celebrateIfMonthJustCompleted(previousTotal)
 
                                         // Trigger focus back to Date field for next entry
                                         focusRequestKey++
@@ -1106,7 +1084,7 @@ fun TimeEntryDetail(
     focusRequestKey: Int = 0,
     initialDate: kotlinx.datetime.LocalDate,
     loggedEntries: List<TimeEntry> = emptyList(),
-    dailyHours: Float = WorkHours.DAILY_STANDARD_HOURS,
+    dailyHours: Hours = WorkHours.DAILY_STANDARD_HOURS,
     onError: (String) -> Unit = {}
 ) {
     // initialDate is deliberately NOT a remember key: it is recomputed by every background
@@ -1128,6 +1106,7 @@ fun TimeEntryDetail(
     var hours by remember(timeEntry) {
         mutableStateOf(timeEntry?.hours?.toString() ?: "")
     }
+    val parsedHours = remember(hours) { Hours.parse(hours) }
     var comments by remember(timeEntry) {
         mutableStateOf(timeEntry?.comments ?: "")
     }
@@ -1152,25 +1131,22 @@ fun TimeEntryDetail(
 
     // Check if the form is valid and not in a loading state
     val isValid =
-        remember(selectedProject, selectedActivity, hours, selectedIssue, comments, isLoading, isGlobalLoading) {
+        remember(selectedProject, selectedActivity, hours, dailyHours, selectedIssue, comments, isLoading, isGlobalLoading) {
             val hasProject = selectedProject != null
             val hasActivity = selectedActivity != null
-            val hasHours = hours.isNotEmpty()
-            val normalizedHours = hours.replace(',', '.')
-            val validHours = normalizedHours.toFloatOrNull() != null
-            val nonZeroHours = normalizedHours.toFloatOrNull() != 0f
+            val hasHours = parsedHours != null && parsedHours > Hours.ZERO && parsedHours <= dailyHours
             val hasIssue = selectedIssue != null
             val hasComments = comments.isNotEmpty()
             val notLoading = !isLoading && !isGlobalLoading
 
-            hasProject && hasActivity && hasHours && validHours && nonZeroHours && hasIssue && hasComments && notLoading
+            hasProject && hasActivity && hasHours && hasIssue && hasComments && notLoading
         }
 
     val hasChanges = remember(hours, comments, selectedProject, selectedActivity, date, selectedIssue) {
         if (timeEntry == null) {
             hours.isNotEmpty() || comments.isNotEmpty() || selectedProject != null || selectedActivity != null || selectedIssue != null
         } else {
-            hours != timeEntry.hours.toString() ||
+            parsedHours != timeEntry.hours ||
                     comments != (timeEntry.comments ?: "") ||
                     selectedProject?.id != timeEntry.project.id ||
                     selectedActivity != timeEntry.activity ||
@@ -1193,11 +1169,10 @@ fun TimeEntryDetail(
         isSaving = true
         scope.launch {
             try {
-                val parsedHours = hours.replace(',', '.').toFloatOrNull() ?: 0f
                 val timeEntryToSave = TimeEntry(
                     id = timeEntry?.id,
                     date = date,
-                    hours = parsedHours,
+                    hours = parsedHours ?: Hours.ZERO,
                     project = project,
                     issue = issue,
                     activity = activity,
@@ -1445,6 +1420,13 @@ fun TimeEntryDetail(
 
             // Hours
             Column(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                val hoursError = when {
+                    hours.isEmpty() -> null
+                    parsedHours == null -> Strings["invalid_number"]
+                    parsedHours <= Hours.ZERO -> Strings["hours_must_be_positive"]
+                    parsedHours > dailyHours -> Strings["hours_max_value"].format(dailyHours.format())
+                    else -> null
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1453,20 +1435,16 @@ fun TimeEntryDetail(
                     OutlinedTextField(
                         value = hours,
                         onValueChange = { input: String ->
-                            if (input.isEmpty() || input.matches(HOURS_INPUT_REGEX)) {
-                                val normalized = input.replace(',', '.')
-                                val floatValue = normalized.toFloatOrNull()
-                                if (floatValue == null || floatValue <= dailyHours) {
+                            if (input.isEmpty() || input.matches(Hours.INPUT_REGEX)) {
+                                val parsed = Hours.parse(input)
+                                if (parsed == null || parsed <= dailyHours) {
                                     hours = input
                                 }
                             }
                         },
                         modifier = Modifier.width(200.dp).heightIn(min = 48.dp).then(shortcutHandler),
                         label = { Text(Strings["hours_label"]) },
-                        isError = hours.isNotEmpty() && run {
-                            val normalized = hours.replace(',', '.')
-                            (normalized.toFloatOrNull() == null || normalized.toFloat() <= 0f || normalized.toFloat() > dailyHours)
-                        },
+                        isError = hoursError != null,
                         singleLine = true,
                         enabled = !isLoading && !isGlobalLoading,
                         trailingIcon = {
@@ -1485,55 +1463,37 @@ fun TimeEntryDetail(
                     )
 
                     TextButton(
-                        onClick = { hours = Strings["total_hours_format"].format(dailyHours) },
+                        onClick = { hours = dailyHours.format() },
                         enabled = !isLoading && !isGlobalLoading
                     ) {
                         Text(Strings["full_day"])
                     }
                 }
 
-                run {
-                    val normalized = hours.replace(',', '.')
-                    if (hours.isNotEmpty() && normalized.toFloatOrNull() == null) {
+                if (hoursError != null) {
+                    Text(
+                        text = hoursError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                    )
+                } else if (parsedHours != null) {
+                    val otherHours = loggedEntries
+                        .filter { it.date == date && it.id != timeEntry?.id }
+                        .sumOfHours { it.hours }
+                    val kept = WorkHours.hoursKept(parsedHours, otherHours, dailyHours)
+                    if (kept < parsedHours) {
                         Text(
-                            text = Strings["invalid_number"],
-                            color = MaterialTheme.colorScheme.error,
+                            text = if (kept == Hours.ZERO) {
+                                Strings["hours_day_full"]
+                            } else {
+                                Strings["hours_capped_by_day"]
+                                    .format(formatHours(kept, locale), formatHours(dailyHours, locale))
+                            },
+                            color = Tone.Warning.contentColor(),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                         )
-                    } else if (hours.isNotEmpty() && normalized.toFloat() <= 0f) {
-                        Text(
-                            text = Strings["hours_must_be_positive"],
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                    } else if (hours.isNotEmpty() && normalized.toFloat() > dailyHours) {
-                        Text(
-                            text = Strings["hours_max_value"].format(dailyHours),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                        )
-                    } else if (hours.isNotEmpty()) {
-                        val entered = normalized.toFloat()
-                        val otherHours = loggedEntries
-                            .filter { it.date == date && it.id != timeEntry?.id }
-                            .sumOf { it.hours.toDouble() }.toFloat()
-                        val kept = WorkHours.hoursKept(entered, otherHours, dailyHours)
-                        if (kept < entered - WorkHours.HOURS_TOLERANCE) {
-                            Text(
-                                text = if (kept <= WorkHours.HOURS_TOLERANCE) {
-                                    Strings["hours_day_full"]
-                                } else {
-                                    Strings["hours_capped_by_day"]
-                                        .format(formatHours(kept, locale), formatHours(dailyHours, locale))
-                                },
-                                color = Tone.Warning.contentColor(),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                            )
-                        }
                     }
                 }
             }

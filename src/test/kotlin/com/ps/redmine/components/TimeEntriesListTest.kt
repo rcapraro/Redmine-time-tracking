@@ -1,6 +1,7 @@
 package com.ps.redmine.components
 
 import com.ps.redmine.model.Activity
+import com.ps.redmine.model.Hours
 import com.ps.redmine.model.Issue
 import com.ps.redmine.model.Project
 import com.ps.redmine.model.TimeEntry
@@ -19,7 +20,7 @@ class TimeEntriesListTest {
 
     private fun entriesByDate(vararg daysWithCount: Pair<LocalDate, Int>): Map<LocalDate, List<TimeEntry>> =
         daysWithCount.associate { (date, count) ->
-            date to List(count) { TimeEntry(nextId++, date, 1f, activity, project, issue) }
+            date to List(count) { TimeEntry(nextId++, date, Hours.of(1.0), activity, project, issue) }
         }.toSortedMap(compareByDescending { it })
 
     @Test

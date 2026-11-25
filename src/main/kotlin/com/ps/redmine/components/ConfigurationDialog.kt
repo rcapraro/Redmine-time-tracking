@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.ps.redmine.Version
 import com.ps.redmine.api.RedmineClientInterface
 import com.ps.redmine.config.ConfigurationManager
+import com.ps.redmine.model.Hours
 import com.ps.redmine.resources.Strings
 import java.util.*
 
@@ -148,15 +149,15 @@ fun ConfigurationDialog(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     var expandedDaily by remember { mutableStateOf(false) }
-                    val options = listOf(7.5f, 7.0f, 6.5f, 6.0f)
+                    val options = listOf(7.5, 7.0, 6.5, 6.0).map(Hours::of)
                     Box {
                         TextButton(onClick = { expandedDaily = true }) {
-                            Text(Strings["hours_format"].format(config.dailyHours))
+                            Text(Strings["hours_format"].format(config.dailyHours.format()))
                         }
                         DropdownMenu(expanded = expandedDaily, onDismissRequest = { expandedDaily = false }) {
                             options.forEach { v ->
                                 DropdownMenuItem(
-                                    text = { Text(Strings["hours_format"].format(v)) },
+                                    text = { Text(Strings["hours_format"].format(v.format())) },
                                     onClick = {
                                         config = config.copy(dailyHours = v)
                                         expandedDaily = false
@@ -211,7 +212,7 @@ fun ConfigurationDialog(
                     }
                     val derivedWeekly = config.dailyHours * (5 - config.nonWorkingIsoDays.size)
                     Text(
-                        text = Strings["working_weekly_hours"].format(derivedWeekly),
+                        text = Strings["working_weekly_hours"].format(derivedWeekly.format()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
