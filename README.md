@@ -15,6 +15,9 @@ enabled in the settings.*
 - **Weekly and monthly progress bars** with completion percentage and tooltips per ISO week
 - **Configurable working time** — daily target (6 / 6.5 / 7 / 7.5 h) and up to four non-working weekdays
 - **Add, edit, and delete time entries** with comprehensive validation
+- **Exact hours** — two-decimal input (3.75), totals free of rounding errors, and a warning when Redmine will cap the day
+- **Lucca absences import** — leaves and public holidays logged in Redmine in one click, also for an impersonated
+  teammate
 - **Duplicate entries** to the same day, the next working day, or over a date range
 - **Bulk edit and bulk delete** — select several entries to change project, activity, issue, hours, or comment in one go
 - **Project, issue, and activity pickers** with searchable dropdowns
@@ -82,7 +85,9 @@ The configuration is automatically saved and stored securely using Java Preferen
 - macOS: `~/Library/Preferences/com.ps.redmine.plist` (Key: `/com/ps/redmine`)
 - Linux: `~/.java/.userPrefs/com/ps/redmine/prefs.xml`
 
-The configuration values are stored under the node `/com/ps/redmine` in these system-specific locations.
+The configuration values are stored under the node `/com/ps/redmine` in these system-specific locations. The mapping of
+Lucca leave types to Redmine issues is stored there too (key `lucca.absenceTargets`). The Lucca session is kept in the
+system keychain instead (macOS Keychain, Windows Credential Manager).
 
 ### Environment Variables
 
@@ -177,6 +182,8 @@ When a new version is ready for release:
     - Create a new GitHub release with the tag name
     - Attach all built installers to the release
 
+A tag containing a hyphen (e.g. `v2.4.0-beta`) is published as a pre-release, which the in-app updater does not offer.
+
 The released installers will be available on the GitHub Releases page.
 
 ## Usage
@@ -198,6 +205,7 @@ The top bar groups status information and global actions:
 - **Status chips** — today's date, the current time, and the current ISO week number.
 - **Update** (download icon, with a red dot) — appears only when a newer stable release is available; opens the update
   dialog with release notes and a one-click installer download for your OS.
+- **Absences** (beach umbrella icon) — opens the Lucca absences import window (see below).
 - **Settings** (gear icon) — opens the configuration dialog.
 - **Help** (question-mark icon) — opens an in-app guide listing every action, icon, and shortcut.
 
@@ -217,7 +225,9 @@ The top bar groups status information and global actions:
 3. **Add a new time entry**: the right-hand panel is the create/edit form. Deselect the current entry (or change day) to
    show the create form, then fill in:
     - **Date** — pick a date with the calendar icon, or use the `-1 / +1 day` business-day buttons
-    - **Hours** — number of hours worked
+    - **Hours** — number of hours worked, with at most two decimals (`3.75` or `3,75`). The "Full Day" button fills it
+      with your daily hours. Redmine caps each day at those hours: when an entry would go past them, the form shows how
+      many hours will actually be kept.
     - **Project** — searchable dropdown
     - **Issue** — searchable dropdown filtered by the selected project
     - **Activity** — searchable dropdown
@@ -231,8 +241,35 @@ The top bar groups status information and global actions:
       to all selected entries.
     - **Delete** — delete every selected entry after confirmation.
     - **Close** (X) — clear the current selection.
-8. **Save changes**: use Ctrl/Cmd+S or click the Save button.
+8. **Save changes**: use Ctrl/Cmd+S or click the Save button. The form then moves to the first incomplete day of the
+   month, keeping the issue, activity, and comment so you can log the next entry.
 9. **Cancel changes**: press Escape or click Cancel.
+
+### Lucca Absences
+
+The **Absences** button in the top bar logs the absences recorded in Lucca into Redmine, for the displayed month and the
+next one.
+
+1. **Sign in to Lucca**: the first time, a Lucca sign-in window opens inside the application (SSO included). The session
+   is kept in the system keychain; "Sign out" clears it.
+2. **Map the leave types**: each type (paid leave, RTT, public holiday…) is mapped once to a Redmine issue and activity.
+   Lucca public holidays falling on a weekday show up under the "Jour férié" type. Remote work is not counted as an
+   absence.
+3. **Pick the absences to log**: each absence day gets a status (to add, already logged, different hours, overbooked,
+   cancelled…). A half day counts as 3.75 h. Only absences approved in Lucca and missing from Redmine are ticked by
+   default.
+4. **Save to Redmine**: nothing already in Redmine changes without your consent. An absence logged with other hours, or
+   since cancelled in Lucca, is never ticked by default. Before saving, a confirmation lists the replaced hours, the
+   deleted entries, and the days Redmine will cap.
+
+While impersonating, the window shows the teammate's Lucca absences, read with your own Lucca session, and imports them
+into their Redmine. The teammate is found in Lucca by first and last name, whatever the case, accents, hyphens, and
+apostrophes; if several people share that name, nobody is picked. If Lucca does not let you read their absences, the
+window says so. [docs/lucca-impersonation-test.md](docs/lucca-impersonation-test.md) (in French) explains how to check
+and troubleshoot it.
+
+The Lucca instance is set in `LuccaClient.kt` (`LUCCA_BASE_URL`). Signing in to Lucca is not supported on Linux yet
+(see Native Installers).
 
 ### Monthly Progress Tracking
 
@@ -260,15 +297,17 @@ application picks up the new credentials and reloads the data without restarting
 
 Built with:
 
-- **Kotlin** 2.2.0
-- **Compose for Desktop** 1.8.2
-- **Ktor Client** 3.2.0 (HTTP client for API communication)
-- **Kotlin Coroutines** 1.10.2
-- **Kotlinx DateTime** 0.6.1
-- **Kotlinx Serialization** 1.9.0
-- **Koin** 4.1.0 (Dependency Injection)
-- **SLF4J** 2.0.16 + **Logback** 1.5.12 (Logging)
-- **JUnit 5** 5.13.2 (Testing framework)
+- **Kotlin** 2.3.21
+- **Compose for Desktop** 1.10.3 (Material 3 1.9.0)
+- **Ktor Client** 3.4.3 (HTTP client for the Redmine and Lucca APIs)
+- **Kotlin Coroutines** 1.11.0
+- **Kotlinx DateTime** 0.8.0
+- **Kotlinx Serialization** 1.11.0
+- **Koin** 4.2.1 (Dependency Injection)
+- **JCEF** (shipped with JetBrains Runtime 21) for the Lucca sign-in window
+- **java-keyring** 1.0.4 (Lucca session in the system keychain)
+- **SLF4J** 2.0.17 (Logging)
+- **JUnit** 6.0.3 + **MockK** 1.14.9 (Testing)
 
 ### Architecture
 

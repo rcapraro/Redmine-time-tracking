@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Kotlin 2.2 + Compose for Desktop (JVM — not Android), JDK 21. For architecture, domain rules, and conventions specific
+Kotlin 2.3 + Compose for Desktop (JVM — not Android), JDK 21. For architecture, domain rules, and conventions specific
 to this codebase, invoke the **redmine-time** skill.
 
 ## Build / test / run
 
 ```bash
 ./gradlew build           # Compile + run all tests
-./gradlew test            # JUnit 5 tests only
+./gradlew test            # JUnit tests only
 ./gradlew run             # Launch the desktop app
 ./gradlew test --tests "com.ps.redmine.util.DateUtilsTest"          # single class
 ./gradlew test --tests "com.ps.redmine.util.DateUtilsTest.method"   # single method
@@ -34,11 +34,12 @@ src/main/kotlin/com/ps/redmine/
 ├── components/       # Compose UI: dialogs, list, date picker, dropdowns, progress bars
 ├── config/           # ConfigurationManager (java.util.prefs) + Config data class
 ├── di/               # Koin AppModule
-├── model/            # Domain models + API DTOs
+├── lucca/            # Lucca client, JCEF login, keychain session, absence import planning
+├── model/            # Domain models (incl. Hours) + API DTOs
 ├── resources/        # Strings.kt — in-code i18n table (FR/EN)
 ├── update/           # UpdateService + UpdateManager (GitHub Releases self-update)
 └── util/             # Date/time (kotlinx.datetime), OSUtils, keyboard shortcuts, WorkHours
 src/main/composeResources/drawable/   # Compose Resources (Res.app_icon, etc.)
 src/main/resources/                   # JVM classpath resources (platform icons)
-src/test/kotlin/                      # Tests mirror main/ structure (JUnit 5 + MockK)
+src/test/kotlin/                      # Tests mirror main/ structure (JUnit 6 + MockK)
 ```

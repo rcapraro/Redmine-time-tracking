@@ -14,6 +14,10 @@ sombre qui peut être activé dans les paramètres.*
 - **Barres de progression hebdomadaires et mensuelle** avec pourcentage de completion et infobulles par semaine ISO
 - **Temps de travail configurable** — heures par jour (6 / 6,5 / 7 / 7,5 h) et jusqu'à 4 jours non travaillés en semaine
 - **Ajout, modification et suppression de saisies** avec validation complète
+- **Heures exactes** — saisie à deux décimales (3,75), totaux sans erreur d'arrondi, et avertissement quand Redmine
+  plafonnera la journée
+- **Import des absences Lucca** — congés et jours fériés reportés dans Redmine en un clic, y compris pour un collègue en
+  impersonation
 - **Duplication de saisies** sur le même jour, sur le jour ouvré suivant, ou sur une plage de dates
 - **Modification et suppression groupées** — sélectionnez plusieurs saisies pour modifier projet, activité, demande,
   heures ou commentaire en une seule opération
@@ -89,6 +93,9 @@ préférences de votre système :
 - Linux: `~/.java/.userPrefs/com/ps/redmine/prefs.xml`
 
 Les valeurs de configuration sont stockées sous le nœud `/com/ps/redmine` dans ces emplacements spécifiques au système.
+L'association des types d'absence Lucca aux tickets Redmine y est aussi enregistrée (clé `lucca.absenceTargets`). La
+session Lucca, elle, est conservée dans le trousseau du système (Trousseau macOS, Gestionnaire d'identification
+Windows).
 
 ### Variables d'environnement
 
@@ -186,6 +193,9 @@ Lorsqu'une nouvelle version est prête pour la publication :
     - Créer une nouvelle version GitHub avec le nom du tag
     - Joindre tous les installateurs construits à la version
 
+Un tag contenant un tiret (par exemple `v2.4.0-beta`) est publié comme pré-version : la mise à jour intégrée ne la
+propose pas.
+
 Les installateurs publiés seront disponibles sur la page des versions GitHub.
 
 ## Utilisation
@@ -209,6 +219,7 @@ Le bandeau supérieur regroupe les informations de statut et les actions globale
 - **Mise à jour** (icône de téléchargement, avec un point rouge) — n'apparaît que lorsqu'une nouvelle version stable est
   disponible ; ouvre la boîte de dialogue de mise à jour avec les notes de version et un téléchargement direct de
   l'installateur correspondant à votre OS.
+- **Absences** (icône de parasol) — ouvre la fenêtre d'import des absences Lucca (voir plus bas).
 - **Paramètres** (icône d'engrenage) — ouvre la boîte de dialogue de configuration.
 - **Aide** (icône point d'interrogation) — ouvre un guide intégré listant chaque action, icône et raccourci.
 
@@ -228,7 +239,9 @@ Le bandeau supérieur regroupe les informations de statut et les actions globale
 3. **Ajouter une nouvelle saisie de temps** : le panneau de droite est le formulaire de création/édition. Désélectionnez
    la saisie courante (ou changez de jour) pour afficher le formulaire de création, puis remplissez :
     - **Date** — choisir une date avec l'icône calendrier, ou utiliser les boutons `-1 / +1 jour` (jours ouvrés)
-    - **Heures** — nombre d'heures travaillées
+    - **Heures** — nombre d'heures travaillées, avec deux décimales au plus (`3.75` ou `3,75`). Le bouton « Journée
+      complète » le remplit avec vos heures du jour. Redmine plafonne chaque journée à ces heures : si la saisie les
+      dépasse, le formulaire indique combien d'heures seront réellement gardées.
     - **Projet** — menu déroulant recherchable
     - **Ticket** — menu déroulant recherchable filtré par le projet sélectionné
     - **Activité** — menu déroulant recherchable
@@ -244,8 +257,35 @@ Le bandeau supérieur regroupe les informations de statut et les actions globale
       activité, ticket, heures, commentaire) appliquer à toutes les saisies sélectionnées.
     - **Supprimer** — supprime toutes les saisies sélectionnées après confirmation.
     - **Fermer** (X) — vide la sélection courante.
-8. **Sauvegarder les modifications** : utilisez Ctrl/Cmd+S ou cliquez sur le bouton Enregistrer.
+8. **Sauvegarder les modifications** : utilisez Ctrl/Cmd+S ou cliquez sur le bouton Enregistrer. Le formulaire passe
+   ensuite au premier jour incomplet du mois, en gardant ticket, activité et commentaire pour enchaîner.
 9. **Annuler les modifications** : appuyez sur Échap ou cliquez sur Annuler.
+
+### Absences Lucca
+
+Le bouton **Absences** du bandeau supérieur reporte dans Redmine les absences posées dans Lucca, pour le mois affiché
+et le suivant.
+
+1. **Se connecter à Lucca** : à la première ouverture, une fenêtre de connexion Lucca s'ouvre dans l'application (SSO
+   compris). La session est conservée dans le trousseau du système ; « Se déconnecter » l'efface.
+2. **Associer les types d'absence** : chaque type (congés payés, RTT, jour férié…) est associé une fois pour toutes à un
+   ticket et à une activité Redmine. Les jours fériés Lucca qui tombent en semaine apparaissent sous le type « Jour
+   férié ». Le télétravail n'est pas compté comme une absence.
+3. **Choisir les absences à reporter** : chaque jour d'absence reçoit un statut (à ajouter, déjà saisie, heures
+   différentes, dépassement, annulée…). Une demi-journée compte 3,75 h. Seules les absences validées dans Lucca et
+   absentes de Redmine sont cochées d'office.
+4. **Enregistrer dans Redmine** : rien de ce qui existe déjà n'est modifié sans votre accord. Une absence déjà saisie
+   avec d'autres heures, ou annulée depuis dans Lucca, n'est jamais cochée d'office. Avant l'enregistrement, une
+   confirmation récapitule les heures remplacées, les saisies supprimées et les journées que Redmine plafonnera.
+
+En impersonation, la fenêtre affiche les absences Lucca du collègue, lues avec votre propre session Lucca, et les
+importe dans son Redmine. Le collègue est retrouvé dans Lucca par son prénom et son nom, quels que soient la casse, les
+accents, les tirets et les apostrophes ; en cas d'homonyme, personne n'est choisi. Si Lucca ne vous autorise pas à lire
+ses absences, la fenêtre l'indique. Le document [docs/lucca-impersonation-test.md](docs/lucca-impersonation-test.md)
+détaille comment le vérifier et le diagnostiquer.
+
+L'instance Lucca est fixée dans `LuccaClient.kt` (`LUCCA_BASE_URL`). Sous Linux, la connexion à Lucca n'est pas encore
+prise en charge (voir Installateurs natifs).
 
 ### Suivi de progression mensuelle
 
@@ -275,15 +315,17 @@ redémarrer.
 
 Construit avec :
 
-- **Kotlin** 2.2.0
-- **Compose for Desktop** 1.8.2
-- **Ktor Client** 3.2.0 (client HTTP pour la communication API)
-- **Kotlin Coroutines** 1.10.2
-- **Kotlinx DateTime** 0.6.1
-- **Kotlinx Serialization** 1.9.0
-- **Koin** 4.1.0 (Injection de dépendances)
-- **SLF4J** 2.0.16 + **Logback** 1.5.12 (Journalisation)
-- **JUnit 5** 5.13.2 (Framework de test)
+- **Kotlin** 2.3.21
+- **Compose for Desktop** 1.10.3 (Material 3 1.9.0)
+- **Ktor Client** 3.4.3 (client HTTP pour les API Redmine et Lucca)
+- **Kotlin Coroutines** 1.11.0
+- **Kotlinx DateTime** 0.8.0
+- **Kotlinx Serialization** 1.11.0
+- **Koin** 4.2.1 (Injection de dépendances)
+- **JCEF** (fourni par JetBrains Runtime 21) pour la fenêtre de connexion Lucca
+- **java-keyring** 1.0.4 (session Lucca dans le trousseau du système)
+- **SLF4J** 2.0.17 (Journalisation)
+- **JUnit** 6.0.3 + **MockK** 1.14.9 (Tests)
 
 ### Architecture
 

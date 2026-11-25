@@ -6,7 +6,7 @@ description: Project context for the RedmineTime codebase — architecture layer
 # RedmineTime — codebase context
 
 A Compose for Desktop (JVM) app for managing Redmine time entries. Compose targets `compose.desktop.currentOs`; this is
-**not** an Android project. JDK 21, Kotlin 2.2, Gradle build.
+**not** an Android project. JDK 21, Kotlin 2.3, Gradle build.
 
 ## Architecture
 
@@ -20,7 +20,12 @@ A Compose for Desktop (JVM) app for managing Redmine time entries. Compose targe
   It is `Closeable`, supports SSL with self-signed certs (trust-all + hostname-verification disabled), and exposes
   `updateConfiguration(uri, apiKey)` so the running client picks up new credentials without an app restart.
 - **`components/`** — Compose UI components: `ConfigurationDialog`, `DatePicker`, `TimeEntriesList`,
-  `WeeklyProgressBars`, `SearchableDropdown`, `ErrorDialog`, `UpdateDialog`.
+  `WeeklyProgressBars`, `SearchableDropdown`, `ErrorDialog`, `UpdateDialog`, `HelpDialog`, and the absences window
+  (`AbsencesDialog`, `AbsenceImportList`, `AbsenceMappingDialog`).
+- **`lucca/`** — Lucca absences: `LuccaClient` (Ktor, fixed `LUCCA_BASE_URL`), `LuccaLoginWindow` (JCEF sign-in),
+  `LuccaSessionStore` (session cookies in the system keychain), `LuccaPeople` (finds an impersonated user by name),
+  `AbsenceTargetStore` (leave type → Redmine issue/activity, in Preferences) and `AbsenceImport` (pure planning of what
+  an import creates, replaces or deletes; nothing in it writes).
 - **`config/Config.kt`** — `ConfigurationManager` is a singleton object backed by `java.util.prefs.Preferences` under
   node `/com/ps/redmine`. Env vars (`REDMINE_URL`, `REDMINE_API_KEY`, `REDMINE_DARK_THEME`) act as defaults when no
   preference exists. The two Material 3 color schemes (light and dark) are defined in `ui/Color.kt`; selection is a
@@ -72,7 +77,7 @@ Repository wrapper. Don't introduce these abstractions unless the user asks — 
   boundaries.
 - The Ktor client manages JSON serialization manually — when adding endpoints, follow the existing pattern in
   `KtorRedmineClient` rather than introducing `ContentNegotiation`.
-- Tests use JUnit 5 (`useJUnitPlatform()`), MockK, and `kotlinx-coroutines-test`. The `ktor-client-mock` engine is
+- Tests use JUnit 6 Jupiter (`useJUnitPlatform()`), MockK, and `kotlinx-coroutines-test`. The `ktor-client-mock` engine is
   available for HTTP-level tests (see `KtorRedmineClientTest`).
 - Toolchain pinned to JetBrains Runtime 21 with JCEF via `mise.toml` (`jetbrains-jcef-21.0.11-b1163.125`, same build
   in `.github/workflows/build.yml`) and `jvmToolchain(21)` in `build.gradle.kts`. JCEF (`org.cef.*`, `com.jetbrains.cef.*`)

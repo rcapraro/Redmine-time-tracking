@@ -84,6 +84,22 @@ fun HelpDialog(onDismiss: () -> Unit) {
                             text = Strings["help_action_delete"],
                             iconTint = MaterialTheme.colorScheme.error,
                         )
+                        ActionRow(Icons.Filled.Schedule, Strings["help_action_hours"])
+                    }
+
+                    HelpSection(title = Strings["help_absences_title"]) {
+                        ActionRow(
+                            icon = Icons.Filled.BeachAccess,
+                            text = Strings["help_absences_open"],
+                            iconTint = MaterialTheme.colorScheme.primary,
+                        )
+                        ActionRow(Icons.Filled.Link, Strings["help_absences_map"])
+                        ActionRow(Icons.Filled.EventAvailable, Strings["help_absences_import"])
+                        ActionRow(
+                            icon = Icons.Filled.Warning,
+                            text = Strings["help_absences_conflicts"],
+                            iconTint = MaterialTheme.colorScheme.tertiary,
+                        )
                     }
 
                     HelpSection(title = Strings["help_bulk_title"]) {
