@@ -935,6 +935,7 @@ fun App(
                                             currentMonth.year,
                                             currentMonth.monthValue
                                         )
+                                        selectedDate = computeFirstIncompleteDate(currentMonth, timeEntries, nonWorkingIsoDays)
                                         selectedTimeEntry = null
 
                                         val message = if (updatedEntry.id == null)
@@ -1098,7 +1099,7 @@ fun TimeEntryDetail(
     // once the form is done, the date must follow the recomputed initialDate again.
     var dateTouched by remember(timeEntry, focusRequestKey) { mutableStateOf(false) }
     // Keep date in sync with selected initialDate when creating a new entry
-    LaunchedEffect(initialDate, timeEntry) {
+    LaunchedEffect(initialDate, timeEntry, focusRequestKey) {
         if (timeEntry == null && !dateTouched) {
             date = initialDate
         }
